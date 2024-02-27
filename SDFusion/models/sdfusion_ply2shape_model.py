@@ -96,17 +96,18 @@ class SDFusionModelPly2Shape(BaseModel):
 
         if self.isTrain:
             # initialize optimizers
-            trainable_params = [p for p in self.df.parameters() if p.requires_grad == True] + \
-                                 [p for p in self.cond_model.parameters() if p.requires_grad == True]
-            self.optimizer = optim.AdamW(trainable_params, lr=opt.lr)
-            self.scheduler = get_cosine_schedule_with_warmup(
-                optimizer=self.optimizer,
-                num_warmup_steps=1000,
-                num_training_steps=opt.total_iters,
-            )
+            self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True], lr=opt.lr)
+            self.optimizer2 = optim.AdamW([p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
 
-            self.optimizers = [self.optimizer]
-            self.schedulers = [self.scheduler]
+            lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
+            self.scheduler1 = optim.lr_scheduler.LambdaLR(self.optimizer1, lr_lambda1)
+            
+            freeze_iters = 10000
+            lr_lambda2 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters)) if it > freeze_iters else 0
+            self.scheduler2 = optim.lr_scheduler.LambdaLR(self.optimizer2, lr_lambda2)
+
+            self.optimizers = [self.optimizer1, self.optimizer2]
+            self.schedulers = [self.scheduler1, self.scheduler2]
 
             self.print_networks(verbose=False)
 
@@ -370,21 +371,20 @@ class SDFusionModelPly2Shape(BaseModel):
         self.set_requires_grad([self.df], requires_grad=True)
 
         self.forward()
-        self.optimizer.zero_grad()
         self.backward()
         
-        ## compute the norm of gradients
-        total_norm = 0.
-        for p in self.df.parameters():
-            param_norm = p.grad.data.norm(2)
-            total_norm += param_norm.item() ** 2
-        self.grad_norm = total_norm ** (1. / 2)
-
-        if total_steps > 1000:
-            nn.utils.clip_grad_norm_(self.df.parameters(), 0.3)
+        # clip grad norm
+        torch.nn.utils.clip_grad_norm_(self.df.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(self.cond_model.parameters(), 1.0)
         
-        self.optimizer.step()
-        self.scheduler.step()
+        for optimizer in self.optimizers:
+            optimizer.step()
+        
+        for scheduler in self.schedulers:
+            scheduler.step()
+
+        for optimizer in self.optimizers:
+            optimizer.zero_grad()
 
     def get_current_errors(self):
         
@@ -423,10 +423,13 @@ class SDFusionModelPly2Shape(BaseModel):
         state_dict = {
             'vqvae': self.vqvae_module.state_dict(),
             'df': self.df_module.state_dict(),
-            'opt': self.optimizer.state_dict(),
-            'sch': self.scheduler.state_dict(),
             'global_step': global_step,
         }
+
+        for i, optimizer in enumerate(self.optimizers):
+            state_dict[f'opt{i}'] = optimizer.state_dict()
+        for i, scheduler in enumerate(self.schedulers):
+            state_dict[f'sch{i}'] = scheduler.state_dict()
            
         save_filename = 'df_%s.pth' % (label)
         save_path = os.path.join(self.opt.ckpt_dir, save_filename)
@@ -445,12 +448,14 @@ class SDFusionModelPly2Shape(BaseModel):
         print(colored('[*] weight successfully load from: %s' % ckpt, 'blue'))
 
         # if 'opt' in state_dict:
-        self.optimizer.load_state_dict(state_dict['opt'])
+        for i, optimizer in enumerate(self.optimizers):
+            optimizer.load_state_dict(state_dict[f'opt{i}'])
         print(colored('[*] optimizer successfully restored from: %s' % ckpt, 'blue'))
         iter_passed = state_dict['global_step']
         
         if 'sch' in state_dict:
-            self.scheduler.load_state_dict(state_dict['sch'])
+            for i, scheduler in enumerate(self.schedulers):
+                scheduler.load_state_dict(state_dict[f'sch{i}'])
             print(colored('[*] scheduler successfully restored from: %s' % ckpt, 'blue'))
 
         return iter_passed

@@ -425,18 +425,14 @@ class SDFusionModel(BaseModel):
         self.optimizer.zero_grad()
         self.backward()
         
-        ## compute the norm of gradients
-        total_norm = 0.
-        for p in self.df.parameters():
-            param_norm = p.grad.data.norm(2)
-            total_norm += param_norm.item() ** 2
-        self.grad_norm = total_norm ** (1. / 2)
-
-        if total_steps > 1000:
-            nn.utils.clip_grad_norm_(self.df.parameters(), 0.3)
+        # clip grad norm
+        torch.nn.utils.clip_grad_norm_(self.df.parameters(), 1.0)
         
-        self.optimizer.step()
-        self.scheduler.step()
+        for optimizer in self.optimizers:
+            optimizer.step()
+        
+        for scheduler in self.schedulers:
+            scheduler.step()
 
     def get_current_errors(self):
         

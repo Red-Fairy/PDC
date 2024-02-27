@@ -109,8 +109,7 @@ def train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, visualize
                         os.path.abspath( os.path.join(opt.logs_dir, opt.name) )
                     ), 'blue', attrs=['bold']
                     )
-
-        model.update_learning_rate()
+        # model.update_learning_rate()
 
         pbar.update(1)
         
