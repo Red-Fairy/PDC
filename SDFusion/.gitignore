@@ -4,7 +4,6 @@
 trash/
 *.ini
 Manifold/
-*.sh
 *.pyc
 *.png
 *.jpg
