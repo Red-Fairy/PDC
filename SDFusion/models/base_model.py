@@ -15,7 +15,7 @@ def create_model(opt, accelerator=None):
             from models.sdfusion_model import SDFusionModel
             model = SDFusionModel(opt)
         else:
-            from models.sdfusion_model_accelerate import SDFusionModelAcc
+            from models.sdfusion_acc_model import SDFusionModelAcc
             model = SDFusionModelAcc(opt, accelerator)
         
     elif opt.model == 'sdfusion-txt2shape':

@@ -1,3 +1,7 @@
+'''
+Author: Rundong Luo
+'''
+
 import os
 import time
 import inspect
@@ -13,28 +17,21 @@ from datasets.dataloader import CreateDataLoader, get_data_generator
 from models.base_model import create_model
 from accelerate import Accelerator
 
-# from utils.distributed import (
-#     get_rank,
-#     synchronize,
-#     reduce_loss_dict,
-#     reduce_sum,
-#     get_world_size,
-# )
-
 import torch
 import random
 import numpy as np
 
 from utils.visualizer import Visualizer
 
-cuda_avail = torch.cuda.is_available()
-# import pdb; pdb.set_trace()
-print(f"CUDA TORCH AVAILABLE: {cuda_avail}")
+torch.autograd.set_detect_anomaly(True)
 
-
-def train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, visualizer, accelerator: Accelerator):
+def train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, accelerator: Accelerator):
 
     if accelerator.is_main_process:
+        # setup visualizer for the main process
+        visualizer = Visualizer(opt)
+        visualizer.setup_io()
+        # start training
         cprint('[*] Start training. name: %s' % opt.name, 'blue')
 
     train_dg = get_data_generator(train_dl)
@@ -58,7 +55,7 @@ def train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, visualize
         
         data = next(train_dg)
         if iter_i == 0 and accelerator.is_main_process:
-            print(f"!!!! data Shape on single GPU: {data['sdf'].shape}")
+            print(f"data Shape on single GPU: {data['sdf'].shape}")
 
         model.set_input(data)
         model.optimize_parameters(iter_i)
@@ -72,19 +69,13 @@ def train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, visualize
 
             # display every n batches
             if iter_i % opt.display_freq == 0:
-                if iter_i == 0 and opt.debug == "1":
-                    pbar.update(1)
-                    continue
-
                 # eval
                 model.inference(data)
                 visualizer.display_current_results(model.get_current_visuals(), iter_i, phase='train')
 
-                # model.set_input(next(test_dg))
                 test_data = next(test_dg)
                 model.inference(test_data)
                 visualizer.display_current_results(model.get_current_visuals(), iter_i, phase='test')
-                # torch.cuda.empty_cache()
 
             if iter_ip1 % opt.save_latest_freq == 0:
                 cprint('saving the latest model (current_iter %d)' % (iter_i), 'blue')
@@ -130,8 +121,11 @@ if __name__ == "__main__":
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
+    # create accelerator
+    accelerator = Accelerator()
+
     # this will parse args, setup log_dirs, multi-gpus
-    opt = TrainOptions().parse_and_setup()
+    opt = TrainOptions().parse_and_setup(accelerator)
     # device = opt.device
     # rank = opt.rank
 
@@ -154,18 +148,11 @@ if __name__ == "__main__":
         cprint('[*] # testing images = %d' % len(test_ds), 'yellow')
 
     # main loop
-    accelerator = Accelerator()
     model = create_model(opt, accelerator)
     cprint(f'[*] "{opt.model}" initialized.', 'cyan')
 
-    # visualizer
-    visualizer = Visualizer(opt)
-
-    if accelerator.is_main_process == 0:
-        visualizer.setup_io()
-
     # save model and dataset files
-    if accelerator.is_main_process == 0:
+    if accelerator.is_main_process:
         expr_dir = '%s/%s' % (opt.logs_dir, opt.name)
         model_f = inspect.getfile(model.__class__)
         dset_f = inspect.getfile(train_ds.__class__)
@@ -185,4 +172,4 @@ if __name__ == "__main__":
             cfg_out = os.path.join(expr_dir, os.path.basename(df_cfg))
             os.system(f'cp {df_cfg} {cfg_out}')
 
-    train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, visualizer, accelerator)
+    train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, accelerator)

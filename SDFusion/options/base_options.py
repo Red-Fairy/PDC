@@ -7,12 +7,7 @@ from omegaconf import OmegaConf
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-import utils
-
-from utils.distributed import (
-    get_rank,
-    synchronize,
-)
+from accelerate import Accelerator
 
 class BaseOptions():
     def __init__(self):
@@ -83,7 +78,7 @@ class BaseOptions():
 
         self.initialized = True
 
-    def parse_and_setup(self):
+    def parse_and_setup(self, accelerator: Accelerator = None):
         import sys
         cmd = ' '.join(sys.argv)
         print(f'python {cmd}')
@@ -99,62 +94,39 @@ class BaseOptions():
         else:
             self.opt.phase = 'test'
 
-        # setup multi-gpu stuffs here
-        # basically from stylegan2-pytorch, train.py by rosinality
-        self.opt.device = 'cuda'
-        n_gpu = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
-        self.opt.distributed = n_gpu > 1
-
-        if self.opt.distributed:
-            torch.cuda.set_device(self.opt.local_rank)
-            torch.distributed.init_process_group(backend=self.opt.backend, init_method="env://")
-            synchronize()
-
-        # name = self.opt.name
-        # if self.opt.isTrain and self.opt.ckpt is not None:
-        #     name = f'continue-{name}'
-        # self.opt.name = name
+        # make experiment dir
+        expr_dir = os.path.join(self.opt.logs_dir, self.opt.name)
+        if (accelerator is None or accelerator.is_main_process) and not os.path.exists(expr_dir):
+            os.makedirs(expr_dir)
         
-        self.opt.gpu_ids_str = self.opt.gpu_ids
+        ckpt_dir = os.path.join(self.opt.logs_dir, self.opt.name, 'ckpt')
+        self.opt.ckpt_dir = ckpt_dir
+        if (accelerator is None or accelerator.is_main_process) and not os.path.exists(ckpt_dir):
+            os.makedirs(ckpt_dir)
 
-        # NOTE: seed or not?
-        # seed = opt.seed
-        # util.seed_everything(seed)
 
-        self.opt.rank = get_rank()
-
-        if get_rank() == 0:
-            # print args
+        # print args
+        if (accelerator is None or accelerator.is_main_process):
             args = vars(self.opt)
-
             print('------------ Options -------------')
             for k, v in sorted(args.items()):
                 print('%s: %s' % (str(k), str(v)))
             print('-------------- End ----------------')
-
-            # make experiment dir
-            # if self.opt.isTrain:
-            expr_dir = os.path.join(self.opt.logs_dir, self.opt.name)
-            utils.util.mkdirs(expr_dir)
             
-            ckpt_dir = os.path.join(self.opt.logs_dir, self.opt.name, 'ckpt')
-            if not os.path.exists(ckpt_dir):
-                os.makedirs(ckpt_dir)
-            self.opt.ckpt_dir = ckpt_dir
-                
             file_name = os.path.join(expr_dir, 'opt.txt')
             with open(file_name, 'wt') as opt_file:
                 opt_file.write('------------ Options -------------\n')
                 for k, v in sorted(args.items()):
                     opt_file.write('%s: %s\n' % (str(k), str(v)))
                 opt_file.write('-------------- End ----------------\n')
-            
-            # tensorboard writer
-            tb_dir = '%s/tboard' % expr_dir
-            if not os.path.exists(tb_dir):
-                os.makedirs(tb_dir)
-            self.opt.tb_dir = tb_dir
-            writer = SummaryWriter(log_dir=tb_dir)
-            self.opt.writer = writer
+
+        # tensorboard writer
+        tb_dir = '%s/tboard' % expr_dir
+        if (accelerator is None or accelerator.is_main_process) and not os.path.exists(tb_dir):
+            os.makedirs(tb_dir)
+
+        self.opt.tb_dir = tb_dir
+        writer = SummaryWriter(log_dir=tb_dir)
+        self.opt.writer = writer
 
         return self.opt

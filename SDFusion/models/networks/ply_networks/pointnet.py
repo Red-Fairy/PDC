@@ -36,10 +36,10 @@ class STN3d(nn.Module):
         x = F.relu(self.bn5(self.fc2(x)))
         x = self.fc3(x)
 
-        iden = Variable(torch.from_numpy(np.array([1, 0, 0, 0, 1, 0, 0, 0, 1]).astype(np.float32))).view(1, 9).repeat(
-            batchsize, 1)
-        if x.is_cuda:
-            iden = iden.cuda()
+        iden = torch.from_numpy(np.array([1, 0, 0, 0, 1, 0, 0, 0, 1]).astype(np.float32)).view(1, 9).repeat(
+            batchsize, 1).to(x.device)
+        # if x.is_cuda:
+        #     iden = iden.cuda()
         x = x + iden
         x = x.view(-1, 3, 3)
         return x
@@ -76,62 +76,45 @@ class STNkd(nn.Module):
         x = F.relu(self.bn5(self.fc2(x)))
         x = self.fc3(x)
 
-        iden = Variable(torch.from_numpy(np.eye(self.k).flatten().astype(np.float32))).view(1, self.k * self.k).repeat(
-            batchsize, 1)
-        if x.is_cuda:
-            iden = iden.cuda()
+        iden = torch.from_numpy(np.eye(self.k).flatten().astype(np.float32)).view(1, self.k * self.k).repeat(
+            batchsize, 1).to(x.device)
+        # if x.is_cuda:
+        #     iden = iden.cuda()
         x = x + iden
         x = x.view(-1, self.k, self.k)
         return x
 
 
 class PointNetEncoder(nn.Module):
-    def __init__(self, feature_transform=False, channel=3, out_channel=1024):
+    def __init__(self, channel=3, out_dim=1024):
         super(PointNetEncoder, self).__init__()
         self.stn = STN3d(channel)
         self.conv1 = torch.nn.Conv1d(channel, 64, 1)
         self.conv2 = torch.nn.Conv1d(64, 128, 1)
-        self.conv3 = torch.nn.Conv1d(128, out_channel, 1)
+        self.conv3 = torch.nn.Conv1d(128, out_dim, 1)
         self.bn1 = nn.BatchNorm1d(64)
         self.bn2 = nn.BatchNorm1d(128)
-        self.bn3 = nn.BatchNorm1d(out_channel)
-        self.feature_transform = feature_transform
-        if self.feature_transform:
-            self.fstn = STNkd(k=64)
-        self.out_channel = out_channel
+        self.bn3 = nn.BatchNorm1d(out_dim)
+        # if self.feature_transform:
+        #     self.fstn = STNkd(k=64)
+        self.out_dim = out_dim
 
     def forward(self, x):
         B, D, N = x.size()
+        assert D == 3
         trans = self.stn(x)
         x = x.transpose(2, 1)
-        if D > 3:
-            feature = x[:, :, 3:]
-            x = x[:, :, :3]
         x = torch.bmm(x, trans)
-        if D > 3:
-            x = torch.cat([x, feature], dim=2)
         x = x.transpose(2, 1)
         x = F.relu(self.bn1(self.conv1(x)))
-
-        if self.feature_transform:
-            trans_feat = self.fstn(x)
-            x = x.transpose(2, 1)
-            x = torch.bmm(x, trans_feat)
-            x = x.transpose(2, 1)
-        else:
-            trans_feat = None
 
         # pointfeat = x
         x = F.relu(self.bn2(self.conv2(x)))
         x = self.bn3(self.conv3(x)) # (B, out_dim, N)
         x = torch.max(x, 2, keepdim=True)[0] # max pooling, (B, out_dim, 1)
-        x = x.view(-1, self.out_channel) # (B, out_dim)
+        x = x.view(-1, self.out_dim) # (B, out_dim)
 
-        if trans_feat is not None:
-            return x, trans_feat
-        else:
-            return x
-
+        return x
 
 def feature_transform_reguliarzer(trans):
     d = trans.size()[1]

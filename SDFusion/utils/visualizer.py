@@ -62,6 +62,8 @@ class Visualizer():
         self.opt = opt
 
     def setup_io(self):
+
+        assert self.isTrain
         
         print('[*] create image directory:\n%s...' % os.path.abspath(self.img_dir) )
         util.mkdirs([self.img_dir])

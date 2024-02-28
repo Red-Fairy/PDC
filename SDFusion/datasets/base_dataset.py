@@ -14,9 +14,7 @@ from torchvision import datasets
 # from configs.paths import dataroot
 
 
-def data_sampler(dataset, shuffle, distributed):
-    if distributed:
-        return data.distributed.DistributedSampler(dataset, shuffle=shuffle)
+def data_sampler(dataset, shuffle):
 
     if shuffle:
         return data.RandomSampler(dataset)
@@ -31,11 +29,10 @@ class BaseDataset(data.Dataset):
     def name(self):
         return 'BaseDataset'
 
-    def initialize(self, opt):
-        pass
+    # def initialize(self, opt):
+    #     pass
 
 def CreateDataset(opt):
-    dataset = None
 
     # decide resolution later at model
     if opt.dataset_mode == 'snet':

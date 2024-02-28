@@ -39,9 +39,6 @@ from models.networks.diffusion_networks.samplers.ddim import DDIMSampler
 
 from planners.base_model import create_planner
 
-# distributed 
-from utils.distributed import reduce_loss_dict
-
 # rendering
 from utils.util_3d import init_mesh_renderer, render_sdf
 
@@ -79,7 +76,7 @@ class SDFusionModel(BaseModel):
         # self.init_diffusion_params(scale=1, opt=opt)
 
         # init vqvae
-        self.vqvae = load_vqvae(vq_conf, vq_ckpt=opt.vq_ckpt, opt=opt)
+        self.vqvae = load_vqvae(vq_conf, vq_ckpt=opt.vq_ckpt, opt=opt).to(self.device)
 
         # noise scheduler
         self.noise_scheduler = DDIMScheduler()
@@ -118,38 +115,11 @@ class SDFusionModel(BaseModel):
 
         self.renderer = init_mesh_renderer(image_size=256, dist=dist, elev=elev, azim=azim, device=self.device)
 
-        # for distributed training
-        if self.opt.distributed:
-            self.make_distributed(opt)
-
-            self.df_module = self.df.module
-            self.vqvae_module = self.vqvae.module
-        else:
-            self.df_module = self.df
-            self.vqvae_module = self.vqvae
-
-        self.ddim_steps = 200
-        if self.opt.debug == "1":
-            # NOTE: for debugging purpose
-            self.ddim_steps = 7
+        self.ddim_steps = self.df_conf.model.params.ddim_steps
         cprint(f'[*] setting ddim_steps={self.ddim_steps}', 'blue')
         self.planner = None
         if not self.isTrain:
             self.planner = create_planner(opt)
-
-    def make_distributed(self, opt):
-        self.df = nn.parallel.DistributedDataParallel(
-            self.df,
-            device_ids=[opt.local_rank],
-            output_device=opt.local_rank,
-            broadcast_buffers=False,
-        )
-        self.vqvae = nn.parallel.DistributedDataParallel(
-            self.vqvae,
-            device_ids=[opt.local_rank],
-            output_device=opt.local_rank,
-            broadcast_buffers=False,
-        )
     
     def set_input(self, input=None, max_sample=None):
         
@@ -190,7 +160,7 @@ class SDFusionModel(BaseModel):
             if not isinstance(cond, list):
                 cond = [cond]
             # key = 'c_concat' if self.model.conditioning_key == 'concat' else 'c_crossattn'
-            key = 'c_concat' if self.df_module.conditioning_key == 'concat' else 'c_crossattn'
+            key = 'c_concat' if self.df.conditioning_key == 'concat' else 'c_crossattn'
             cond = {key: cond}
 
         # eps
@@ -275,7 +245,7 @@ class SDFusionModel(BaseModel):
         latents = torch.randn((B, *shape), device=self.device)
         latents = latents * self.noise_scheduler.init_noise_sigma
 
-        self.noise_scheduler.set_timesteps(self.ddim_steps)
+        self.noise_scheduler.set_timesteps(ddim_steps)
         # w/o condition
         for t in tqdm(self.noise_scheduler.timesteps):
             # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
@@ -290,68 +260,52 @@ class SDFusionModel(BaseModel):
             # compute the previous noisy sample x_t -> x_t-1
             latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
 
-        # w/ condition
-        
-        # for t in tqdm(self.noise_scheduler.timesteps):
-        #     # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
-        #     latent_model_input = torch.cat([latents] * 2)
-
-        #     latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
-
-        #     # predict the noise residual
-        #     with torch.no_grad():
-        #         noise_pred = self.apply_model(latent_model_input, t, encoder_hidden_states=text_embeddings).sample
-
-        #     # perform guidance
-        #     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-        #     noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
-
-        #     # compute the previous noisy sample x_t -> x_t-1
-        #     latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
-        
-        # samples, intermediates = ddim_sampler.sample(S=ddim_steps,
-        #                                              batch_size=B,
-        #                                              shape=shape,
-        #                                              conditioning=c,
-        #                                              verbose=False,
-        #                                              unconditional_guidance_scale=scale,
-        #                                             #  unconditional_conditioning=uc,
-        #                                              eta=ddim_eta)
-
         # decode z
-        self.gen_df = self.vqvae_module.decode_no_quant(latents)
+        self.gen_df = self.vqvae.decode_no_quant(latents)
 
         self.df.train()
 
     @torch.no_grad()
-    def uncond(self, ngen=1, ddim_steps=200, ddim_eta=0., scale=None):
-        ddim_sampler = DDIMSampler(self)
+    @torch.no_grad()
+    def inference(self, data, sample=True, ddim_steps=None, ddim_eta=0., quantize_denoised=True,
+                  infer_all=False, max_sample=16):
 
-        if scale is None:
-            scale = self.scale
-            
+        self.df.eval()
+
+        if not infer_all:
+            self.set_input(data, max_sample=max_sample)
+        else:
+            self.set_input(data)
+        
         if ddim_steps is None:
             ddim_steps = self.ddim_steps
             
-        # get noise, denoise, and decode with vqvae
-        B = ngen
+        B = self.x.shape[0]
         shape = self.z_shape
         c = None
-        
-        samples, intermediates = ddim_sampler.sample(S=ddim_steps,
-                                                     batch_size=B,
-                                                     shape=shape,
-                                                     conditioning=c,
-                                                     verbose=False,
-                                                     unconditional_guidance_scale=scale,
-                                                     log_every_t=1,
-                                                    #  unconditional_conditioning=uc,
-                                                     eta=ddim_eta)
 
+        latents = torch.randn((B, *shape), device=self.device)
+        latents = latents * self.noise_scheduler.init_noise_sigma
+
+        self.noise_scheduler.set_timesteps(ddim_steps)
+
+        for t in tqdm(self.noise_scheduler.timesteps):
+            # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
+            latent_model_input = torch.cat([latents])
+            latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
+
+            # predict the noise residual
+            with torch.no_grad():
+                timesteps = torch.full((B,), t, device=self.device, dtype=torch.int64)
+                noise_pred = self.apply_model(latent_model_input, timesteps, c)
+
+            # compute the previous noisy sample x_t -> x_t-1
+            latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
 
         # decode z
-        self.gen_df = self.vqvae_module.decode_no_quant(samples)
-        return self.gen_df, intermediates
+        self.gen_df = self.vqvae.decode_no_quant(latents)
+
+        self.df.train()
 
     @torch.no_grad()
     def shape_comp(self, shape, xyz_dict, ngen=1, ddim_steps=100, ddim_eta=0.0, scale=None):        
@@ -398,7 +352,7 @@ class SDFusionModel(BaseModel):
 
 
         # decode z
-        self.gen_df = self.vqvae_module.decode_no_quant(samples)
+        self.gen_df = self.vqvae.decode_no_quant(samples)
         return self.gen_df
 
     @torch.no_grad()
@@ -413,9 +367,7 @@ class SDFusionModel(BaseModel):
 
     def backward(self):
         
-        self.loss_dict = reduce_loss_dict(self.loss_dict)
         self.loss = self.loss_dict['loss']
-
         self.loss.backward()
 
     def optimize_parameters(self, total_steps):
@@ -467,8 +419,8 @@ class SDFusionModel(BaseModel):
     def save(self, label, global_step, save_opt=False):
 
         state_dict = {
-            'vqvae': self.vqvae_module.state_dict(),
-            'df': self.df_module.state_dict(),
+            'vqvae': self.vqvae.state_dict(),
+            'df': self.df.state_dict(),
             'opt': self.optimizer.state_dict(),
             'sch': self.scheduler.state_dict(),
             'global_step': global_step,

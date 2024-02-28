@@ -39,8 +39,6 @@ from models.networks.diffusion_networks.samplers.ddim import DDIMSampler
 
 from planners.base_model import create_planner
 
-# distributed 
-# from utils.distributed import reduce_loss_dict
 from accelerate import Accelerator
 
 # rendering
@@ -63,8 +61,8 @@ class SDFusionModelAcc(BaseModel):
         assert opt.vq_cfg is not None
 
         # init df
-        df_conf = OmegaConf.load(opt.df_cfg)
-        vq_conf = OmegaConf.load(opt.vq_cfg)
+        self.df_conf = df_conf = OmegaConf.load(opt.df_cfg)
+        self.vq_conf = vq_conf = OmegaConf.load(opt.vq_cfg)
 
         # record z_shape
         ddconfig = vq_conf.model.params.ddconfig
@@ -80,7 +78,10 @@ class SDFusionModelAcc(BaseModel):
         # self.init_diffusion_params(scale=1, opt=opt)
 
         # init vqvae
-        self.vqvae = load_vqvae(vq_conf, vq_ckpt=opt.vq_ckpt, opt=opt)
+        self.vqvae = load_vqvae(vq_conf, vq_ckpt=opt.vq_ckpt, opt=opt).to(self.device)
+
+        # prepare accelerate
+        self.df, self.vqvae = accelerator.prepare(self.df, self.vqvae).to(self.device)
 
         # noise scheduler
         self.noise_scheduler = DDIMScheduler()
@@ -101,21 +102,20 @@ class SDFusionModelAcc(BaseModel):
 
             self.print_networks(verbose=False)
 
-        if opt.ckpt is not None:
-            self.load_ckpt(opt.ckpt, load_opt=self.isTrain)
-            # if self.isTrain:
-            #     self.optimizers = [self.optimizer]
-            # self.schedulers = [self.scheduler]
+        if opt.continue_train:
+            self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
+        else:
+            self.start_iter = 0
 
         # setup renderer
         if 'snet' in opt.dataset_mode:
-            dist, elev, azim = 1.7, 20, 20
+            dist, elev, azim = 1.7, 120, 120
         elif 'pix3d' in opt.dataset_mode:
-            dist, elev, azim = 1.7, 20, 20
+            dist, elev, azim = 1.7, 120, 120
         elif opt.dataset_mode == 'buildingnet':
-            dist, elev, azim = 1.0, 20, 20
+            dist, elev, azim = 1.0, 120, 120
         elif opt.dataset_mode == 'gapnet':
-            dist, elev, azim = 1.0, 20, 20
+            dist, elev, azim = 1.0, 120, 120
 
         self.renderer = init_mesh_renderer(image_size=256, dist=dist, elev=elev, azim=azim, device=self.device)
 
@@ -130,18 +130,11 @@ class SDFusionModelAcc(BaseModel):
             self.planner = create_planner(opt)
 
     def set_input(self, input=None, max_sample=None):
-        
         self.x = input['sdf']
-
-        # if max_sample is not None:
-        #     self.x = self.x[:max_sample]
-
-        # vars_list = ['x']
-
-        # self.tocuda(var_names=vars_list)
 
     def switch_train(self):
         self.df.train()
+        self.vqvae.eval()
 
     def switch_eval(self):
         self.df.eval()
@@ -168,7 +161,7 @@ class SDFusionModelAcc(BaseModel):
             if not isinstance(cond, list):
                 cond = [cond]
             # key = 'c_concat' if self.model.conditioning_key == 'concat' else 'c_crossattn'
-            key = 'c_concat' if self.df_module.conditioning_key == 'concat' else 'c_crossattn'
+            key = 'c_concat' if self.df_conf.model.params.conditioning_key == 'concat' else 'c_crossattn'
             cond = {key: cond}
 
         # eps
@@ -196,7 +189,7 @@ class SDFusionModelAcc(BaseModel):
 
     def forward(self):
 
-        self.df.train()
+        self.switch_train()
 
         c = None # no condition here
 
@@ -226,8 +219,7 @@ class SDFusionModelAcc(BaseModel):
             raise NotImplementedError()
 
         # l2
-        loss_simple = self.get_loss(model_output, target, mean=False).mean([1, 2, 3, 4])
-        loss = self.l_simple_weight * loss_simple.mean()
+        loss = self.get_loss(model_output, target, mean=False).mean([1, 2, 3, 4])
         loss_dict.update({f'loss': loss.mean()})
 
         self.loss_dict = loss_dict
@@ -237,7 +229,7 @@ class SDFusionModelAcc(BaseModel):
     def inference(self, data, sample=True, ddim_steps=None, ddim_eta=0., quantize_denoised=True,
                   infer_all=False, max_sample=16):
 
-        self.df.eval()
+        self.switch_eval()
 
         if not infer_all:
             self.set_input(data, max_sample=max_sample)
@@ -250,7 +242,6 @@ class SDFusionModelAcc(BaseModel):
         B = self.x.shape[0]
         shape = self.z_shape
         c = None
-        guidance_scale = self.scale
 
         latents = torch.randn((B, *shape), device=self.device)
         latents = latents * self.noise_scheduler.init_noise_sigma
@@ -272,8 +263,6 @@ class SDFusionModelAcc(BaseModel):
 
         # decode z
         self.gen_df = self.vqvae_module.decode_no_quant(latents)
-
-        self.df.train()
 
     @torch.no_grad()
     def uncond(self, ngen=1, ddim_steps=200, ddim_eta=0., scale=None):
@@ -364,29 +353,27 @@ class SDFusionModelAcc(BaseModel):
         return ret
 
     def backward(self):
+
+        self.loss = self.loss_dict['loss']
         self.accelerator.backward(self.loss)
 
     def optimize_parameters(self, total_steps):
         self.set_requires_grad([self.df], requires_grad=True)
 
-        self.optimizer.zero_grad()
-
         self.forward()
         self.backward()
-        self.accelerator.clip_grad_norm_(self.df.parameters(), 1.0)
         
-        ## compute the norm of gradients
-        # total_norm = 0.
-        # for p in self.df.parameters():
-        #     param_norm = p.grad.data.norm(2)
-        #     total_norm += param_norm.item() ** 2
-        # self.grad_norm = total_norm ** (1. / 2)
+        # clip grad norm
+        torch.nn.utils.clip_grad_norm_(self.df.parameters(), 1.0)
+        
+        for optimizer in self.optimizers:
+            optimizer.step()
+        
+        for scheduler in self.schedulers:
+            scheduler.step()
 
-        # if total_steps > 1000:
-        #     nn.utils.clip_grad_norm_(self.df.parameters(), 0.3)
-        
-        self.optimizer.step()
-        self.scheduler.step()
+        for optimizer in self.optimizers:
+            optimizer.zero_grad()
 
     def get_current_errors(self):
         
@@ -421,19 +408,23 @@ class SDFusionModelAcc(BaseModel):
     def save(self, label, global_step, save_opt=False):
 
         state_dict = {
-            'vqvae': self.vqvae_module.state_dict(),
-            'df': self.df_module.state_dict(),
-            'opt': self.optimizer.state_dict(),
-            'sch': self.scheduler.state_dict(),
+            'vqvae': self.vqvae.state_dict(),
+            'df': self.df.state_dict(),
             'global_step': global_step,
         }
-          
+
+        for i, optimizer in enumerate(self.optimizers):
+            state_dict[f'opt{i}'] = optimizer.state_dict()
+        for i, scheduler in enumerate(self.schedulers):
+            state_dict[f'sch{i}'] = scheduler.state_dict()
+           
         save_filename = 'df_%s.pth' % (label)
         save_path = os.path.join(self.opt.ckpt_dir, save_filename)
 
         torch.save(state_dict, save_path)
 
     def load_ckpt(self, ckpt, load_opt=False):
+
         map_fn = lambda storage, loc: storage
         if type(ckpt) == str:
             state_dict = torch.load(ckpt, map_location=map_fn)
@@ -444,9 +435,18 @@ class SDFusionModelAcc(BaseModel):
         self.df.load_state_dict(state_dict['df'])
         print(colored('[*] weight successfully load from: %s' % ckpt, 'blue'))
 
-        if load_opt:
-            self.optimizer.load_state_dict(state_dict['opt'])
-            print(colored('[*] optimizer successfully restored from: %s' % ckpt, 'blue'))
+        # if 'opt' in state_dict:
+        for i, optimizer in enumerate(self.optimizers):
+            optimizer.load_state_dict(state_dict[f'opt{i}'])
+        print(colored('[*] optimizer successfully restored from: %s' % ckpt, 'blue'))
+        iter_passed = state_dict['global_step']
+        
+        if 'sch' in state_dict:
+            for i, scheduler in enumerate(self.schedulers):
+                scheduler.load_state_dict(state_dict[f'sch{i}'])
+            print(colored('[*] scheduler successfully restored from: %s' % ckpt, 'blue'))
+
+        return iter_passed
 
     def set_planner(self, planner):
         if not self.isTrain:

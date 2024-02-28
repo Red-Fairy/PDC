@@ -27,6 +27,6 @@ def load_vqvae(vq_conf, vq_ckpt, opt=None):
     print(colored('[*] VQVAE: weight successfully load from: %s' % vq_ckpt, 'blue'))
     vqvae.requires_grad = False
 
-    vqvae.to(opt.device)
+    # vqvae.to(opt.device)
     vqvae.eval()
     return vqvae

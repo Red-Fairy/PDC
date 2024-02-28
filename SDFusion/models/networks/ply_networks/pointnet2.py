@@ -17,9 +17,9 @@ class PointNet2(nn.Module):
         self.fc2 = nn.Linear(512, hidden_dim)
         self.bn2 = nn.BatchNorm1d(hidden_dim)
         self.drop2 = nn.Dropout(0.4)
-        self.fc3 = nn.Linear(hidden_dim, num_class)
+        # self.fc3 = nn.Linear(hidden_dim, num_class)
 
-    def forward(self, xyz, return_feat=True):
+    def forward(self, xyz):
         B, _, _ = xyz.shape
         if self.normal_channel:
             norm = xyz[:, 3:, :]
@@ -32,13 +32,8 @@ class PointNet2(nn.Module):
         x = l3_points.view(B, 1024)
         x = self.drop1(F.relu(self.bn1(self.fc1(x))))
         x = self.drop2(F.relu(self.bn2(self.fc2(x))))
-
-        result = F.log_softmax(self.fc3(x), -1)
         
-        if not return_feat:
-            return result, l3_points
-        else:
-            return x
+        return x
 
 class get_loss(nn.Module):
     def __init__(self):

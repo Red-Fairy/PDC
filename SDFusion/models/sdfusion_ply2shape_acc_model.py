@@ -24,9 +24,12 @@ from models.networks.vqvae_networks.network import VQVAE
 from models.networks.diffusion_networks.network import DiffusionUNet
 from models.model_utils import load_vqvae
 from models.networks.ply_networks.pointnet2 import PointNet2
+from models.networks.ply_networks.pointnet import PointNetEncoder
 
 from diffusers import DDIMScheduler
 from diffusers.optimization import get_cosine_schedule_with_warmup
+
+from accelerate import Accelerator
 
 # ldm util
 from models.networks.diffusion_networks.ldm_diffusion_util import (
@@ -39,18 +42,22 @@ from models.networks.diffusion_networks.ldm_diffusion_util import (
 
 from planners.base_model import create_planner
 
+# distributed 
+from utils.distributed import reduce_loss_dict
+
 # rendering
 from utils.util_3d import init_mesh_renderer, render_sdf
 
-class SDFusionModelPly2Shape(BaseModel):
+class SDFusionModelPly2ShapeAcc(BaseModel):
     def name(self):
-        return 'SDFusion-Model-PointCloud-to-Shape'
+        return 'SDFusion-Model-PointCloud-to-Shape-Accelerate'
 
-    def __init__(self, opt):
+    def __init__(self, opt, accelerator: Accelerator):
         super().__init__(opt)
         self.isTrain = opt.isTrain
         self.model_name = self.name()
-        self.device = opt.device
+        self.device = accelerator.device
+        self.accelerator = accelerator
         assert self.opt.ply_cond
 
         # self.optimizer_skip = False
@@ -81,10 +88,23 @@ class SDFusionModelPly2Shape(BaseModel):
 
         # init U-Net conditional model
         self.cond_model = PointNet2(hidden_dim=df_conf.unet.params.context_dim).to(self.device)
+        # convert to sync-bn
+        self.cond_model = nn.SyncBatchNorm.convert_sync_batchnorm(self.cond_model)
         self.cond_model.requires_grad_(True)
-        self.cond_model.load_state_dict(torch.load(opt.cond_ckpt)['model_state_dict'])
+        if not opt.continue_train:
+            load_result = self.cond_model.load_state_dict(torch.load(opt.cond_ckpt)['model_state_dict'], strict=False)
+            if 'missing_keys' in load_result:
+                assert False
         print(colored('[*] conditional model successfully loaded', 'blue'))
         self.uncond_prob = df_conf.model.params.uncond_prob
+
+        if opt.continue_train:
+            self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
+        else:
+            self.start_iter = 0
+
+        # prepare accelerate
+        self.df, self.vqvae, self.cond_model = accelerator.prepare(self.df, self.vqvae, self.cond_model)
 
         # noise scheduler
         self.noise_scheduler = DDIMScheduler()
@@ -93,34 +113,23 @@ class SDFusionModelPly2Shape(BaseModel):
 
         if self.isTrain:
             # initialize optimizers
-            # self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True], lr=opt.lr)
-            # self.optimizer2 = optim.AdamW([p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
-
-            # lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
-            # self.scheduler1 = optim.lr_scheduler.LambdaLR(self.optimizer1, lr_lambda1)
-            
-            # freeze_iters = 10000
-            # lr_lambda2 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters)) if it > freeze_iters else 0
-            # self.scheduler2 = optim.lr_scheduler.LambdaLR(self.optimizer2, lr_lambda2)
-
-            # self.optimizers = [self.optimizer1, self.optimizer2]
-            # self.schedulers = [self.scheduler1, self.scheduler2]
-
-            self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True] + \
-                            [p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
+            self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True], lr=opt.lr)
+            self.optimizer2 = optim.AdamW([p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
 
             lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
             self.scheduler1 = optim.lr_scheduler.LambdaLR(self.optimizer1, lr_lambda1)
+            
+            freeze_iters = 10000
+            lr_lambda2 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters)) if it > freeze_iters else 0
+            self.scheduler2 = optim.lr_scheduler.LambdaLR(self.optimizer2, lr_lambda2)
 
-            self.optimizers = [self.optimizer1]
-            self.schedulers = [self.scheduler1]
+            self.optimizer1, self.optimizer2 = accelerator.prepare(self.optimizer1, self.optimizer2)
+            self.scheduler1, self.scheduler2 = accelerator.prepare(self.scheduler1, self.scheduler2)
+
+            self.optimizers = [self.optimizer1, self.optimizer2]
+            self.schedulers = [self.scheduler1, self.scheduler2]
 
             self.print_networks(verbose=False)
-
-        if opt.continue_train:
-            self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
-        else:
-            self.start_iter = 0
 
         # setup renderer
         if 'snet' in opt.dataset_mode:
@@ -135,9 +144,6 @@ class SDFusionModelPly2Shape(BaseModel):
         self.renderer = init_mesh_renderer(image_size=256, dist=dist, elev=elev, azim=azim, device=self.device)
 
         self.ddim_steps = self.df_conf.model.params.ddim_steps
-        if self.opt.debug == "1":
-            # NOTE: for debugging purpose
-            self.ddim_steps = 7
         cprint(f'[*] setting ddim_steps={self.ddim_steps}', 'blue')
         self.planner = None
         if not self.isTrain:
@@ -148,6 +154,9 @@ class SDFusionModelPly2Shape(BaseModel):
         self.x = input['sdf'].to(self.device)
         self.ply = input['ply'].to(self.device)
         self.paths = input['path']
+
+        # if max_sample is not None:
+        #     self.x = self.x[:max_sample]
 
     def switch_train(self):
         self.df.train()
@@ -179,7 +188,8 @@ class SDFusionModelPly2Shape(BaseModel):
         else:
             if not isinstance(cond, list):
                 cond = [cond]
-            key = 'c_concat' if self.df.conditioning_key == 'concat' else 'c_crossattn'
+            # key = 'c_concat' if self.model.conditioning_key == 'concat' else 'c_crossattn'
+            key = 'c_concat' if self.df_conf.model.params.conditioning_key == 'concat' else 'c_crossattn'
             cond = {key: cond}
 
         # eps
@@ -270,7 +280,7 @@ class SDFusionModelPly2Shape(BaseModel):
         latents = torch.randn((B, *shape), device=self.device)
         latents = latents * self.noise_scheduler.init_noise_sigma
 
-        self.noise_scheduler.set_timesteps(self.ddim_steps)
+        self.noise_scheduler.set_timesteps(ddim_steps)
 
         # w/ condition
         for t in tqdm(self.noise_scheduler.timesteps):
@@ -291,7 +301,7 @@ class SDFusionModelPly2Shape(BaseModel):
             latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
 
         # decode z
-        self.gen_df = self.vqvae.decode_no_quant(latents)
+        self.gen_df = self.vqvae.module.decode_no_quant(latents)
 
     @torch.no_grad()
     def uncond(self, ngen=1, ddim_steps=200, ddim_eta=0.):
@@ -307,7 +317,7 @@ class SDFusionModelPly2Shape(BaseModel):
         latents = torch.randn((B, *shape), device=self.device)
         latents = latents * self.noise_scheduler.init_noise_sigma
 
-        self.noise_scheduler.set_timesteps(self.ddim_steps)
+        self.noise_scheduler.set_timesteps(ddim_steps)
         
         for t in tqdm(self.noise_scheduler.timesteps):
             # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
@@ -323,7 +333,7 @@ class SDFusionModelPly2Shape(BaseModel):
             latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
 
         # decode z
-        self.gen_df = self.vqvae.decode_no_quant(latents)
+        self.gen_df = self.vqvae.module.decode_no_quant(latents)
         return self.gen_df
 
     @torch.no_grad()
@@ -338,8 +348,9 @@ class SDFusionModelPly2Shape(BaseModel):
 
     def backward(self):
         
+        # self.loss_dict = reduce_loss_dict(self.loss_dict)
         self.loss = self.loss_dict['loss']
-        self.loss.backward()
+        self.accelerator.backward(self.loss)
 
     def optimize_parameters(self, total_steps):
         self.set_requires_grad([self.df], requires_grad=True)
@@ -395,8 +406,8 @@ class SDFusionModelPly2Shape(BaseModel):
     def save(self, label, global_step, save_opt=False):
 
         state_dict = {
-            'vqvae': self.vqvae.state_dict(),
-            'df': self.df.state_dict(),
+            'vqvae': self.vqvae.module.state_dict(),
+            'df': self.df.module.state_dict(),
             'global_step': global_step,
         }
 
