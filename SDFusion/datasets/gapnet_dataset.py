@@ -35,6 +35,7 @@ class GAPartNetDataset(BaseDataset):
 
         self.bbox_cond = opt.bbox_cond
         self.ply_cond = opt.ply_cond
+        self.ply_input_rotate = opt.ply_input_rotate
         self.df_conf = OmegaConf.load(opt.df_cfg)
 
         if self.phase == 'eval':
@@ -86,7 +87,18 @@ class GAPartNetDataset(BaseDataset):
             ply_filepath = sdf_h5_file.replace('part_sdf', 'part_ply').replace('.h5', '.ply')
             ret['ply'] = ply_filepath
             # load ply file
-            points = torch.from_numpy(np.array(open3d.io.read_point_cloud(ply_filepath).points)).transpose(0, 1).float() # (3, N)
+            ply_file = open3d.io.read_point_cloud(ply_filepath).points
+            points = torch.from_numpy(np.array(ply_file)).transpose(0, 1).float() # (3, N)
+
+            if self.ply_input_rotate: # rotate the input pointcloud by a random angle
+                raw, pitch, yaw = torch.rand(3) * 2 * np.pi
+                R = torch.tensor([
+                    [np.cos(yaw)*np.cos(pitch), np.cos(yaw)*np.sin(pitch)*np.sin(raw)-np.sin(yaw)*np.cos(raw), np.cos(yaw)*np.sin(pitch)*np.cos(raw)+np.sin(yaw)*np.sin(raw)],
+                    [np.sin(yaw)*np.cos(pitch), np.sin(yaw)*np.sin(pitch)*np.sin(raw)+np.cos(yaw)*np.cos(raw), np.sin(yaw)*np.sin(pitch)*np.cos(raw)-np.cos(yaw)*np.sin(raw)],
+                    [-np.sin(pitch), np.cos(pitch)*np.sin(raw), np.cos(pitch)*np.cos(raw)]
+                ])
+                points = torch.mm(R, points)
+                
             # padding
             N = points.shape[1]
             points = torch.cat([points, torch.zeros(3, self.df_conf.ply.max_points - N)], dim=1)

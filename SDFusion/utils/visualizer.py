@@ -1,4 +1,3 @@
-
 import pickle
 from collections import OrderedDict
 import os
@@ -13,6 +12,8 @@ import imageio
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+
+import open3d
 
 def parse_line(line):
     info_d = {}
@@ -111,12 +112,18 @@ class Visualizer():
         visual_meshes = visuals['meshes']
         # paths = visuals['paths']
         if self.opt.ply_cond:
-            ply_paths = [path.replace('part_sdf', 'part_ply').replace('.h5', '.ply') for path in visuals['paths']]
-            # create a symbolic link
-            for i, path in enumerate(ply_paths):
-                dst_path = os.path.join(self.img_dir, f'{phase}_step{current_iters:05d}_{im_name}_{i}.ply')
-                if not os.path.exists(dst_path):
-                    os.system(f'ln -s {path} {dst_path}')
+            # save the visualized ply files, points are stored in visuals['points']
+            ply_file = open3d.geometry.PointCloud()
+            ply_file.points = open3d.utility.Vector3dVector(visuals['points'])
+            ply_path = os.path.join(self.img_dir, f'{phase}_step{current_iters:05d}_{im_name}.ply')
+            open3d.io.write_point_cloud(ply_path, ply_file)
+
+            # ply_paths = [path.replace('part_sdf', 'part_ply').replace('.h5', '.ply') for path in visuals['paths']]
+            # # create a symbolic link
+            # for i, path in enumerate(ply_paths):
+            #     dst_path = os.path.join(self.img_dir, f'{phase}_step{current_iters:05d}_{im_name}_{i}.ply')
+            #     if not os.path.exists(dst_path):
+            #         os.system(f'ln -s {path} {dst_path}')
         if self.opt.bbox_cond:
             bboxes = visuals['bboxes']
             data_dict = {

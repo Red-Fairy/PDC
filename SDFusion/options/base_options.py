@@ -75,6 +75,7 @@ class BaseOptions():
         # condition
         self.parser.add_argument('--bbox_cond', action='store_true', help='if true, use bbox condition')
         self.parser.add_argument('--ply_cond', action='store_true', help='if true, use pointcloud condition')
+        self.parser.add_argument('--ply_input_rotate', action='store_true', help='if true, rotate the input pointcloud')
 
         self.initialized = True
 

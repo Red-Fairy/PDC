@@ -1,5 +1,7 @@
-# Reference: diffusion is borrowed from the LDM repo: https://github.com/CompVis/latent-diffusion
-# Specifically, functions from: https://github.com/CompVis/latent-diffusion/blob/main/ldm/models/diffusion/ddpm.py
+'''
+Incoporate accumulate for multi-gpu training and diffusers for training diffusion models.
+Author: Rundong Luo
+'''
 import os
 from collections import OrderedDict
 from functools import partial
@@ -399,7 +401,8 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         visuals_dict = {
             "img": OrderedDict(visuals),
             "meshes": meshes,
-            "paths": self.paths
+            "paths": self.paths,
+            "points": self.ply.cpu().numpy(),
         }
         return visuals_dict
 
