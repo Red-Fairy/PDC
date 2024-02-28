@@ -96,18 +96,27 @@ class SDFusionModelPly2Shape(BaseModel):
 
         if self.isTrain:
             # initialize optimizers
-            self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True], lr=opt.lr)
-            self.optimizer2 = optim.AdamW([p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
+            # self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True], lr=opt.lr)
+            # self.optimizer2 = optim.AdamW([p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
+
+            # lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
+            # self.scheduler1 = optim.lr_scheduler.LambdaLR(self.optimizer1, lr_lambda1)
+            
+            # freeze_iters = 10000
+            # lr_lambda2 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters)) if it > freeze_iters else 0
+            # self.scheduler2 = optim.lr_scheduler.LambdaLR(self.optimizer2, lr_lambda2)
+
+            # self.optimizers = [self.optimizer1, self.optimizer2]
+            # self.schedulers = [self.scheduler1, self.scheduler2]
+
+            self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True] + \
+                            [p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
 
             lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
             self.scheduler1 = optim.lr_scheduler.LambdaLR(self.optimizer1, lr_lambda1)
-            
-            freeze_iters = 10000
-            lr_lambda2 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters)) if it > freeze_iters else 0
-            self.scheduler2 = optim.lr_scheduler.LambdaLR(self.optimizer2, lr_lambda2)
 
-            self.optimizers = [self.optimizer1, self.optimizer2]
-            self.schedulers = [self.scheduler1, self.scheduler2]
+            self.optimizers = [self.optimizer1]
+            self.schedulers = [self.scheduler1]
 
             self.print_networks(verbose=False)
 

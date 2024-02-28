@@ -31,7 +31,7 @@ cuda_avail = torch.cuda.is_available()
 print(f"CUDA TORCH AVAILABLE: {cuda_avail}")
 
 
-def train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, visualizer, device):
+def train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, visualizer):
 
     if get_rank() == 0:
         cprint('[*] Start training. name: %s' % opt.name, 'blue')
@@ -113,8 +113,7 @@ def train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, visualize
 
         pbar.update(1)
         
-
-if __name__ == "__main__":
+def main():
     ## set random seed
     torch.backends.cudnn.benchmark = False     
     torch.backends.cudnn.deterministic = True
@@ -127,7 +126,7 @@ if __name__ == "__main__":
 
     # this will parse args, setup log_dirs, multi-gpus
     opt = TrainOptions().parse_and_setup()
-    device = opt.device
+    # device = opt.device
     rank = opt.rank
 
     # CUDA_VISIBLE_DEVICES = int(os.environ["LOCAL_RANK"]) 
@@ -178,4 +177,8 @@ if __name__ == "__main__":
             cfg_out = os.path.join(expr_dir, os.path.basename(df_cfg))
             os.system(f'cp {df_cfg} {cfg_out}')
 
-    train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, visualizer, device)
+    train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, visualizer)
+
+if __name__ == "__main__":
+    main()
+

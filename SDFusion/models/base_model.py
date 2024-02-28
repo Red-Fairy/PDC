@@ -35,8 +35,12 @@ def create_model(opt, accelerator=None):
         model = SDFusionBbox2ShapeModel(opt)
 
     elif opt.model == 'sdfusion-ply2shape':
-        from models.sdfusion_ply2shape_model import SDFusionModelPly2Shape
-        model = SDFusionModelPly2Shape(opt)
+        if accelerator is None:
+            from models.sdfusion_ply2shape_model import SDFusionModelPly2Shape
+            model = SDFusionModelPly2Shape(opt)
+        else:
+            from models.sdfusion_ply2shape_acc_model import SDFusionModelPly2ShapeAcc
+            model = SDFusionModelPly2ShapeAcc(opt, accelerator)
         
     else:
         raise ValueError("Model [%s] not recognized." % opt.model)
@@ -128,12 +132,12 @@ class BaseModel():
                 print('[Network %s] Total number of parameters : %.3f M' % (name, num_params / 1e6))
         print('-----------------------------------------------')
 
-    def tocuda(self, var_names):
-        for name in var_names:
-            if isinstance(name, str):
-                var = getattr(self, name)
-                # setattr(self, name, var.cuda(self.gpu_ids[0], non_blocking=True))
-                setattr(self, name, var.cuda(self.opt.device, non_blocking=True))
+    # def tocuda(self, var_names):
+    #     for name in var_names:
+    #         if isinstance(name, str):
+    #             var = getattr(self, name)
+    #             # setattr(self, name, var.cuda(self.gpu_ids[0], non_blocking=True))
+    #             setattr(self, name, var.cuda(self.opt.device, non_blocking=True))
 
 
     def tnsrs2ims(self, tensor_names):

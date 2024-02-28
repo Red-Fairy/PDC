@@ -40,11 +40,10 @@ def train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, visualize
     train_dg = get_data_generator(train_dl)
     test_dg = get_data_generator(test_dl)
 
-    model.df, model.vqvae, train_dg, test_dg, model.optimizer, model.scheduler = accelerator.prepare(
-        model.df, model.vqvae, train_dg, test_dg, model.optimizer, model.scheduler
-    )
-    
+    train_dg, test_dg = accelerator.prepare(train_dg, test_dg)
+
     pbar = tqdm(total=opt.total_iters, disable=not accelerator.is_local_main_process)
+    pbar.update(model.start_iter)
     pbar.set_description("Training Iters")
     # pbar = tqdm(total=opt.total_iters)
 
@@ -115,7 +114,7 @@ def train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, visualize
                     ), 'blue', attrs=['bold']
                     )
 
-        model.update_learning_rate()
+        # model.update_learning_rate()
 
         pbar.update(1)
         
@@ -133,8 +132,8 @@ if __name__ == "__main__":
 
     # this will parse args, setup log_dirs, multi-gpus
     opt = TrainOptions().parse_and_setup()
-    device = opt.device
-    rank = opt.rank
+    # device = opt.device
+    # rank = opt.rank
 
     # CUDA_VISIBLE_DEVICES = int(os.environ["LOCAL_RANK"]) 
     # import pdb; pdb.set_trace()

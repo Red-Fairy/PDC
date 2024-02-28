@@ -153,14 +153,14 @@ class SDFusionModel(BaseModel):
     
     def set_input(self, input=None, max_sample=None):
         
-        self.x = input['sdf']
+        self.x = input['sdf'].to(self.device)
 
         if max_sample is not None:
             self.x = self.x[:max_sample]
 
-        vars_list = ['x']
+        # vars_list = ['x']
 
-        self.tocuda(var_names=vars_list)
+        # self.tocuda(var_names=vars_list)
 
     def switch_train(self):
         self.df.train()
