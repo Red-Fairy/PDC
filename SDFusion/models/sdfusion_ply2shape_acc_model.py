@@ -223,7 +223,8 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
         B = self.x.shape[0]
         c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim)
-        uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
+        uc = torch.zeros_like(c, device=self.device)
+        # uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
         # drop cond with self.uncond_prob
         c = torch.where(torch.rand(B, 1, device=self.device) < self.uncond_prob, uc, c)
 
@@ -276,7 +277,8 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         B = self.x.shape[0]
         shape = self.z_shape
         c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
-        uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
+        uc = torch.zeros_like(c, device=self.device)
+        # uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
         c_full = torch.cat([uc, c])
 
         latents = torch.randn((B, *shape), device=self.device)
@@ -438,9 +440,10 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         for i, optimizer in enumerate(self.optimizers):
             try:
                 optimizer.load_state_dict(state_dict[f'opt{i}'])
+                print(colored('[*] optimizer successfully restored from: %s' % ckpt, 'blue'))
             except:
-                pass
-        print(colored('[*] optimizer successfully restored from: %s' % ckpt, 'blue'))
+                print(colored('[*] optimizer not loaded', 'red'))
+        
         iter_passed = state_dict['global_step']
         
         if 'sch' in state_dict:
