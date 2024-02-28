@@ -395,7 +395,7 @@ class SDFusionModelPly2Shape(BaseModel):
     def save(self, label, global_step, save_opt=False):
 
         state_dict = {
-            'vqvae': self.vqvae.state_dict(),
+            # 'vqvae': self.vqvae.state_dict(),
             'df': self.df.state_dict(),
             'global_step': global_step,
         }
@@ -417,19 +417,26 @@ class SDFusionModelPly2Shape(BaseModel):
         else:
             state_dict = ckpt
 
-        self.vqvae.load_state_dict(state_dict['vqvae'])
+        # self.vqvae.load_state_dict(state_dict['vqvae'])
         self.df.load_state_dict(state_dict['df'])
         print(colored('[*] weight successfully load from: %s' % ckpt, 'blue'))
 
         # if 'opt' in state_dict:
         for i, optimizer in enumerate(self.optimizers):
-            optimizer.load_state_dict(state_dict[f'opt{i}'])
+            try:
+                optimizer.load_state_dict(state_dict[f'opt{i}'])
+            except:
+                pass
         print(colored('[*] optimizer successfully restored from: %s' % ckpt, 'blue'))
         iter_passed = state_dict['global_step']
         
         if 'sch' in state_dict:
             for i, scheduler in enumerate(self.schedulers):
-                scheduler.load_state_dict(state_dict[f'sch{i}'])
+                try:
+                    scheduler.load_state_dict(state_dict[f'sch{i}'])
+                except:
+                    for _ in range(state_dict['global_step']):
+                        scheduler.step()
             print(colored('[*] scheduler successfully restored from: %s' % ckpt, 'blue'))
 
         return iter_passed

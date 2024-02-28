@@ -98,19 +98,6 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         print(colored('[*] conditional model successfully loaded', 'blue'))
         self.uncond_prob = df_conf.model.params.uncond_prob
 
-        if opt.continue_train:
-            self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
-        else:
-            self.start_iter = 0
-
-        # prepare accelerate
-        self.df, self.vqvae, self.cond_model = accelerator.prepare(self.df, self.vqvae, self.cond_model)
-
-        # noise scheduler
-        self.noise_scheduler = DDIMScheduler()
-
-        ######## END: Define Networks ########
-
         if self.isTrain:
             # initialize optimizers
             self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True], lr=opt.lr)
@@ -130,6 +117,19 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
             self.schedulers = [self.scheduler1, self.scheduler2]
 
             self.print_networks(verbose=False)
+
+        if opt.continue_train:
+            self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
+        else:
+            self.start_iter = 0
+
+        # prepare accelerate
+        self.df, self.vqvae, self.cond_model = accelerator.prepare(self.df, self.vqvae, self.cond_model)
+
+        # noise scheduler
+        self.noise_scheduler = DDIMScheduler()
+
+        ######## END: Define Networks ########
 
         # setup renderer
         if 'snet' in opt.dataset_mode:
@@ -406,7 +406,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
     def save(self, label, global_step, save_opt=False):
 
         state_dict = {
-            'vqvae': self.vqvae.module.state_dict(),
+            # 'vqvae': self.vqvae.module.state_dict(),
             'df': self.df.module.state_dict(),
             'global_step': global_step,
         }
@@ -428,19 +428,25 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         else:
             state_dict = ckpt
 
-        self.vqvae.load_state_dict(state_dict['vqvae'])
         self.df.load_state_dict(state_dict['df'])
         print(colored('[*] weight successfully load from: %s' % ckpt, 'blue'))
 
         # if 'opt' in state_dict:
         for i, optimizer in enumerate(self.optimizers):
-            optimizer.load_state_dict(state_dict[f'opt{i}'])
+            try:
+                optimizer.load_state_dict(state_dict[f'opt{i}'])
+            except:
+                pass
         print(colored('[*] optimizer successfully restored from: %s' % ckpt, 'blue'))
         iter_passed = state_dict['global_step']
         
         if 'sch' in state_dict:
             for i, scheduler in enumerate(self.schedulers):
-                scheduler.load_state_dict(state_dict[f'sch{i}'])
+                try:
+                    scheduler.load_state_dict(state_dict[f'sch{i}'])
+                except:
+                    for _ in range(state_dict['global_step']):
+                        scheduler.step()
             print(colored('[*] scheduler successfully restored from: %s' % ckpt, 'blue'))
 
         return iter_passed

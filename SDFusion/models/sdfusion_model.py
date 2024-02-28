@@ -419,7 +419,7 @@ class SDFusionModel(BaseModel):
     def save(self, label, global_step, save_opt=False):
 
         state_dict = {
-            'vqvae': self.vqvae.state_dict(),
+            # 'vqvae': self.vqvae.state_dict(),
             'df': self.df.state_dict(),
             'opt': self.optimizer.state_dict(),
             'sch': self.scheduler.state_dict(),
@@ -438,7 +438,7 @@ class SDFusionModel(BaseModel):
         else:
             state_dict = ckpt
 
-        self.vqvae.load_state_dict(state_dict['vqvae'])
+        # self.vqvae.load_state_dict(state_dict['vqvae'])
         self.df.load_state_dict(state_dict['df'])
         print(colored('[*] weight successfully load from: %s' % ckpt, 'blue'))
 

@@ -408,7 +408,7 @@ class SDFusionModelAcc(BaseModel):
     def save(self, label, global_step, save_opt=False):
 
         state_dict = {
-            'vqvae': self.vqvae.state_dict(),
+            # 'vqvae': self.vqvae.state_dict(),
             'df': self.df.state_dict(),
             'global_step': global_step,
         }
@@ -431,7 +431,7 @@ class SDFusionModelAcc(BaseModel):
         else:
             state_dict = ckpt
 
-        self.vqvae.load_state_dict(state_dict['vqvae'])
+        # self.vqvae.load_state_dict(state_dict['vqvae'])
         self.df.load_state_dict(state_dict['df'])
         print(colored('[*] weight successfully load from: %s' % ckpt, 'blue'))
 
