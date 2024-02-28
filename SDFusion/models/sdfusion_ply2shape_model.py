@@ -391,7 +391,7 @@ class SDFusionModelPly2Shape(BaseModel):
             "img": OrderedDict(visuals),
             "meshes": meshes,
             "paths": self.paths,
-            "points": self.ply.cpu().numpy()
+            "points": self.ply.cpu().numpy() # (B, 3, N)
         }
         return visuals_dict
 

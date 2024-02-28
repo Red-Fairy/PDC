@@ -113,10 +113,11 @@ class Visualizer():
         # paths = visuals['paths']
         if self.opt.ply_cond:
             # save the visualized ply files, points are stored in visuals['points']
-            ply_file = open3d.geometry.PointCloud()
-            ply_file.points = open3d.utility.Vector3dVector(visuals['points'])
-            ply_path = os.path.join(self.img_dir, f'{phase}_step{current_iters:05d}_{im_name}.ply')
-            open3d.io.write_point_cloud(ply_path, ply_file)
+            for i in range(visuals['points'].shape[0]):
+                ply_file = open3d.geometry.PointCloud()
+                ply_file.points = open3d.utility.Vector3dVector(visuals['points'][i].T)
+                ply_path = os.path.join(self.img_dir, f'{phase}_step{current_iters:05d}_{im_name}_{i}.ply')
+                open3d.io.write_point_cloud(ply_path, ply_file)
 
             # ply_paths = [path.replace('part_sdf', 'part_ply').replace('.h5', '.ply') for path in visuals['paths']]
             # # create a symbolic link

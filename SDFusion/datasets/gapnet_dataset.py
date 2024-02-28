@@ -20,7 +20,6 @@ from omegaconf import OmegaConf
 
 import open3d
 
-# from https://github.com/laughtervv/DISN/blob/master/preprocessing/info.json
 class GAPartNetDataset(BaseDataset):
 
     def __init__(self, opt, phase='train', cat='all', res=256, eval_samples=100):
@@ -97,8 +96,8 @@ class GAPartNetDataset(BaseDataset):
                     [np.sin(yaw)*np.cos(pitch), np.sin(yaw)*np.sin(pitch)*np.sin(raw)+np.cos(yaw)*np.cos(raw), np.sin(yaw)*np.sin(pitch)*np.cos(raw)-np.cos(yaw)*np.sin(raw)],
                     [-np.sin(pitch), np.cos(pitch)*np.sin(raw), np.cos(pitch)*np.cos(raw)]
                 ])
-                points = torch.mm(R, points)
-                
+                points = torch.mm(R, points) # (3, N)
+
             # padding
             N = points.shape[1]
             points = torch.cat([points, torch.zeros(3, self.df_conf.ply.max_points - N)], dim=1)
