@@ -297,6 +297,8 @@ class SDFusionModelPly2Shape(BaseModel):
 
     @torch.no_grad()
     def uncond(self, ngen=1, ddim_steps=200, ddim_eta=0.):
+
+        self.switch_eval()
             
         if ddim_steps is None:
             ddim_steps = self.ddim_steps

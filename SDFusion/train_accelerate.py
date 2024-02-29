@@ -45,9 +45,9 @@ def train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, accelerat
     # pbar = tqdm(total=opt.total_iters)
 
     iter_start_time = time.time()
-    for iter_i in range(1, opt.total_iters+1):
+    for iter_i in range(model.start_iter+1, opt.total_iters+1):
 
-        opt.iter_i = iter_i
+        # opt.iter_i = iter_i
         iter_ip1 = iter_i + 1
 
         if accelerator.is_main_process:

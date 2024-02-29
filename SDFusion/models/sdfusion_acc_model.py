@@ -41,6 +41,8 @@ from planners.base_model import create_planner
 
 from accelerate import Accelerator
 
+from utils.util import AverageMeter
+
 # rendering
 from utils.util_3d import init_mesh_renderer, render_sdf
 
@@ -80,14 +82,6 @@ class SDFusionModelAcc(BaseModel):
         # init vqvae
         self.vqvae = load_vqvae(vq_conf, vq_ckpt=opt.vq_ckpt, opt=opt).to(self.device)
 
-        # prepare accelerate
-        self.df, self.vqvae = accelerator.prepare(self.df, self.vqvae).to(self.device)
-
-        # noise scheduler
-        self.noise_scheduler = DDIMScheduler()
-
-        ######## END: Define Networks ########
-
         if self.isTrain:
             # initialize optimizers
             self.optimizer = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True], lr=opt.lr)
@@ -107,6 +101,14 @@ class SDFusionModelAcc(BaseModel):
         else:
             self.start_iter = 0
 
+        # prepare accelerate
+        self.df, self.vqvae = accelerator.prepare(self.df, self.vqvae)
+
+        # noise scheduler
+        self.noise_scheduler = DDIMScheduler()
+
+        ######## END: Define Networks ########
+
         # setup renderer
         if 'snet' in opt.dataset_mode:
             dist, elev, azim = 1.7, 120, 120
@@ -119,7 +121,6 @@ class SDFusionModelAcc(BaseModel):
 
         self.renderer = init_mesh_renderer(image_size=256, dist=dist, elev=elev, azim=azim, device=self.device)
 
-
         self.ddim_steps = 200
         if self.opt.debug == "1":
             # NOTE: for debugging purpose
@@ -129,8 +130,11 @@ class SDFusionModelAcc(BaseModel):
         if not self.isTrain:
             self.planner = create_planner(opt)
 
+        self.loss_meter = AverageMeter()
+        self.loss_meter.reset()
+
     def set_input(self, input=None, max_sample=None):
-        self.x = input['sdf']
+        self.x = input['sdf'].to(self.device)
 
     def switch_train(self):
         self.df.train()
@@ -209,8 +213,6 @@ class SDFusionModelAcc(BaseModel):
         z_noisy = self.noise_scheduler.add_noise(z, noise, timesteps)
         model_output = self.apply_model(z_noisy, timesteps, cond=c)
 
-        loss_dict = {}
-
         if self.parameterization == "x0":
             target = z
         elif self.parameterization == "eps":
@@ -219,10 +221,8 @@ class SDFusionModelAcc(BaseModel):
             raise NotImplementedError()
 
         # l2
-        loss = self.get_loss(model_output, target, mean=False).mean([1, 2, 3, 4])
-        loss_dict.update({f'loss': loss.mean()})
-
-        self.loss_dict = loss_dict
+        loss = self.get_loss(model_output, target).mean()
+        return loss
 
     # check: ddpm.py, log_images(). line 1317~1327
     @torch.no_grad()
@@ -262,14 +262,12 @@ class SDFusionModelAcc(BaseModel):
             latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
 
         # decode z
-        self.gen_df = self.vqvae_module.decode_no_quant(latents)
+        self.gen_df = self.vqvae.module.decode_no_quant(latents)
 
     @torch.no_grad()
-    def uncond(self, ngen=1, ddim_steps=200, ddim_eta=0., scale=None):
-        ddim_sampler = DDIMSampler(self)
+    def uncond(self, ngen=1, ddim_steps=200, ddim_eta=0.):
 
-        if scale is None:
-            scale = self.scale
+        self.switch_eval()
             
         if ddim_steps is None:
             ddim_steps = self.ddim_steps
@@ -278,68 +276,27 @@ class SDFusionModelAcc(BaseModel):
         B = ngen
         shape = self.z_shape
         c = None
-        
-        samples, intermediates = ddim_sampler.sample(S=ddim_steps,
-                                                     batch_size=B,
-                                                     shape=shape,
-                                                     conditioning=c,
-                                                     verbose=False,
-                                                     unconditional_guidance_scale=scale,
-                                                     log_every_t=1,
-                                                    #  unconditional_conditioning=uc,
-                                                     eta=ddim_eta)
 
+        latents = torch.randn((B, *shape), device=self.device)
+        latents = latents * self.noise_scheduler.init_noise_sigma
+
+        self.noise_scheduler.set_timesteps(ddim_steps)
+        
+        for t in tqdm(self.noise_scheduler.timesteps):
+            # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
+            latent_model_input = torch.cat([latents])
+            latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
+
+            # predict the noise residual
+            with torch.no_grad():
+                timesteps = torch.full((B,), t, device=self.device, dtype=torch.int64)
+                noise_pred = self.apply_model(latent_model_input, timesteps, c)
+
+            # compute the previous noisy sample x_t -> x_t-1
+            latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
 
         # decode z
-        self.gen_df = self.vqvae_module.decode_no_quant(samples)
-        return self.gen_df, intermediates
-
-    @torch.no_grad()
-    def shape_comp(self, shape, xyz_dict, ngen=1, ddim_steps=100, ddim_eta=0.0, scale=None):        
-        from utils.demo_util import get_partial_shape
-        ddim_sampler = DDIMSampler(self)
-        
-        if scale is None:
-            scale = self.scale
-            
-        if ddim_steps is None:
-            ddim_steps = self.ddim_steps
-            
-        if shape.dim() == 4:
-            shape = shape.unsqueeze(0)
-            shape = shape.to(self.device)
-            
-        self.df.eval()
-
-        # get noise, denoise, and decode with vqvae
-        B = ngen
-        z = self.vqvae(shape, forward_no_quant=True, encode_only=True)
-
-        # get partial shape
-        ret = get_partial_shape(shape, xyz_dict=xyz_dict, z=z)
-        
-        x_mask, z_mask = ret['shape_mask'], ret['z_mask']
-
-        # for vis purpose
-        self.x_part = ret['shape_part']
-        self.x_missing = ret['shape_missing']
-        
-        shape = self.z_shape
-        c = None
-        samples, intermediates = ddim_sampler.sample(S=ddim_steps,
-                                                     batch_size=B,
-                                                     shape=shape,
-                                                     conditioning=c,
-                                                     verbose=False,
-                                                     x0=z,
-                                                     mask=z_mask,
-                                                     unconditional_guidance_scale=scale,
-                                                    #  unconditional_conditioning=uc,
-                                                     eta=ddim_eta)
-
-
-        # decode z
-        self.gen_df = self.vqvae_module.decode_no_quant(samples)
+        self.gen_df = self.vqvae.module.decode_no_quant(latents)
         return self.gen_df
 
     @torch.no_grad()
@@ -353,15 +310,15 @@ class SDFusionModelAcc(BaseModel):
         return ret
 
     def backward(self):
-
-        self.loss = self.loss_dict['loss']
         self.accelerator.backward(self.loss)
 
     def optimize_parameters(self, total_steps):
         self.set_requires_grad([self.df], requires_grad=True)
 
-        self.forward()
-        self.backward()
+        loss = self.forward()
+        avg_loss = self.accelerator.gather(loss).mean()
+        self.loss_meter.update(avg_loss, self.opt.batch_size)
+        self.accelerator.backward(loss)
         
         # clip grad norm
         torch.nn.utils.clip_grad_norm_(self.df.parameters(), 1.0)
@@ -378,11 +335,10 @@ class SDFusionModelAcc(BaseModel):
     def get_current_errors(self):
         
         ret = OrderedDict([
-            ('total', self.loss.data),
+            ('total', self.loss_meter.avg),
         ])
 
-        if hasattr(self, 'loss_gamma'):
-            ret['gamma'] = self.loss_gamma.data
+        self.loss_meter.reset()
 
         return ret
 

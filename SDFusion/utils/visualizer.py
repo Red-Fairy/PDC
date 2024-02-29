@@ -96,7 +96,7 @@ class Visualizer():
     def print_current_metrics(self, current_iters, metrics, phase):
         # message = f'([{phase}] GPU: {}, steps: %d) ' % (phase, self.opt.gpu_ids_str, current_iters)
         # message = f'([{self.opt.exp_time}] [{phase}] GPU: {self.opt.gpu_ids_str}, steps: {current_iters}) '
-        message = f'([{self.opt.name}] [{phase}] GPU: {self.opt.gpu_ids_str}, steps: {current_iters}) '
+        message = f'([{self.opt.name}] [{phase}] GPU: {self.opt.gpu_ids}, steps: {current_iters}) '
         for k, v in metrics.items():
             message += '%s: %.3f ' % (k, v)
 

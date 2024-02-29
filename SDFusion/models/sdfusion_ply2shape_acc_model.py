@@ -33,6 +33,8 @@ from diffusers.optimization import get_cosine_schedule_with_warmup
 
 from accelerate import Accelerator
 
+from utils.util import AverageMeter
+
 # ldm util
 from models.networks.diffusion_networks.ldm_diffusion_util import (
     make_beta_schedule,
@@ -150,6 +152,9 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         self.planner = None
         if not self.isTrain:
             self.planner = create_planner(opt)
+        
+        self.loss_meter = AverageMeter()
+        self.loss_meter.reset()
     
     def set_input(self, input=None, max_sample=None):
         
@@ -223,8 +228,8 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
         B = self.x.shape[0]
         c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim)
-        uc = torch.zeros_like(c, device=self.device)
-        # uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
+        # uc = torch.zeros_like(c, device=self.device)
+        uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
         # drop cond with self.uncond_prob
         c = torch.where(torch.rand(B, 1, device=self.device) < self.uncond_prob, uc, c)
 
@@ -244,8 +249,6 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         z_noisy = self.noise_scheduler.add_noise(z, noise, timesteps)
         model_output = self.apply_model(z_noisy, timesteps, cond=c)
 
-        loss_dict = {}
-
         if self.parameterization == "x0":
             target = z
         elif self.parameterization == "eps":
@@ -254,10 +257,8 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
             raise NotImplementedError()
 
         # l2
-        loss = self.get_loss(model_output, target, mean=False).mean([1, 2, 3, 4])
-        loss_dict.update({f'loss': loss.mean()})
-
-        self.loss_dict = loss_dict
+        loss = self.get_loss(model_output, target).mean()
+        return loss
 
     # check: ddpm.py, log_images(). line 1317~1327
     @torch.no_grad()
@@ -277,8 +278,8 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         B = self.x.shape[0]
         shape = self.z_shape
         c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
-        uc = torch.zeros_like(c, device=self.device)
-        # uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
+        # uc = torch.zeros_like(c, device=self.device)
+        uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
         c_full = torch.cat([uc, c])
 
         latents = torch.randn((B, *shape), device=self.device)
@@ -309,6 +310,8 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
     @torch.no_grad()
     def uncond(self, ngen=1, ddim_steps=200, ddim_eta=0.):
+
+        self.switch_eval()
             
         if ddim_steps is None:
             ddim_steps = self.ddim_steps
@@ -350,17 +353,16 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         self.train()
         return ret
 
-    def backward(self):
-        
-        # self.loss_dict = reduce_loss_dict(self.loss_dict)
-        self.loss = self.loss_dict['loss']
+    def backward(self): # not used
         self.accelerator.backward(self.loss)
 
     def optimize_parameters(self, total_steps):
         self.set_requires_grad([self.df], requires_grad=True)
 
-        self.forward()
-        self.backward()
+        loss = self.forward()
+        avg_loss = self.accelerator.gather(loss).mean()
+        self.loss_meter.update(avg_loss, self.opt.batch_size)
+        self.accelerator.backward(loss)
         
         # clip grad norm
         torch.nn.utils.clip_grad_norm_(self.df.parameters(), 1.0)
@@ -378,11 +380,10 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
     def get_current_errors(self):
         
         ret = OrderedDict([
-            ('total', self.loss.data),
+            ('total', self.loss_meter.avg),
         ])
 
-        if hasattr(self, 'loss_gamma'):
-            ret['gamma'] = self.loss_gamma.data
+        self.loss_meter.reset()
 
         return ret
 
@@ -450,10 +451,12 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
             for i, scheduler in enumerate(self.schedulers):
                 try:
                     scheduler.load_state_dict(state_dict[f'sch{i}'])
+                    print(colored('[*] scheduler successfully restored from: %s' % ckpt, 'blue'))
                 except:
+                    print(colored('[*] scheduler not loaded', 'red'))
                     for _ in range(state_dict['global_step']):
                         scheduler.step()
-            print(colored('[*] scheduler successfully restored from: %s' % ckpt, 'blue'))
+            
 
         return iter_passed
 

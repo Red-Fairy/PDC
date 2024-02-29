@@ -128,12 +128,44 @@ class SDFusionModel(BaseModel):
         if max_sample is not None:
             self.x = self.x[:max_sample]
 
-        # vars_list = ['x']
+    @torch.no_grad()
+    def uncond(self, ngen=1, ddim_steps=200, ddim_eta=0.):
 
-        # self.tocuda(var_names=vars_list)
+        self.switch_eval()
+            
+        if ddim_steps is None:
+            ddim_steps = self.ddim_steps
+            
+        # get noise, denoise, and decode with vqvae
+        B = ngen
+        shape = self.z_shape
+        c = None
+
+        latents = torch.randn((B, *shape), device=self.device)
+        latents = latents * self.noise_scheduler.init_noise_sigma
+
+        self.noise_scheduler.set_timesteps(ddim_steps)
+        
+        for t in tqdm(self.noise_scheduler.timesteps):
+            # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
+            latent_model_input = torch.cat([latents])
+            latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
+
+            # predict the noise residual
+            with torch.no_grad():
+                timesteps = torch.full((B,), t, device=self.device, dtype=torch.int64)
+                noise_pred = self.apply_model(latent_model_input, timesteps, c)
+
+            # compute the previous noisy sample x_t -> x_t-1
+            latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
+
+        # decode z
+        self.gen_df = self.vqvae.decode_no_quant(latents)
+        return self.gen_df
 
     def switch_train(self):
         self.df.train()
+        self.vqvae.eval()
 
     def switch_eval(self):
         self.df.eval()
@@ -306,54 +338,6 @@ class SDFusionModel(BaseModel):
         self.gen_df = self.vqvae.decode_no_quant(latents)
 
         self.df.train()
-
-    @torch.no_grad()
-    def shape_comp(self, shape, xyz_dict, ngen=1, ddim_steps=100, ddim_eta=0.0, scale=None):        
-        from utils.demo_util import get_partial_shape
-        ddim_sampler = DDIMSampler(self)
-        
-        if scale is None:
-            scale = self.scale
-            
-        if ddim_steps is None:
-            ddim_steps = self.ddim_steps
-            
-        if shape.dim() == 4:
-            shape = shape.unsqueeze(0)
-            shape = shape.to(self.device)
-            
-        self.df.eval()
-
-        # get noise, denoise, and decode with vqvae
-        B = ngen
-        z = self.vqvae(shape, forward_no_quant=True, encode_only=True)
-
-        # get partial shape
-        ret = get_partial_shape(shape, xyz_dict=xyz_dict, z=z)
-        
-        x_mask, z_mask = ret['shape_mask'], ret['z_mask']
-
-        # for vis purpose
-        self.x_part = ret['shape_part']
-        self.x_missing = ret['shape_missing']
-        
-        shape = self.z_shape
-        c = None
-        samples, intermediates = ddim_sampler.sample(S=ddim_steps,
-                                                     batch_size=B,
-                                                     shape=shape,
-                                                     conditioning=c,
-                                                     verbose=False,
-                                                     x0=z,
-                                                     mask=z_mask,
-                                                     unconditional_guidance_scale=scale,
-                                                    #  unconditional_conditioning=uc,
-                                                     eta=ddim_eta)
-
-
-        # decode z
-        self.gen_df = self.vqvae.decode_no_quant(samples)
-        return self.gen_df
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):

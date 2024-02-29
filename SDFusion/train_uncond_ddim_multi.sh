@@ -2,7 +2,7 @@ CAT=$1
 BATCHSIZE=$2
 RELEASE_NOTE=$3
 multi_gpu=1
-gpu_ids=6,7  # multi-gpu
+gpu_ids=0,1  # multi-gpu
 SLURM=1
 
 RED='\033[0;31m'
@@ -38,7 +38,7 @@ trunc_thres=0.2
 ### display & log stuff ###
 display_freq=250
 print_freq=25
-total_iters=500000
+total_iters=250000
 save_steps_freq=5000
 ###########################
 
@@ -62,7 +62,7 @@ if [ $debug = 1 ]; then
     name="DEBUG-${name}"
 fi
 
-name="drawer-uncond-test"
+name="drawer-uncond"
 load_iter="10000"
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
@@ -72,12 +72,13 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --dataset_mode ${dataset_mode} --res ${res} --cat ${cat} --trunc_thres ${trunc_thres} \
             --display_freq ${display_freq} --print_freq ${print_freq} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
-            --debug ${debug} --dataroot ${dataroot} --data_version ${data_version}"
+            --debug ${debug} --dataroot ${dataroot} --data_version ${data_version} \
+            --continue_train --load_iter 90000 "
 
 # set available gpus
 if [ $multi_gpu = 1 ]; then
-    accelerate launch --multi_gpu --gpu_ids $gpu_ids --main_process_port 29512 --mixed_precision 'no' train_accelerate.py $args
+    accelerate launch --multi_gpu --gpu_ids $gpu_ids --main_process_port 29513 --mixed_precision 'no' train_accelerate.py $args
 else
-    python train_accelerate.py $args
+    python train.py $args
 fi
 

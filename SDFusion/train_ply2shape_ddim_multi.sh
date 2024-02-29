@@ -2,7 +2,7 @@ CAT=$1
 BATCHSIZE=$2
 RELEASE_NOTE=$3
 multi_gpu=1
-gpu_ids=4,5,6,7  # multi-gpu
+gpu_ids=6,7  # multi-gpu
 SLURM=1
 
 RED='\033[0;31m'
@@ -40,7 +40,7 @@ trunc_thres=0.2
 ### display & log stuff ###
 display_freq=250
 print_freq=25
-total_iters=200000
+total_iters=250000
 save_steps_freq=5000
 ###########################
 
@@ -64,7 +64,7 @@ if [ $debug = 1 ]; then
     name="DEBUG-${name}"
 fi
 
-name="drawer-plycond-pointnet2-ddp"
+name="drawer-plycond-pointnet2-0229-r2"
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --lr ${lr} --batch_size ${batch_size} --max_dataset_size ${max_dataset_size} \
@@ -74,13 +74,13 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --display_freq ${display_freq} --print_freq ${print_freq} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
             --debug ${debug} --dataroot ${dataroot} --data_version ${data_version} \
-            --ply_cond --ply_input_rotate --cond_ckpt ${cond_ckpt} --continue_train"
+            --ply_cond --ply_input_rotate --cond_ckpt ${cond_ckpt}"
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 
 # set available gpus
 if [ $multi_gpu = 1 ]; then
-    accelerate launch --multi_gpu --gpu_ids $gpu_ids --main_process_port 29512 --mixed_precision 'no' train_accelerate.py $args
+    accelerate launch --multi_gpu --gpu_ids $gpu_ids --main_process_port 29514 --mixed_precision 'no' train_accelerate.py $args
 else
     python train.py $args
 fi
