@@ -1,8 +1,4 @@
-CAT=$1
-BATCHSIZE=$2
-RELEASE_NOTE=$3
-multi_gpu=1
-gpu_ids=6,7  # multi-gpu
+multi_gpu=1  # multi-gpu
 SLURM=1
 
 RED='\033[0;31m'
@@ -12,8 +8,11 @@ DATE_WITH_TIME=`date "+%Y-%m-%dT%H-%M-%S"`
 logs_dir='logs'
 
 ### hyper params ###
-lr=1e-4
 batch_size=8
+name=$1
+lr=$2
+port=$3
+gpu_ids=$4
 
 ### model stuff ###
 model='sdfusion-ply2shape'
@@ -64,8 +63,6 @@ if [ $debug = 1 ]; then
     name="DEBUG-${name}"
 fi
 
-name="drawer-plycond-pointnet2-0229-r2"
-
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --lr ${lr} --batch_size ${batch_size} --max_dataset_size ${max_dataset_size} \
             --model ${model} --df_cfg ${df_cfg} \
@@ -80,7 +77,7 @@ echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs
 
 # set available gpus
 if [ $multi_gpu = 1 ]; then
-    accelerate launch --multi_gpu --gpu_ids $gpu_ids --main_process_port 29514 --mixed_precision 'no' train_accelerate.py $args
+    accelerate launch --multi_gpu --gpu_ids $gpu_ids --main_process_port $port --mixed_precision 'no' train_accelerate.py $args
 else
     python train.py $args
 fi

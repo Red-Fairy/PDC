@@ -104,21 +104,30 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
         if self.isTrain:
             # initialize optimizers
-            self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True], lr=opt.lr)
-            self.optimizer2 = optim.AdamW([p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
+            # self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True], lr=opt.lr)
+            # self.optimizer2 = optim.AdamW([p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
+
+            # lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
+            # self.scheduler1 = optim.lr_scheduler.LambdaLR(self.optimizer1, lr_lambda1)
+            
+            # freeze_iters = 10000
+            # lr_lambda2 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters)) if it > freeze_iters else 0
+            # self.scheduler2 = optim.lr_scheduler.LambdaLR(self.optimizer2, lr_lambda2)
+
+            # self.optimizer1, self.optimizer2 = accelerator.prepare(self.optimizer1, self.optimizer2)
+            # self.scheduler1, self.scheduler2 = accelerator.prepare(self.scheduler1, self.scheduler2)
+
+            # self.optimizers = [self.optimizer1, self.optimizer2]
+            # self.schedulers = [self.scheduler1, self.scheduler2]
+
+            self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True] + \
+                            [p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
 
             lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
             self.scheduler1 = optim.lr_scheduler.LambdaLR(self.optimizer1, lr_lambda1)
-            
-            freeze_iters = 10000
-            lr_lambda2 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters)) if it > freeze_iters else 0
-            self.scheduler2 = optim.lr_scheduler.LambdaLR(self.optimizer2, lr_lambda2)
 
-            self.optimizer1, self.optimizer2 = accelerator.prepare(self.optimizer1, self.optimizer2)
-            self.scheduler1, self.scheduler2 = accelerator.prepare(self.scheduler1, self.scheduler2)
-
-            self.optimizers = [self.optimizer1, self.optimizer2]
-            self.schedulers = [self.scheduler1, self.scheduler2]
+            self.optimizers = [self.optimizer1]
+            self.schedulers = [self.scheduler1]
 
             self.print_networks(verbose=False)
 
@@ -155,6 +164,8 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         
         self.loss_meter = AverageMeter()
         self.loss_meter.reset()
+        self.loss_meter_epoch = AverageMeter()
+        self.loss_meter_epoch.reset()
     
     def set_input(self, input=None, max_sample=None):
         
@@ -228,8 +239,8 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
         B = self.x.shape[0]
         c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim)
-        # uc = torch.zeros_like(c, device=self.device)
-        uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
+        uc = torch.zeros_like(c, device=self.device)
+        # uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
         # drop cond with self.uncond_prob
         c = torch.where(torch.rand(B, 1, device=self.device) < self.uncond_prob, uc, c)
 
@@ -278,8 +289,8 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         B = self.x.shape[0]
         shape = self.z_shape
         c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
-        # uc = torch.zeros_like(c, device=self.device)
-        uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
+        uc = torch.zeros_like(c, device=self.device)
+        # uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
         c_full = torch.cat([uc, c])
 
         latents = torch.randn((B, *shape), device=self.device)
@@ -345,12 +356,12 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
-        self.eval()
-        
+
         ret = OrderedDict([
-            ('dummy_metrics', 0.0),
+            ('loss', self.loss_meter_epoch.avg),
         ])
-        self.train()
+        self.loss_meter_epoch.reset()
+
         return ret
 
     def backward(self): # not used
@@ -362,6 +373,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         loss = self.forward()
         avg_loss = self.accelerator.gather(loss).mean()
         self.loss_meter.update(avg_loss, self.opt.batch_size)
+        self.loss_meter_epoch.update(avg_loss, self.opt.batch_size)
         self.accelerator.backward(loss)
         
         # clip grad norm
