@@ -44,8 +44,6 @@ total_iters=250000
 save_steps_freq=5000
 ###########################
 
-data_version=v.2.0
-
 today=$(date '+%m%d')
 me=`basename "$0"`
 me=$(echo $me | cut -d'.' -f 1)
@@ -71,7 +69,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --dataset_mode ${dataset_mode} --res ${res} --cat ${cat} --trunc_thres ${trunc_thres} \
             --display_freq ${display_freq} --print_freq ${print_freq} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
-            --debug ${debug} --dataroot ${dataroot} --data_version ${data_version} \
+            --debug ${debug} --dataroot ${dataroot} \
             --ply_cond --ply_input_rotate --cond_ckpt ${cond_ckpt} --freeze_iters ${freeze_iters}"
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"

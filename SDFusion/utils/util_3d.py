@@ -330,7 +330,7 @@ def mesh_to_sdf(mesh, res=64, padding=0.2):
         spacing = (np.max(mesh.bounding_box.extents) + padding) / voxel_resolution
         return spacing
 
-    def scale_to_unit_cube_padding(mesh, padding):
+    def scale_to_unit_cube_padding(mesh: trimesh.Trimesh, padding: float):
         """
         add padding
         """

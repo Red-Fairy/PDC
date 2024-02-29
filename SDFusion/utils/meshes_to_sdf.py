@@ -12,7 +12,7 @@ import skimage
 parser = argparse.ArgumentParser()
 parser.add_argument('--cat', type=str, default='slider_drawer', help='category name')
 parser.add_argument('--length', type=float, default=1.2, help='length of the bounding box')
-parser.add_argument('--mesh_scale', type=float, default=1, help='scale of the mesh')
+# parser.add_argument('--mesh_scale', type=float, default=1, help='scale of the mesh')
 parser.add_argument('--res', type=int, default=64, help='resolution of the sdf')
 parser.add_argument('--truncation', type=float, default=0.2, help='truncation of the sdf')
 parser.add_argument('--rotation', action='store_true', help='whether to rotate the mesh')
@@ -23,7 +23,7 @@ args = parser.parse_args()
 
 CAT = args.cat
 LENGTH = args.length
-SPACING = LENGTH / args.res
+SPACING = 2. / args.res
 
 ROTATION = args.rotation
 MIRROR = args.mirror
@@ -40,15 +40,15 @@ if __name__ == '__main__':
 
     filenames = [f for f in os.listdir(mesh_basedir) if f.endswith('.obj')]
 
-    for file_name in filenames:
+    for file_name in filenames[:10]:
 
         mesh = trimesh.load(os.path.join(mesh_basedir, file_name))
         mesh.apply_translation(-mesh.centroid)
-        mesh.apply_scale(args.mesh_scale / np.max(np.abs(mesh.bounds)))
+        mesh.apply_scale(1. / np.max(np.abs(mesh.bounds)))
 
         # create bbox (eight points) in the order (-x,+y,+z), (+x,+y,+z), (+x,-y,+z), (-x,-y,+z), (-x,+y,-z), (+x,+y,-z), (+x,-y,-z), (-x,-y,-z)
-        (x_min, y_min, z_min), (x_max, y_max, z_max) = mesh.bounds
-        bbox = np.array([[x_min, y_max, z_max], [x_max, y_max, z_max], [x_max, y_min, z_max], [x_min, y_min, z_max], [x_min, y_max, z_min], [x_max, y_max, z_min], [x_max, y_min, z_min], [x_min, y_min, z_min]])
+        # (x_min, y_min, z_min), (x_max, y_max, z_max) = mesh.bounds
+        # bbox = np.array([[x_min, y_max, z_max], [x_max, y_max, z_max], [x_max, y_min, z_max], [x_min, y_min, z_max], [x_min, y_max, z_min], [x_max, y_max, z_min], [x_max, y_min, z_min], [x_min, y_min, z_min]])
 
         if ROTATION:
             ## rotate the mesh
@@ -88,12 +88,13 @@ if __name__ == '__main__':
         mesh_recon = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_normals=normals)
         centroid = mesh_recon.centroid
         print(centroid)
-        mesh_recon.apply_translation(-centroid)
-        (x_min, y_min, z_min), (x_max, y_max, z_max) = mesh_recon.bounds
-        print(x_min, y_min, z_min, x_max, y_max, z_max)
-        recon_filename = file_name[:-4] + '_recon.obj' if suffix == '' else file_name[:-4] + '_recon{}.obj'.format(suffix)
-        mesh_recon.export(os.path.join(sdf_basedir, recon_filename))
-        print(mesh_recon.centroid)
+        print(np.max(mesh_recon.bounding_box.extents))
+        # mesh_recon.apply_translation(-centroid)
+        # (x_min, y_min, z_min), (x_max, y_max, z_max) = mesh_recon.bounds
+        # print(x_min, y_min, z_min, x_max, y_max, z_max)
+        # recon_filename = file_name[:-4] + '_recon.obj' if suffix == '' else file_name[:-4] + '_recon{}.obj'.format(suffix)
+        # mesh_recon.export(os.path.join(sdf_basedir, recon_filename))
+        # print(mesh_recon.centroid)
 
         sdf = sdf.reshape(-1, 1)
         h5_filename = file_name[:-4] + '_sdf_res_64.h5'
