@@ -27,16 +27,6 @@ from models.model_utils import load_vqvae
 from diffusers import DDIMScheduler
 from diffusers.optimization import get_cosine_schedule_with_warmup
 
-# ldm util
-from models.networks.diffusion_networks.ldm_diffusion_util import (
-    make_beta_schedule,
-    extract_into_tensor,
-    noise_like,
-    exists,
-    default,
-)
-from models.networks.diffusion_networks.samplers.ddim import DDIMSampler
-
 from planners.base_model import create_planner
 
 from accelerate import Accelerator
@@ -132,9 +122,12 @@ class SDFusionModelAcc(BaseModel):
 
         self.loss_meter = AverageMeter()
         self.loss_meter.reset()
+        self.loss_meter_epoch = AverageMeter()
+        self.loss_meter_epoch.reset()
 
     def set_input(self, input=None, max_sample=None):
         self.x = input['sdf'].to(self.device)
+        self.paths = input['path']
 
     def switch_train(self):
         self.df.train()
@@ -144,11 +137,11 @@ class SDFusionModelAcc(BaseModel):
         self.df.eval()
         self.vqvae.eval()
 
-    def q_sample(self, x_start, t, noise=None):
-        noise = default(noise, lambda: torch.randn_like(x_start))
+    # def q_sample(self, x_start, t, noise=None):
+    #     noise = default(noise, lambda: torch.randn_like(x_start))
 
-        return (extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
-                extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise)
+    #     return (extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
+    #             extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise)
 
     # check: ddpm.py, line 891
     def apply_model(self, x_noisy, t, cond, return_ids=False):
@@ -220,7 +213,6 @@ class SDFusionModelAcc(BaseModel):
         else:
             raise NotImplementedError()
 
-        # l2
         loss = self.get_loss(model_output, target).mean()
         return loss
 
@@ -301,23 +293,24 @@ class SDFusionModelAcc(BaseModel):
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
-        self.eval()
         
         ret = OrderedDict([
-            ('dummy_metrics', 0.0),
+            ('loss', self.loss_meter_epoch.avg),
         ])
-        self.train()
+        self.loss_meter_epoch.reset()
+
         return ret
 
     def backward(self):
         self.accelerator.backward(self.loss)
 
     def optimize_parameters(self, total_steps):
-        self.set_requires_grad([self.df], requires_grad=True)
+        # self.set_requires_grad([self.df], requires_grad=True)
 
         loss = self.forward()
         avg_loss = self.accelerator.gather(loss).mean()
         self.loss_meter.update(avg_loss, self.opt.batch_size)
+        self.loss_meter_epoch.update(avg_loss, self.opt.batch_size)
         self.accelerator.backward(loss)
         
         # clip grad norm
@@ -357,7 +350,8 @@ class SDFusionModelAcc(BaseModel):
         visuals = zip(vis_tensor_names, vis_ims)
         visuals_dict = {
             "img": OrderedDict(visuals),
-            "meshes": meshes
+            "meshes": meshes,
+            "paths": self.paths,
         }
         return visuals_dict
 

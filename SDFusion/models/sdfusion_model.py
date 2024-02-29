@@ -27,17 +27,11 @@ from models.model_utils import load_vqvae
 from diffusers import DDIMScheduler
 from diffusers.optimization import get_cosine_schedule_with_warmup
 
-# ldm util
-from models.networks.diffusion_networks.ldm_diffusion_util import (
-    make_beta_schedule,
-    extract_into_tensor,
-    noise_like,
-    exists,
-    default,
-)
 from models.networks.diffusion_networks.samplers.ddim import DDIMSampler
 
 from planners.base_model import create_planner
+
+from utils.util import AverageMeter
 
 # rendering
 from utils.util_3d import init_mesh_renderer, render_sdf
@@ -72,14 +66,10 @@ class SDFusionModel(BaseModel):
         self.df = DiffusionUNet(unet_params, vq_conf=vq_conf)
         self.df.to(self.device)
         self.parameterization = "eps"
-        self.guidance_scale = opt.uc_scale
         # self.init_diffusion_params(scale=1, opt=opt)
 
         # init vqvae
         self.vqvae = load_vqvae(vq_conf, vq_ckpt=opt.vq_ckpt, opt=opt).to(self.device)
-
-        # noise scheduler
-        self.noise_scheduler = DDIMScheduler()
 
         ######## END: Define Networks ########
 
@@ -103,6 +93,9 @@ class SDFusionModel(BaseModel):
         else:
             self.start_iter = 0
 
+        # noise scheduler
+        self.noise_scheduler = DDIMScheduler()
+
         # setup renderer
         if 'snet' in opt.dataset_mode:
             dist, elev, azim = 1.7, 20, 120
@@ -120,48 +113,19 @@ class SDFusionModel(BaseModel):
         self.planner = None
         if not self.isTrain:
             self.planner = create_planner(opt)
+
+        self.loss_meter = AverageMeter()
+        self.loss_meter.reset()
+        self.loss_meter_epoch = AverageMeter()
+        self.loss_meter_epoch.reset()
     
     def set_input(self, input=None, max_sample=None):
         
         self.x = input['sdf'].to(self.device)
+        self.paths = input['path']
 
-        if max_sample is not None:
-            self.x = self.x[:max_sample]
-
-    @torch.no_grad()
-    def uncond(self, ngen=1, ddim_steps=200, ddim_eta=0.):
-
-        self.switch_eval()
-            
-        if ddim_steps is None:
-            ddim_steps = self.ddim_steps
-            
-        # get noise, denoise, and decode with vqvae
-        B = ngen
-        shape = self.z_shape
-        c = None
-
-        latents = torch.randn((B, *shape), device=self.device)
-        latents = latents * self.noise_scheduler.init_noise_sigma
-
-        self.noise_scheduler.set_timesteps(ddim_steps)
-        
-        for t in tqdm(self.noise_scheduler.timesteps):
-            # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
-            latent_model_input = torch.cat([latents])
-            latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
-
-            # predict the noise residual
-            with torch.no_grad():
-                timesteps = torch.full((B,), t, device=self.device, dtype=torch.int64)
-                noise_pred = self.apply_model(latent_model_input, timesteps, c)
-
-            # compute the previous noisy sample x_t -> x_t-1
-            latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
-
-        # decode z
-        self.gen_df = self.vqvae.decode_no_quant(latents)
-        return self.gen_df
+        # if max_sample is not None:
+        #     self.x = self.x[:max_sample]
 
     def switch_train(self):
         self.df.train()
@@ -171,11 +135,11 @@ class SDFusionModel(BaseModel):
         self.df.eval()
         self.vqvae.eval()
 
-    def q_sample(self, x_start, t, noise=None):
-        noise = default(noise, lambda: torch.randn_like(x_start))
+    # def q_sample(self, x_start, t, noise=None):
+    #     noise = default(noise, lambda: torch.randn_like(x_start))
 
-        return (extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
-                extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise)
+    #     return (extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
+    #             extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise)
 
     # check: ddpm.py, line 891
     def apply_model(self, x_noisy, t, cond, return_ids=False):
@@ -220,7 +184,7 @@ class SDFusionModel(BaseModel):
 
     def forward(self):
 
-        self.df.train()
+        self.switch_train()
 
         c = None # no condition here
 
@@ -249,18 +213,15 @@ class SDFusionModel(BaseModel):
         else:
             raise NotImplementedError()
 
-        # l2
-        loss = self.get_loss(model_output, target, mean=False).mean([1, 2, 3, 4])
-        loss_dict.update({f'loss': loss.mean()})
-
-        self.loss_dict = loss_dict
+        loss = self.get_loss(model_output, target).mean()
+        return loss
 
     # check: ddpm.py, log_images(). line 1317~1327
     @torch.no_grad()
     def inference(self, data, sample=True, ddim_steps=None, ddim_eta=0., quantize_denoised=True,
                   infer_all=False, max_sample=16):
 
-        self.df.eval()
+        self.switch_eval()
 
         if not infer_all:
             self.set_input(data, max_sample=max_sample)
@@ -295,24 +256,16 @@ class SDFusionModel(BaseModel):
         # decode z
         self.gen_df = self.vqvae.decode_no_quant(latents)
 
-        self.df.train()
-
     @torch.no_grad()
-    @torch.no_grad()
-    def inference(self, data, sample=True, ddim_steps=None, ddim_eta=0., quantize_denoised=True,
-                  infer_all=False, max_sample=16):
+    def uncond(self, ngen=1, ddim_steps=200, ddim_eta=0.):
 
-        self.df.eval()
-
-        if not infer_all:
-            self.set_input(data, max_sample=max_sample)
-        else:
-            self.set_input(data)
-        
+        self.switch_eval()
+            
         if ddim_steps is None:
             ddim_steps = self.ddim_steps
             
-        B = self.x.shape[0]
+        # get noise, denoise, and decode with vqvae
+        B = ngen
         shape = self.z_shape
         c = None
 
@@ -320,7 +273,7 @@ class SDFusionModel(BaseModel):
         latents = latents * self.noise_scheduler.init_noise_sigma
 
         self.noise_scheduler.set_timesteps(ddim_steps)
-
+        
         for t in tqdm(self.noise_scheduler.timesteps):
             # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
             latent_model_input = torch.cat([latents])
@@ -332,35 +285,34 @@ class SDFusionModel(BaseModel):
                 noise_pred = self.apply_model(latent_model_input, timesteps, c)
 
             # compute the previous noisy sample x_t -> x_t-1
-            latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
+            latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
 
         # decode z
         self.gen_df = self.vqvae.decode_no_quant(latents)
-
-        self.df.train()
-
+        return self.gen_df
+    
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
-        self.eval()
         
         ret = OrderedDict([
-            ('dummy_metrics', 0.0),
+            ('loss', self.loss_meter_epoch.avg),
         ])
-        self.train()
+        self.loss_meter_epoch.reset()
+
         return ret
 
-    def backward(self):
-        
-        self.loss = self.loss_dict['loss']
+    def backward(self): # not used
         self.loss.backward()
 
     def optimize_parameters(self, total_steps):
-        self.set_requires_grad([self.df], requires_grad=True)
+        # self.set_requires_grad([self.df], requires_grad=True)
 
-        self.forward()
-        self.optimizer.zero_grad()
-        self.backward()
-        
+        loss = self.forward()
+        avg_loss = self.accelerator.gather(loss).mean()
+        self.loss_meter.update(avg_loss, self.opt.batch_size)
+        self.loss_meter_epoch.update(avg_loss, self.opt.batch_size)
+        loss.backward()
+
         # clip grad norm
         torch.nn.utils.clip_grad_norm_(self.df.parameters(), 1.0)
         
@@ -370,14 +322,16 @@ class SDFusionModel(BaseModel):
         for scheduler in self.schedulers:
             scheduler.step()
 
+        for optimizer in self.optimizers:
+            optimizer.zero_grad()
+
     def get_current_errors(self):
         
         ret = OrderedDict([
-            ('total', self.loss.data),
+            ('total', self.loss_meter.avg),
         ])
 
-        if hasattr(self, 'loss_gamma'):
-            ret['gamma'] = self.loss_gamma.data
+        self.loss_meter.reset()
 
         return ret
 
@@ -396,7 +350,8 @@ class SDFusionModel(BaseModel):
         visuals = zip(vis_tensor_names, vis_ims)
         visuals_dict = {
             "img": OrderedDict(visuals),
-            "meshes": meshes
+            "meshes": meshes,
+            "paths": self.paths,
         }
         return visuals_dict
 
@@ -405,10 +360,13 @@ class SDFusionModel(BaseModel):
         state_dict = {
             # 'vqvae': self.vqvae.state_dict(),
             'df': self.df.state_dict(),
-            'opt': self.optimizer.state_dict(),
-            'sch': self.scheduler.state_dict(),
             'global_step': global_step,
         }
+
+        for i, optimizer in enumerate(self.optimizers):
+            state_dict[f'opt{i}'] = optimizer.state_dict()
+        for i, scheduler in enumerate(self.schedulers):
+            state_dict[f'sch{i}'] = scheduler.state_dict()
            
         save_filename = 'df_%s.pth' % (label)
         save_path = os.path.join(self.opt.ckpt_dir, save_filename)
