@@ -35,19 +35,7 @@ from accelerate import Accelerator
 
 from utils.util import AverageMeter
 
-# ldm util
-from models.networks.diffusion_networks.ldm_diffusion_util import (
-    make_beta_schedule,
-    extract_into_tensor,
-    noise_like,
-    exists,
-    default,
-)
-
 from planners.base_model import create_planner
-
-# distributed 
-from utils.distributed import reduce_loss_dict
 
 # rendering
 from utils.util_3d import init_mesh_renderer, render_sdf
@@ -267,7 +255,6 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         else:
             raise NotImplementedError()
 
-        # l2
         loss = self.get_loss(model_output, target).mean()
         return loss
 
@@ -289,7 +276,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         B = self.x.shape[0]
         shape = self.z_shape
         c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
-        uc = uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
+        uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
         # uc = torch.zeros_like(c, device=self.device)
         # uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
         c_full = torch.cat([uc, c])

@@ -30,16 +30,9 @@ from models.networks.ply_networks.pointnet2 import PointNet2
 from diffusers import DDIMScheduler
 from diffusers.optimization import get_cosine_schedule_with_warmup
 
-# ldm util
-from models.networks.diffusion_networks.ldm_diffusion_util import (
-    make_beta_schedule,
-    extract_into_tensor,
-    noise_like,
-    exists,
-    default,
-)
-
 from planners.base_model import create_planner
+
+from utils.util import AverageMeter
 
 # rendering
 from utils.util_3d import init_mesh_renderer, render_sdf
@@ -84,12 +77,11 @@ class SDFusionModelPly2Shape(BaseModel):
         # init U-Net conditional model
         self.cond_model = PointNet2(hidden_dim=df_conf.unet.params.context_dim).to(self.device)
         self.cond_model.requires_grad_(True)
-        self.cond_model.load_state_dict(torch.load(opt.cond_ckpt)['model_state_dict'])
-        print(colored('[*] conditional model successfully loaded', 'blue'))
+        if not opt.continue_train:
+            load_result = self.cond_model.load_state_dict(torch.load(opt.cond_ckpt)['model_state_dict'], strict=False)
+            print(load_result)
+            print(colored('[*] conditional model successfully loaded', 'blue'))
         self.uncond_prob = df_conf.model.params.uncond_prob
-
-        # noise scheduler
-        self.noise_scheduler = DDIMScheduler()
 
         ######## END: Define Networks ########
 
@@ -124,6 +116,9 @@ class SDFusionModelPly2Shape(BaseModel):
         else:
             self.start_iter = 0
 
+        # noise scheduler
+        self.noise_scheduler = DDIMScheduler()
+
         # setup renderer
         if 'snet' in opt.dataset_mode:
             dist, elev, azim = 1.7, 20, 120
@@ -144,6 +139,11 @@ class SDFusionModelPly2Shape(BaseModel):
         self.planner = None
         if not self.isTrain:
             self.planner = create_planner(opt)
+
+        self.loss_meter = AverageMeter()
+        self.loss_meter.reset()
+        self.loss_meter_epoch = AverageMeter()
+        self.loss_meter_epoch.reset()
     
     def set_input(self, input=None, max_sample=None):
         
@@ -161,11 +161,11 @@ class SDFusionModelPly2Shape(BaseModel):
         self.cond_model.eval()
         self.vqvae.eval()
 
-    def q_sample(self, x_start, t, noise=None):
-        noise = default(noise, lambda: torch.randn_like(x_start))
+    # def q_sample(self, x_start, t, noise=None):
+    #     noise = default(noise, lambda: torch.randn_like(x_start))
 
-        return (extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
-                extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise)
+    #     return (extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
+    #             extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise)
 
     # check: ddpm.py, line 891
     def apply_model(self, x_noisy, t, cond, return_ids=False):
@@ -213,7 +213,7 @@ class SDFusionModelPly2Shape(BaseModel):
 
         B = self.x.shape[0]
         c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim)
-        uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
+        uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1) # (B, 1, context_dim), unconditional condition
         # drop cond with self.uncond_prob
         c = torch.where(torch.rand(B, 1, device=self.device) < self.uncond_prob, uc, c)
 
@@ -242,11 +242,8 @@ class SDFusionModelPly2Shape(BaseModel):
         else:
             raise NotImplementedError()
 
-        # l2
-        loss = self.get_loss(model_output, target, mean=False).mean([1, 2, 3, 4])
-        loss_dict.update({f'loss': loss.mean()})
-
-        self.loss_dict = loss_dict
+        loss = self.get_loss(model_output, target).mean()
+        return loss
 
     # check: ddpm.py, log_images(). line 1317~1327
     @torch.no_grad()
@@ -266,7 +263,7 @@ class SDFusionModelPly2Shape(BaseModel):
         B = self.x.shape[0]
         shape = self.z_shape
         c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
-        uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
+        uc = uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
         c_full = torch.cat([uc, c])
 
         latents = torch.randn((B, *shape), device=self.device)
@@ -332,24 +329,25 @@ class SDFusionModelPly2Shape(BaseModel):
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
-        self.eval()
         
         ret = OrderedDict([
-            ('dummy_metrics', 0.0),
+            ('loss', self.loss_meter_epoch.avg),
         ])
-        self.train()
+        self.loss_meter_epoch.reset()
+
         return ret
 
-    def backward(self):
-        
-        self.loss = self.loss_dict['loss']
+    def backward(self): # not used
         self.loss.backward()
 
     def optimize_parameters(self, total_steps):
-        self.set_requires_grad([self.df], requires_grad=True)
+        # self.set_requires_grad([self.df], requires_grad=True)
 
-        self.forward()
-        self.backward()
+        loss = self.forward()
+        avg_loss = self.accelerator.gather(loss).mean()
+        self.loss_meter.update(avg_loss, self.opt.batch_size)
+        self.loss_meter_epoch.update(avg_loss, self.opt.batch_size)
+        loss.backward()
         
         # clip grad norm
         torch.nn.utils.clip_grad_norm_(self.df.parameters(), 1.0)
@@ -367,11 +365,10 @@ class SDFusionModelPly2Shape(BaseModel):
     def get_current_errors(self):
         
         ret = OrderedDict([
-            ('total', self.loss.data),
+            ('total', self.loss_meter.avg),
         ])
 
-        if hasattr(self, 'loss_gamma'):
-            ret['gamma'] = self.loss_gamma.data
+        self.loss_meter.reset()
 
         return ret
 
