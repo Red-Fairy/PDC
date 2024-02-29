@@ -20,6 +20,13 @@ from omegaconf import OmegaConf
 
 import open3d
 
+def pc_normalize(pc):
+    centroid = np.mean(pc, axis=0)
+    pc = pc - centroid
+    m = np.max(np.sqrt(np.sum(pc ** 2, axis=1)))
+    pc = pc / m
+    return pc
+
 class GAPartNetDataset(BaseDataset):
 
     def __init__(self, opt, phase='train', cat='all', res=256, eval_samples=100):
