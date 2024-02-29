@@ -97,9 +97,8 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         self.cond_model.requires_grad_(True)
         if not opt.continue_train:
             load_result = self.cond_model.load_state_dict(torch.load(opt.cond_ckpt)['model_state_dict'], strict=False)
-            if 'missing_keys' in load_result:
-                assert False
-        print(colored('[*] conditional model successfully loaded', 'blue'))
+            print(load_result)
+            print(colored('[*] conditional model successfully loaded', 'blue'))
         self.uncond_prob = df_conf.model.params.uncond_prob
 
         if self.isTrain:
@@ -238,9 +237,10 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         self.switch_train()
 
         B = self.x.shape[0]
-        c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim)
+        c = self.cond_model(self.ply).unsqueeze(1) # (B, 1, context_dim)
+        uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1) # (B, 1, context_dim), unconditional condition
         # uc = torch.zeros_like(c, device=self.device)
-        uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
+        # uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1)
         # drop cond with self.uncond_prob
         c = torch.where(torch.rand(B, 1, device=self.device) < self.uncond_prob, uc, c)
 
@@ -289,8 +289,9 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         B = self.x.shape[0]
         shape = self.z_shape
         c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
+        uc = uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
         # uc = torch.zeros_like(c, device=self.device)
-        uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
+        # uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
         c_full = torch.cat([uc, c])
 
         latents = torch.randn((B, *shape), device=self.device)
@@ -378,7 +379,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         
         # clip grad norm
         torch.nn.utils.clip_grad_norm_(self.df.parameters(), 1.0)
-        torch.nn.utils.clip_grad_norm_(self.cond_model.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(self.cond_model.parameters(), 0.1)
         
         for optimizer in self.optimizers:
             optimizer.step()

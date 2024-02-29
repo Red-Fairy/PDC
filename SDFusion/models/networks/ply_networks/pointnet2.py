@@ -4,7 +4,7 @@ from models.networks.ply_networks.pointnet2_utils import PointNetSetAbstraction
 import torch
 
 class PointNet2(nn.Module):
-    def __init__(self,num_class=40,normal_channel=False,hidden_dim=256):
+    def __init__(self,num_class=40,normal_channel=False,hidden_dim=256,):
         super(PointNet2, self).__init__()
         in_channel = 6 if normal_channel else 3
         self.normal_channel = normal_channel
@@ -19,21 +19,29 @@ class PointNet2(nn.Module):
         self.drop2 = nn.Dropout(0.4)
         # self.fc3 = nn.Linear(hidden_dim, num_class)
 
-    def forward(self, xyz):
-        B, _, _ = xyz.shape
-        if self.normal_channel:
-            norm = xyz[:, 3:, :]
-            xyz = xyz[:, :3, :]
+        self.null_cond = nn.Parameter(torch.randn(hidden_dim))
+
+    def forward(self, xyz=None, uncond=False):
+
+        if xyz is not None:
+            B, _, _ = xyz.shape
+            if self.normal_channel:
+                norm = xyz[:, 3:, :]
+                xyz = xyz[:, :3, :]
+            else:
+                norm = None
+            l1_xyz, l1_points = self.sa1(xyz, norm)
+            l2_xyz, l2_points = self.sa2(l1_xyz, l1_points)
+            l3_xyz, l3_points = self.sa3(l2_xyz, l2_points)
+            x = l3_points.view(B, 1024)
+            x = self.drop1(F.relu(self.bn1(self.fc1(x))))
+            x = self.drop2(F.relu(self.bn2(self.fc2(x))))
+            return x
+
+        elif uncond:
+            return self.null_cond
         else:
-            norm = None
-        l1_xyz, l1_points = self.sa1(xyz, norm)
-        l2_xyz, l2_points = self.sa2(l1_xyz, l1_points)
-        l3_xyz, l3_points = self.sa3(l2_xyz, l2_points)
-        x = l3_points.view(B, 1024)
-        x = self.drop1(F.relu(self.bn1(self.fc1(x))))
-        x = self.drop2(F.relu(self.bn2(self.fc2(x))))
-        
-        return x
+            assert False
 
 class get_loss(nn.Module):
     def __init__(self):
