@@ -20,11 +20,12 @@ from omegaconf import OmegaConf
 
 import open3d
 
-def pc_normalize(pc):
+def pc_normalize(pc, scale_norm=True):
     centroid = np.mean(pc, axis=0)
     pc = pc - centroid
-    m = np.max(np.sqrt(np.sum(pc ** 2, axis=1)))
-    pc = pc / m
+    if scale_norm:
+        m = np.max(np.sqrt(np.sum(pc ** 2, axis=1)))
+        pc = pc / m
     return pc
 
 class GAPartNetDataset(BaseDataset):
@@ -90,11 +91,13 @@ class GAPartNetDataset(BaseDataset):
             ret['bbox'] = bbox
 
         if self.ply_cond:
-            ply_filepath = sdf_h5_file.replace('part_sdf', 'part_ply').replace('.h5', '.ply')
+            ply_filepath = sdf_h5_file.replace('part_sdf', 'part_ply_fps').replace('.h5', '.ply')
             ret['ply'] = ply_filepath
             # load ply file
             ply_file = open3d.io.read_point_cloud(ply_filepath).points
-            points = torch.from_numpy(np.array(ply_file)).transpose(0, 1).float() # (3, N)
+            points = np.array(ply_file)
+            points = pc_normalize(points, scale_norm=False)
+            points = torch.from_numpy(points).transpose(0, 1).float() # (3, N)
 
             if self.ply_input_rotate: # rotate the input pointcloud by a random angle
                 raw, pitch, yaw = torch.rand(3) * 2 * np.pi

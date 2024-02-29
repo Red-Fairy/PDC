@@ -13,6 +13,7 @@ name=$1
 lr=$2
 port=$3
 gpu_ids=$4
+freeze_iters=$5
 
 ### model stuff ###
 model='sdfusion-ply2shape'
@@ -71,7 +72,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --display_freq ${display_freq} --print_freq ${print_freq} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
             --debug ${debug} --dataroot ${dataroot} --data_version ${data_version} \
-            --ply_cond --ply_input_rotate --cond_ckpt ${cond_ckpt}"
+            --ply_cond --ply_input_rotate --cond_ckpt ${cond_ckpt} --freeze_iters ${freeze_iters}"
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 

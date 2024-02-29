@@ -27,4 +27,7 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument('--continue_train', action='store_true', help='continue training: load the latest model')
         self.parser.add_argument('--load_iter', default='latest', type=str, help='which iter to load?')
 
+        # freeze conditional model
+        self.parser.add_argument('--freeze_iters', default=0, type=int, help='number of iters to freeze the condition model')
+
         self.isTrain = True

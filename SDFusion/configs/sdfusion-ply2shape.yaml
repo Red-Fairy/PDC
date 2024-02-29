@@ -42,4 +42,4 @@ unet:
     legacy: False
 
 ply:
-  max_points: 10000
+  max_points: 5500
