@@ -1,8 +1,5 @@
-CAT=$1
-BATCHSIZE=$2
-RELEASE_NOTE=$3
 multi_gpu=1
-gpu_ids=0,1  # multi-gpu
+gpu_ids=6,7  # multi-gpu
 SLURM=1
 
 RED='\033[0;31m'
@@ -73,7 +70,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --display_freq ${display_freq} --print_freq ${print_freq} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
             --debug ${debug} --dataroot ${dataroot} --data_version ${data_version} \
-            --continue_train --load_iter 90000 "
+            --continue_train "
 
 # set available gpus
 if [ $multi_gpu = 1 ]; then

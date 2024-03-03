@@ -41,7 +41,7 @@ trunc_thres=0.2
 display_freq=250
 print_freq=25
 total_iters=250000
-save_steps_freq=5000
+save_steps_freq=2500
 ###########################
 
 today=$(date '+%m%d')
@@ -70,7 +70,8 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --display_freq ${display_freq} --print_freq ${print_freq} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
             --debug ${debug} --dataroot ${dataroot} \
-            --ply_cond --ply_input_rotate --cond_ckpt ${cond_ckpt} --freeze_iters ${freeze_iters}"
+            --ply_cond --ply_input_rotate --cond_ckpt ${cond_ckpt} --freeze_iters ${freeze_iters} \
+            --continue_train --load_iter 30000"
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 

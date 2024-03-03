@@ -219,6 +219,51 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
             raise NotImplementedError("unknown loss type '{loss_type}'")
 
         return loss
+    
+    def get_sdf_refinement_loss(self, latents: torch.Tensor, ply: torch.Tensor):
+        '''
+        latent: the latent representation of the input sdf
+        calculate the sdf refinement loss
+        including: sds loss and collision loss
+        '''
+
+        self.switch_eval()
+        
+        # 1. sds loss
+        B = latents.shape[0] # latents: (B, latent_dim, res, res, res)
+        c = self.cond_model(ply).unsqueeze(1) # (B, 1, context_dim)
+        uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
+        c_full = torch.cat([uc, c])
+
+        latent_model_input = torch.cat([latents] * 2)
+
+        timesteps = torch.randint(
+            0, self.noise_scheduler.config.num_train_timesteps, (B*2,), device=latents.device,
+            dtype=torch.int64
+        )
+
+        noise = torch.randn(latents.shape, device=latents.device)
+        # Add noise to the clean images according to the noise magnitude at each timestep
+        latent_noisy = self.noise_scheduler.add_noise(latents, noise, timesteps)
+
+        # predict the noise residual
+        with torch.no_grad():
+            noise_pred = self.apply_model(latent_model_input, timesteps, c_full)
+
+        # perform guidance
+        noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
+        noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
+
+        weight = self.noise_scheduler.alphas_cumprod[timesteps].view(B, 1, 1, 1, 1)
+
+        grad = (noise_pred - noise) * weight
+        target = (latents - grad).detach()
+
+        sds_loss = self.get_loss(latents, target, loss_type='l2', mean=True)
+
+        # 2. collision loss
+
+        
 
     def forward(self):
 
@@ -341,6 +386,19 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         # decode z
         self.gen_df = self.vqvae.module.decode_no_quant(latents)
         return self.gen_df
+    
+    @torch.no_grad()
+    def classifier_guidance_from_point_cloud(self, ngen=1, ddim_steps=200, ddim_eta=0.):
+
+        self.switch_eval()
+            
+        if ddim_steps is None:
+            ddim_steps = self.ddim_steps
+            
+        # get noise, denoise, and decode with vqvae
+        B = ngen
+        shape = self.z_shape
+        c = self.cond_model(pty).unsqueeze(1)
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
@@ -382,8 +440,10 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         ret = OrderedDict([
             ('total', self.loss_meter.avg),
         ])
-
         self.loss_meter.reset()
+        # print learning rate
+        for i, scheduler in enumerate(self.schedulers):
+            print(f'learning rate at iter {self.start_iter}: {scheduler.get_last_lr()}', flush=True)
 
         return ret
 

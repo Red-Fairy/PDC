@@ -6,15 +6,15 @@ import numpy as np
 
 
 # TODO: Set the path to the dataset
-PARTNET_DATASET_PATH = './dataset/partnet_all_annotated_new'
-AKB48_DATASET_PATH = './dataset/akb48_all_annotated_new'
+PARTNET_DATASET_PATH = '/raid/haoran/Project/data/partnet_all_annotated_new/annotation'
+AKB48_DATASET_PATH = '/raid/haoran/Project/data/partnet_all_annotated_new/annotation'
 
 SAVE_PATH = './example_rendered'
 
 VISU_SAVE_PATH = './visu'
 
-PARTNET_ID_PATH = './meta/partnet_all_id_list.txt'
-AKB48_ID_PATH = './meta/akb48_all_id_list.txt'
+PARTNET_ID_PATH = '/raid/haoran/Project/PartDiffusion/PartDiffusion/code/dataset/render_tools/utils/meta/partnet_all_id_list.txt'
+AKB48_ID_PATH = '/raid/haoran/Project/PartDiffusion/PartDiffusion/code/dataset/render_tools/utils/meta/akb48_all_id_list.txt'
 
 TARGET_GAPARTS = [
     'line_fixed_handle', 'round_fixed_handle', 'slider_button', 'hinge_door', 'slider_drawer',

@@ -359,7 +359,7 @@ class SDFusionModelAcc(BaseModel):
 
         state_dict = {
             # 'vqvae': self.vqvae.state_dict(),
-            'df': self.df.state_dict(),
+            'df': self.df.module.state_dict(),
             'global_step': global_step,
         }
 
