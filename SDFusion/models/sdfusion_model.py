@@ -44,7 +44,7 @@ class SDFusionModel(BaseModel):
         super().__init__(opt)
         self.isTrain = opt.isTrain
         self.model_name = self.name()
-        self.device = opt.device
+        self.device = 'cuda'
 
         # self.optimizer_skip = False
         ######## START: Define Networks ########
@@ -88,10 +88,10 @@ class SDFusionModel(BaseModel):
 
             self.print_networks(verbose=False)
 
-        if opt.continue_train:
-            self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
-        else:
-            self.start_iter = 0
+            if opt.continue_train:
+                self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
+            else:
+                self.start_iter = 0
 
         # noise scheduler
         self.noise_scheduler = DDIMScheduler()
@@ -231,7 +231,7 @@ class SDFusionModel(BaseModel):
         if ddim_steps is None:
             ddim_steps = self.ddim_steps
             
-        B = self.x.shape[0]
+        B = self.opt.batch_size
         shape = self.z_shape
         c = None
 

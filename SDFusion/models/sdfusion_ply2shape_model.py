@@ -45,7 +45,7 @@ class SDFusionModelPly2Shape(BaseModel):
         super().__init__(opt)
         self.isTrain = opt.isTrain
         self.model_name = self.name()
-        self.device = opt.device
+        self.device = 'cuda'
         assert self.opt.ply_cond
 
         # self.optimizer_skip = False
@@ -77,10 +77,9 @@ class SDFusionModelPly2Shape(BaseModel):
         # init U-Net conditional model
         self.cond_model = PointNet2(hidden_dim=df_conf.unet.params.context_dim).to(self.device)
         self.cond_model.requires_grad_(True)
-        if not opt.continue_train:
-            load_result = self.cond_model.load_state_dict(torch.load(opt.cond_ckpt)['model_state_dict'], strict=False)
-            print(load_result)
-            print(colored('[*] conditional model successfully loaded', 'blue'))
+        load_result = self.cond_model.load_state_dict(torch.load(opt.cond_ckpt)['model_state_dict'], strict=False)
+        print(load_result)
+        print(colored('[*] conditional model successfully loaded', 'blue'))
         self.uncond_prob = df_conf.model.params.uncond_prob
 
         ######## END: Define Networks ########
@@ -111,10 +110,13 @@ class SDFusionModelPly2Shape(BaseModel):
 
             self.print_networks(verbose=False)
 
-        if opt.continue_train:
-            self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
+            if opt.continue_train:
+                self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
+            else:
+                self.start_iter = 0
+
         else:
-            self.start_iter = 0
+            self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
 
         # noise scheduler
         self.noise_scheduler = DDIMScheduler()
@@ -260,7 +262,7 @@ class SDFusionModelPly2Shape(BaseModel):
         if ddim_steps is None:
             ddim_steps = self.ddim_steps
             
-        B = self.x.shape[0]
+        B = self.opt.batch_size
         shape = self.z_shape
         c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
         uc = uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)

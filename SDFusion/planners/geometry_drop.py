@@ -25,11 +25,10 @@ class GeometryDropPlanner(BasePlanner):
     def name(self):
         return 'GeometryDropPlanner'
     
-    def initialize(self, opt):
-        BasePlanner.initialize(self, opt)
+    def __init__(self, opt, device='cuda'):
+        super(GeometryDropPlanner, self).__init__(opt, device)
         self.opt = opt
         self.model_name = self.name()
-        self.device = opt.device
 
     ## softloss planning
     # def plan(self, ori_sdf, t):

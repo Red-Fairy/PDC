@@ -118,10 +118,10 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
             self.print_networks(verbose=False)
 
-        if opt.continue_train:
-            self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
-        else:
-            self.start_iter = 0
+            if opt.continue_train:
+                self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
+            else:
+                self.start_iter = 0
 
         # prepare accelerate
         self.df, self.vqvae, self.cond_model = accelerator.prepare(self.df, self.vqvae, self.cond_model)

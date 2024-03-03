@@ -45,20 +45,20 @@ class GAPartNetDataset(BaseDataset):
 
         self.ply_cond = opt.ply_cond
         self.ply_input_rotate = opt.ply_input_rotate
-        assert not (self.ply_rot and self.joint_rotate), "ply_rot and joint_rotate cannot be both True"
+        assert not (self.ply_input_rotate and self.joint_rotate), "ply_rot and joint_rotate cannot be both True"
 
         self.df_conf = OmegaConf.load(opt.df_cfg)
 
-        if self.phase == 'eval':
-            # generate some random bbox for evaluation
-            vertices = torch.Tensor([[1,1,-1],[1,1,1],[-1,1,1],[-1,1,-1],[1,-1,-1],[1,-1,1],[-1,-1,1],[-1,-1,-1]])
-            self.bbox_list = []
-            for _ in range(eval_samples):
-                bbox = torch.rand(3) * 0.3 + 0.2
-                bbox_full = vertices * bbox.view(1, 3).expand(8, 3)
-                self.bbox_list.append(bbox_full)
-            self.N = eval_samples
-            return
+        # if self.phase == 'eval':
+        #     # generate some random bbox for evaluation
+        #     vertices = torch.Tensor([[1,1,-1],[1,1,1],[-1,1,1],[-1,1,-1],[1,-1,-1],[1,-1,1],[-1,-1,1],[-1,-1,-1]])
+        #     self.bbox_list = []
+        #     for _ in range(eval_samples):
+        #         bbox = torch.rand(3) * 0.3 + 0.2
+        #         bbox_full = vertices * bbox.view(1, 3).expand(8, 3)
+        #         self.bbox_list.append(bbox_full)
+        #     self.N = eval_samples
+        #     return
 
         self.sdf_filepaths = self.sdf_filepaths[:self.max_dataset_size]
         cprint('[*] %d samples loaded.' % (len(self.sdf_filepaths)), 'yellow')
@@ -71,9 +71,10 @@ class GAPartNetDataset(BaseDataset):
 
     def __getitem__(self, index):
 
-        if self.phase == 'eval':
-            return {'bbox': self.bbox_list[index]}
+        # if self.phase == 'eval':
+        #     ret = {'bbox': self.bbox_list[index]}
 
+        # else:
         sdf_h5_file = self.sdf_filepaths[index]
 
         h5_f = h5py.File(sdf_h5_file, 'r')
@@ -91,8 +92,8 @@ class GAPartNetDataset(BaseDataset):
 
         rot_angle = np.random.random() * 2 * np.pi
         rot_matrix = np.array([[np.cos(rot_angle), -np.sin(rot_angle), 0],
-                               [np.sin(rot_angle), np.cos(rot_angle), 0],
-                               [0, 0, 1]])
+                            [np.sin(rot_angle), np.cos(rot_angle), 0],
+                            [0, 0, 1]])
 
         if self.bbox_cond:
             bbox_filepath = sdf_h5_file.replace('part_sdf', 'part_bbox').replace('.h5', '.npy')
@@ -110,8 +111,8 @@ class GAPartNetDataset(BaseDataset):
             points = pc_normalize(points, scale_norm=False)
             points = torch.from_numpy(points).transpose(0, 1).float() # (3, N)
 
-            # point cloud mismatch with mesh, apply y->x, z->y, x->z
-            points = points[[1, 2, 0], :]
+            # # point cloud mismatch with mesh, apply y->x, z->y, x->z
+            # points = points[[1, 2, 0], :]
 
             if self.ply_input_rotate: # rotate the input pointcloud by a random angle
                 raw, pitch, yaw = torch.rand(3) * 2 * np.pi
