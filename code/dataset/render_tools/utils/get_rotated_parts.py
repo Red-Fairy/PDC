@@ -102,33 +102,38 @@ def main(dataset_name, model_id, camera_idx, height, width, wanted_cat='slider_d
         T = bbox_transformed.mean(axis=0)
         bbox_transformed -= T
         # compute the rotation between vector bbox_canon[0] and bbox_transformed[0]
-        M = np.dot(bbox_canon.T, bbox_transformed)
-        U, S, Vt = np.linalg.svd(M)
-        R = np.dot(Vt.T, U.T)
-        if np.linalg.det(R) < 0:
-            Vt[2] *= -1
-            R = np.dot(Vt.T, U.T)
+        # print(bbox_canon, bbox_transformed)
+        b1 = bbox_canon[0]
+        b2 = bbox_transformed[0]
+        print(b1, b2, model_id)
+
+        if (abs(b1[2] - b2[0]) < 0.01 and abs(b1[0] - b2[1]) < 0.01 and abs(b1[1] - b2[2]) < 0.01):
+            print(model_id, 'x->y, y->z, z->x')
+        elif (abs(b1[2] + b2[0]) < 0.01 and abs(b1[0] + b2[1]) < 0.01 and abs(b1[1] - b2[2]) < 0.01):
+            print(model_id, 'x->y, y->-z, z->-x')
+        else:
+            assert False
+        # M = np.dot(bbox_canon.T, bbox_transformed)
+        # U, S, Vt = np.linalg.svd(M)
+        # R = np.dot(Vt.T, U.T)
+        # if np.linalg.det(R) < 0:
+        #     Vt[2] *= -1
+        #     R = np.dot(Vt.T, U.T)
         # test the rotation matrix
-        print(model_id)
-        print(bbox_canon @ R, bbox_transformed)
-        print(bbox_canon, bbox_transformed, np.round(R, 4))
-        exit()
+        # print(bbox_canon @ R, bbox_transformed)
+        # print(bbox_canon, bbox_transformed, np.round(R, 4))
         # R = compute_rotation_matrix(bbox_canon, bbox_transformed)
         # # if R is not identity matrix, then print model_id and link_id
-        R_abs = np.abs(R)
-        if not np.allclose(np.round(R_abs,4), np.eye(3)):
-            print(f"model_id: {model_id}, link_id: {link_id}")
-        # if model_id == 102194:
-        #     print(bbox_canon, bbox_transformed)
+        # R_abs = np.abs(R)
 
-        save_root = '/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_transformation'
-        save_path = pjoin(save_root, wanted_cat, f'{wanted_cat}_{model_id}_{link_id}.json')
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, 'w') as f:
-            # convert numpy array to list, and keep 4 decimal places
-            R = np.round(R, 4).tolist()
-            T = np.round(T, 4).tolist()
-            json.dump({'R': R, 'T': T}, f)
+        # save_root = '/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_transformation'
+        # save_path = pjoin(save_root, wanted_cat, f'{wanted_cat}_{model_id}_{link_id}.json')
+        # os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        # with open(save_path, 'w') as f:
+        #     # convert numpy array to list, and keep 4 decimal places
+        #     R = np.round(R, 4).tolist()
+        #     T = np.round(T, 4).tolist()
+        #     json.dump({'R': R, 'T': T}, f)
         
     
     # # 2. read the urdf file,  get the kinematic chain, and collect all the joints information

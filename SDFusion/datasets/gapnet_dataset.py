@@ -41,8 +41,12 @@ class GAPartNetDataset(BaseDataset):
         self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace('part_sdf', 'part_ply').replace('.h5', '.ply')), self.sdf_filepaths))
 
         self.bbox_cond = opt.bbox_cond
+        self.joint_rotate = opt.joint_rotate
+
         self.ply_cond = opt.ply_cond
         self.ply_input_rotate = opt.ply_input_rotate
+        assert not (self.ply_rot and self.joint_rotate), "ply_rot and joint_rotate cannot be both True"
+
         self.df_conf = OmegaConf.load(opt.df_cfg)
 
         if self.phase == 'eval':
@@ -85,9 +89,16 @@ class GAPartNetDataset(BaseDataset):
             'path': sdf_h5_file,
         }
 
+        rot_angle = np.random.random() * 2 * np.pi
+        rot_matrix = np.array([[np.cos(rot_angle), -np.sin(rot_angle), 0],
+                               [np.sin(rot_angle), np.cos(rot_angle), 0],
+                               [0, 0, 1]])
+
         if self.bbox_cond:
             bbox_filepath = sdf_h5_file.replace('part_sdf', 'part_bbox').replace('.h5', '.npy')
             bbox = torch.tensor(np.load(bbox_filepath))
+            if self.joint_rotate:
+                bbox = torch.mm(bbox, torch.tensor(rot_matrix).float())
             ret['bbox'] = bbox
 
         if self.ply_cond:
@@ -99,6 +110,9 @@ class GAPartNetDataset(BaseDataset):
             points = pc_normalize(points, scale_norm=False)
             points = torch.from_numpy(points).transpose(0, 1).float() # (3, N)
 
+            # point cloud mismatch with mesh, apply y->x, z->y, x->z
+            points = points[[1, 2, 0], :]
+
             if self.ply_input_rotate: # rotate the input pointcloud by a random angle
                 raw, pitch, yaw = torch.rand(3) * 2 * np.pi
                 R = torch.tensor([
@@ -107,6 +121,9 @@ class GAPartNetDataset(BaseDataset):
                     [-np.sin(pitch), np.cos(pitch)*np.sin(raw), np.cos(pitch)*np.cos(raw)]
                 ])
                 points = torch.mm(R, points) # (3, N)
+            
+            if self.joint_rotate:
+                points = torch.mm(torch.tensor(rot_matrix).float(), points)
 
             # padding
             N = points.shape[1]
