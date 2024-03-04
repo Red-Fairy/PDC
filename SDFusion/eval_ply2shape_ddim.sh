@@ -1,6 +1,3 @@
-multi_gpu=1  # multi-gpu
-SLURM=1
-
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 DATE_WITH_TIME=`date "+%Y-%m-%dT%H-%M-%S"`
@@ -10,10 +7,7 @@ logs_dir='logs'
 ### hyper params ###
 batch_size=8
 name=$1
-lr=$2
-port=$3
-gpu_ids=$4
-freeze_iters=$5
+gpu_ids=$2
 
 ### model stuff ###
 model='sdfusion-ply2shape'
@@ -63,24 +57,15 @@ if [ $debug = 1 ]; then
 fi
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
-            --lr ${lr} --batch_size ${batch_size} --max_dataset_size ${max_dataset_size} \
+            --batch_size ${batch_size} --max_dataset_size ${max_dataset_size} \
             --model ${model} --df_cfg ${df_cfg} \
             --vq_model ${vq_model} --vq_cfg ${vq_cfg} --vq_ckpt ${vq_ckpt} --vq_dset ${vq_dset} --vq_cat ${vq_cat} \
             --dataset_mode ${dataset_mode} --res ${res} --cat ${cat} --trunc_thres ${trunc_thres} \
-            --display_freq ${display_freq} --print_freq ${print_freq} \
-            --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
+            --total_iters ${total_iters} \
             --debug ${debug} --dataroot ${dataroot} \
-            --ply_cond --ply_input_rotate --cond_ckpt ${cond_ckpt} --freeze_iters ${freeze_iters} \
-            --continue_train"
+            --ply_cond --cond_ckpt ${cond_ckpt}"
 
-echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
-
-# set available gpus
-if [ $multi_gpu = 1 ]; then
-    accelerate launch --multi_gpu --gpu_ids $gpu_ids --main_process_port $port --mixed_precision 'no' train_accelerate.py $args
-else
-    python train.py $args
-fi
+CUDA_VISIBLE_DEVICES=$gpu_ids python test_new.py $args
 
 
 
