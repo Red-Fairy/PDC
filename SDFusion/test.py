@@ -8,112 +8,84 @@ from tqdm import tqdm
 import torch.backends.cudnn as cudnn
 # cudnn.benchmark = True
 
+from options.train_options import TrainOptions
 from options.test_options import TestOptions
 from datasets.dataloader import CreateDataLoader, get_data_generator
 from models.base_model import create_model
 
-from utils.distributed import (
-    get_rank,
-    synchronize,
-    reduce_loss_dict,
-    reduce_sum,
-    get_world_size,
-)
-
 import torch
 import random
 import numpy as np
-print(f'CUDA TORCH AVAILABLE: {torch.cuda.is_available()}')
+
 from utils.visualizer import Visualizer
-from utils.util_3d import sdf_to_mesh, sdf_to_mesh_trimesh
+
+cuda_avail = torch.cuda.is_available()
+# import pdb; pdb.set_trace()
+print(f"CUDA TORCH AVAILABLE: {cuda_avail}")
 
 
-def test_main_worker(opt, model, visualizer, device):
-    if get_rank() == 0:
-        cprint('[*] Start inference. name: %s' % opt.name, 'blue')
+def eval_main_worker(opt, model, test_dl, visualizer):
 
-    iter_start_time = time.time()
-    for iter_i in range(opt.total_iters):
-        cprint(f'[*] iter_i: {iter_i} . {opt.total_iters}', 'blue')
+	for i, test_data in tqdm(enumerate(test_dl)):
 
-        opt.iter_i = iter_i
-        iter_ip1 = iter_i + 1
+		model.inference(test_data)
+		visualizer.display_current_results(model.get_current_visuals(), i, phase='test')
 
-        if get_rank() == 0:
-            visualizer.reset()
-        
-        gen_df, intermediates = model.uncond(ngen=opt.batch_size)
-        x_inter, pred_x0, timesteps = intermediates.values()
+if __name__ == "__main__":
+	## set random seed
+	torch.backends.cudnn.benchmark = False     
+	torch.backends.cudnn.deterministic = True
+	seed = 42
+	random.seed(seed)
+	np.random.seed(seed)
+	torch.manual_seed(seed)
+	torch.cuda.manual_seed(seed)
+	torch.cuda.manual_seed_all(seed)
 
-        ## create tqdm progress bar
-        pbar = tqdm(total=len(timesteps), desc=f'Verbose Log', )
-        for i_t, i_pred_x0 in zip(timesteps, pred_x0):
-            # i_pred_x0_sdf = model.vqvae_module.decode_no_quant(i_pred_x0)
-            i_pred_x0_sdf = model.vqvae_module.decode(i_pred_x0)
-            for i_shape in range(opt.batch_size):
-                os.makedirs(f'{opt.results_dir}/{opt.name}/samples.verbose/{iter_i}_{i_shape}', exist_ok=True)
-                sdf = i_pred_x0_sdf[i_shape].detach().squeeze(0).cpu().numpy()
-                mesh = sdf_to_mesh_trimesh(sdf, level=0.02)
-                mesh.export(f'{opt.results_dir}/{opt.name}/samples.verbose/{iter_i}_{i_shape}/{iter_i}_{i_shape}@{i_t}.obj')
-            pbar.update(1)
-        
-        os.makedirs(f'{opt.results_dir}/{opt.name}/samples', exist_ok=True)
-        for i_shape in range(opt.batch_size):
-            sdf = gen_df[i_shape].squeeze(0).cpu().numpy()
+	# this will parse args, setup log_dirs, multi-gpus
+	opt = TestOptions().parse_and_setup()
 
-            #* add constraint here
-            # sdf[:50, :, :16] = 0.1
-            # sdf[:50, :, -16:] = 0.1
+	# get current time, print at terminal. easier to track exp
+	from datetime import datetime
+	opt.exp_time = datetime.now().strftime('%Y-%m-%dT%H-%M')
 
-            mesh = sdf_to_mesh_trimesh(sdf, level=0.02)
-            mesh.export(f'{opt.results_dir}/{opt.name}/samples/{iter_i}_{i_shape}.obj')
+	train_dl, test_dl, eval_dl = CreateDataLoader(opt)
+	train_ds, test_ds = train_dl.dataset, test_dl.dataset
 
+	dataset_size = len(train_ds)
+	if opt.dataset_mode == 'shapenet_lang':
+		cprint('[*] # training text snippets = %d' % len(train_ds), 'yellow')
+		cprint('[*] # testing text snippets = %d' % len(test_ds), 'yellow')
+	else:
+		cprint('[*] # training images = %d' % len(train_ds), 'yellow')
+		cprint('[*] # testing images = %d' % len(test_ds), 'yellow')
 
-if __name__ == '__main__':
-    ## set random seed
-    torch.backends.cudnn.benchmark = False     
-    torch.backends.cudnn.deterministic = True
-    seed = 42
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+	# main loop
+	model = create_model(opt)
+	cprint(f'[*] "{opt.model}" initialized.', 'cyan')
 
-    # this will parse args, setup log_dirs, multi-gpus
-    opt = TestOptions().parse_and_setup()
-    device = opt.device
-    rank = opt.rank
+	# visualizer
+	visualizer = Visualizer(opt)
+	visualizer.setup_io()
 
-    # get current time, print at terminal. easier to track exp
-    from datetime import datetime
-    opt.exp_time = datetime.now().strftime('%Y-%m-%dT%H-%M')
+	# save model and dataset files
+	expr_dir = '%s/%s' % (opt.logs_dir, opt.name)
+	model_f = inspect.getfile(model.__class__)
+	dset_f = inspect.getfile(train_ds.__class__)
+	cprint(f'[*] saving model and dataset files: {model_f}, {dset_f}', 'blue')
+	modelf_out = os.path.join(expr_dir, os.path.basename(model_f))
+	dsetf_out = os.path.join(expr_dir, os.path.basename(dset_f))
+	os.system(f'cp {model_f} {modelf_out}')
+	os.system(f'cp {dset_f} {dsetf_out}')
 
-    # create model with loading ckpt
-    model = create_model(opt)
-    cprint(f'[*] "{opt.model}" initialized.', 'cyan')
+	if opt.vq_cfg is not None:
+		vq_cfg = opt.vq_cfg
+		cfg_out = os.path.join(expr_dir, os.path.basename(vq_cfg))
+		os.system(f'cp {vq_cfg} {cfg_out}')
+		
+	if opt.df_cfg is not None:
+		df_cfg = opt.df_cfg
+		cfg_out = os.path.join(expr_dir, os.path.basename(df_cfg))
+		os.system(f'cp {df_cfg} {cfg_out}')
 
-    # visualizer
-    visualizer = Visualizer(opt)
-    if get_rank() == 0:
-        visualizer.setup_io()
-
-    # save model and dataset files
-    if get_rank() == 0:
-        expr_dir = '%s/%s' % (opt.results_dir, opt.name)
-        model_f = inspect.getfile(model.__class__)
-        cprint(f'[*] saving ckpt folder name: {opt.ckpt}', 'blue')
-        modelf_out = os.path.join(expr_dir, os.path.basename(model_f))
-        os.system(f'cp {model_f} {modelf_out}')
-
-        if opt.vq_cfg is not None:
-            vq_cfg = opt.vq_cfg
-            cfg_out = os.path.join(expr_dir, os.path.basename(vq_cfg))
-            os.system(f'cp {vq_cfg} {cfg_out}')
-            
-        if opt.df_cfg is not None:
-            df_cfg = opt.df_cfg
-            cfg_out = os.path.join(expr_dir, os.path.basename(df_cfg))
-            os.system(f'cp {df_cfg} {cfg_out}')
-        
-    test_main_worker(opt, model, visualizer, device)
+	eval_main_worker(opt, model, test_dl, visualizer)
