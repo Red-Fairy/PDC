@@ -28,7 +28,7 @@ def eval_main_worker(opt, model, test_dl, visualizer):
 
 	for i, test_data in tqdm(enumerate(test_dl)):
 
-		model.inference(test_data, transform_info=True, ddim_eta=0.2)
+		model.inference(test_data, transform_info=True)
 		visualizer.display_current_results(model.get_current_visuals(), i, phase='test')
 
 if __name__ == "__main__":

@@ -147,11 +147,18 @@ class SDFusionModelPly2Shape(BaseModel):
         self.loss_meter_epoch = AverageMeter()
         self.loss_meter_epoch.reset()
     
-    def set_input(self, input=None, max_sample=None):
+    def set_input(self, input=None, max_sample=None, transform_info=False):
         
         self.x = input['sdf'].to(self.device)
         self.ply = input['ply'].to(self.device)
         self.paths = input['path']
+
+        # transformation info for calculating collision loss
+        # "ply_points + ply_translation" aligns with "part * part_extent + part_translation"
+        if transform_info:
+            self.ply_translation = input['ply_translation']
+            self.part_translation = input['part_translation']
+            self.part_extent = input['part_extent']
 
     def switch_train(self):
         self.df.train()
@@ -235,8 +242,6 @@ class SDFusionModelPly2Shape(BaseModel):
         z_noisy = self.noise_scheduler.add_noise(z, noise, timesteps)
         model_output = self.apply_model(z_noisy, timesteps, cond=c)
 
-        loss_dict = {}
-
         if self.parameterization == "x0":
             target = z
         elif self.parameterization == "eps":
@@ -250,14 +255,16 @@ class SDFusionModelPly2Shape(BaseModel):
     # check: ddpm.py, log_images(). line 1317~1327
     @torch.no_grad()
     def inference(self, data, sample=True, ddim_steps=None, ddim_eta=0., quantize_denoised=True,
-                  infer_all=False, max_sample=16):
+                  infer_all=False, max_sample=16, transform_info=False):
 
         self.switch_eval()
 
-        if not infer_all:
-            self.set_input(data, max_sample=max_sample)
-        else:
-            self.set_input(data)
+        # if not infer_all:
+        #     self.set_input(data, max_sample=max_sample)
+        # else:
+        #     self.set_input(data)
+        
+        self.set_input(data, transform_info=transform_info)
         
         if ddim_steps is None:
             ddim_steps = self.ddim_steps
@@ -289,7 +296,7 @@ class SDFusionModelPly2Shape(BaseModel):
             noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
 
             # compute the previous noisy sample x_t -> x_t-1
-            latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
+            latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
 
         # decode z
         self.gen_df = self.vqvae.decode_no_quant(latents)
@@ -394,6 +401,15 @@ class SDFusionModelPly2Shape(BaseModel):
             "paths": self.paths,
             "points": self.ply.cpu().numpy() # (B, 3, N)
         }
+        
+        if hasattr(self, 'ply_translation'):
+            visuals_dict['ply_translation'] = self.ply_translation.cpu().numpy()
+            visuals_dict['part_translation'] = self.part_translation.cpu().numpy()
+            mesh_extents = torch.zeros(0, 3)
+            for mesh in meshes:
+                mesh_extents = torch.cat([mesh_extents, torch.tensor(mesh.extents).unsqueeze(0)], dim=0)
+            visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / torch.max(mesh_extents, dim=1)[0]).cpu().numpy()
+
         return visuals_dict
 
     def save(self, label, global_step, save_opt=False):

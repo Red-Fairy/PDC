@@ -58,7 +58,7 @@ class Visualizer():
         else:
             self.log_dir = os.path.join(opt.results_dir, opt.name)
 
-        self.img_dir = os.path.join(self.log_dir, 'images') if self.isTrain else os.path.join(self.log_dir, 'test_images')
+        self.img_dir = os.path.join(self.log_dir, 'images') if self.isTrain else os.path.join(self.log_dir, f'test_{opt.load_iter}_images')
         self.name = opt.name
         self.opt = opt
 
@@ -108,33 +108,43 @@ class Visualizer():
     def display_current_results(self, visuals, current_iters, im_name='', phase='train'):
         visual_img = visuals['img']
         visual_meshes = visuals['meshes']
-        # paths = visuals['paths']
+        if 'ply_translation' in visuals:
+            part_scale = visuals['part_scale']
+            part_translation = visuals['part_translation']
+            for i, mesh in enumerate(visual_meshes):
+                mesh.apply_scale((part_scale[i], part_scale[i], part_scale[i]))
+                mesh.apply_translation(part_translation[i])
+        
+        # get object_id and part_id
+        paths = visuals['paths']
+        object_ids = [path.split('/')[-1].split('_')[0] for path in paths]
+        part_ids = [path.split('/')[-1].split('_')[1].split('.')[0] for path in paths]
+
+        filename_format = f'{phase}_step{current_iters:05d}_{im_name}' + '_{}_{}_{}.{}'
+
         if self.opt.ply_cond:
             # save the visualized ply files, points are stored in visuals['points']
             for i in range(visuals['points'].shape[0]):
                 ply_file = open3d.geometry.PointCloud()
                 ply_file.points = open3d.utility.Vector3dVector(visuals['points'][i].T)
-                ply_path = os.path.join(self.img_dir, f'{phase}_step{current_iters:05d}_{im_name}_{i}.ply')
+                if 'ply_translation' in visuals:
+                    ply_file.translate(visuals['ply_translation'][i])
+                ply_path = os.path.join(self.img_dir, filename_format.format(i, object_ids[i], part_ids[i], 'ply'))
                 open3d.io.write_point_cloud(ply_path, ply_file)
 
-            # ply_paths = [path.replace('part_sdf', 'part_ply').replace('.h5', '.ply') for path in visuals['paths']]
-            # # create a symbolic link
-            # for i, path in enumerate(ply_paths):
-            #     dst_path = os.path.join(self.img_dir, f'{phase}_step{current_iters:05d}_{im_name}_{i}.ply')
-            #     if not os.path.exists(dst_path):
-            #         os.system(f'ln -s {path} {dst_path}')
         if self.opt.bbox_cond:
             bboxes = visuals['bboxes']
             data_dict = {
                 'bboxes': bboxes,
             }
             np.save(f'{self.img_dir}/{phase}_step{current_iters:05d}_{im_name}_meta.npy', data_dict, allow_pickle=True)
+            
         # write images to disk
         for label, image_numpy in visual_img.items():
             img_path = os.path.join(self.img_dir, f'{phase}_step{current_iters:05d}_{label}_{im_name}.png')
             util.save_image(image_numpy, img_path)
-        for mesh_i, visual_mesh in enumerate(visual_meshes):
-            mesh_path = os.path.join(self.img_dir, f'{phase}_step{current_iters:05d}_mesh_{im_name}_{mesh_i}.obj')
+        for i, visual_mesh in enumerate(visual_meshes):
+            mesh_path = os.path.join(self.img_dir, filename_format.format(i, object_ids[i], part_ids[i], 'obj'))
             visual_mesh.export(mesh_path, 'obj')
         # log to tensorboard
         self.log_tensorboard_visuals(visuals, current_iters, phase=phase)

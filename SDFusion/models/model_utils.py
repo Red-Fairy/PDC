@@ -2,6 +2,7 @@ from termcolor import colored
 import torch
 
 from models.networks.vqvae_networks.network import VQVAE
+import trimesh
 
 
 def load_vqvae(vq_conf, vq_ckpt, opt=None):
@@ -30,3 +31,7 @@ def load_vqvae(vq_conf, vq_ckpt, opt=None):
     # vqvae.to(opt.device)
     vqvae.eval()
     return vqvae
+
+# def get_scale(mesh: trimesh.Trimesh, extent: torch.Tensor):
+#     scale = torch.max(extent) / torch.max(torch.tensor(mesh.extents))
+#     return scale

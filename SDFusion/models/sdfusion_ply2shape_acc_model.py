@@ -159,9 +159,12 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         self.x = input['sdf'].to(self.device)
         self.ply = input['ply'].to(self.device)
         self.paths = input['path']
-
-        # if max_sample is not None:
-        #     self.x = self.x[:max_sample]
+        
+        # transformation info for calculating collision loss
+        # "ply_points + ply_translation" aligns with "part * part_extent + part_translation"
+        self.ply_translation = input['ply_translation'].to(self.device)
+        self.part_translation = input['part_translation'].to(self.device)
+        self.part_extent = input['part_extent'].to(self.device)
 
     def switch_train(self):
         self.df.train()
@@ -219,51 +222,6 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
             raise NotImplementedError("unknown loss type '{loss_type}'")
 
         return loss
-    
-    def get_sdf_refinement_loss(self, latents: torch.Tensor, ply: torch.Tensor):
-        '''
-        latent: the latent representation of the input sdf
-        calculate the sdf refinement loss
-        including: sds loss and collision loss
-        '''
-
-        self.switch_eval()
-        
-        # 1. sds loss
-        B = latents.shape[0] # latents: (B, latent_dim, res, res, res)
-        c = self.cond_model(ply).unsqueeze(1) # (B, 1, context_dim)
-        uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
-        c_full = torch.cat([uc, c])
-
-        latent_model_input = torch.cat([latents] * 2)
-
-        timesteps = torch.randint(
-            0, self.noise_scheduler.config.num_train_timesteps, (B*2,), device=latents.device,
-            dtype=torch.int64
-        )
-
-        noise = torch.randn(latents.shape, device=latents.device)
-        # Add noise to the clean images according to the noise magnitude at each timestep
-        latent_noisy = self.noise_scheduler.add_noise(latents, noise, timesteps)
-
-        # predict the noise residual
-        with torch.no_grad():
-            noise_pred = self.apply_model(latent_model_input, timesteps, c_full)
-
-        # perform guidance
-        noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
-        noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
-
-        weight = self.noise_scheduler.alphas_cumprod[timesteps].view(B, 1, 1, 1, 1)
-
-        grad = (noise_pred - noise) * weight
-        target = (latents - grad).detach()
-
-        sds_loss = self.get_loss(latents, target, loss_type='l2', mean=True)
-
-        # 2. collision loss
-
-        
 
     def forward(self):
 
@@ -387,18 +345,18 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         self.gen_df = self.vqvae.module.decode_no_quant(latents)
         return self.gen_df
     
-    @torch.no_grad()
-    def classifier_guidance_from_point_cloud(self, ngen=1, ddim_steps=200, ddim_eta=0.):
+    # @torch.no_grad()
+    # def classifier_guidance_from_point_cloud(self, ngen=1, ddim_steps=200, ddim_eta=0.):
 
-        self.switch_eval()
+    #     self.switch_eval()
             
-        if ddim_steps is None:
-            ddim_steps = self.ddim_steps
+    #     if ddim_steps is None:
+    #         ddim_steps = self.ddim_steps
             
-        # get noise, denoise, and decode with vqvae
-        B = ngen
-        shape = self.z_shape
-        c = self.cond_model(pty).unsqueeze(1)
+    #     # get noise, denoise, and decode with vqvae
+    #     B = ngen
+    #     shape = self.z_shape
+    #     c = self.cond_model(pty).unsqueeze(1)
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
@@ -467,6 +425,15 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
             "paths": self.paths,
             "points": self.ply.cpu().numpy(),
         }
+
+        if hasattr(self, 'ply_translation'):
+            visuals_dict['ply_translation'] = self.ply_translation.cpu().numpy()
+            visuals_dict['part_translation'] = self.part_translation.cpu().numpy()
+            mesh_extents = torch.zeros(0, 3)
+            for mesh in meshes:
+                mesh_extents = torch.cat([mesh_extents, torch.tensor(mesh.extents).unsqueeze(0)], dim=0)
+            visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / torch.max(mesh_extents, dim=1)[0]).cpu().numpy()
+
         return visuals_dict
 
     def save(self, label, global_step, save_opt=False):

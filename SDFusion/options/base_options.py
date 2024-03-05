@@ -28,7 +28,7 @@ class BaseOptions():
         self.parser.add_argument('--bboxroot', type=str, default=None, help='root dir for data. if None, specify by `hostname` in configs/paths.py')
         self.parser.add_argument('--dataset_mode', type=str, default='snet', help='chooses how datasets are loaded. [mnist, snet, abc, snet-abc]')
         self.parser.add_argument('--res', type=int, default=64, help='dataset resolution')
-        self.parser.add_argument('--cat', type=str, default='chair', help='category for shapenet')
+        self.parser.add_argument('--cat', type=str, default='slider_drawer', help='category for shapenet')
         self.parser.add_argument('--trunc_thres', type=float, default=0.2, help='threshold for truncated sdf.')
         
         self.parser.add_argument('--ratio', type=float, default=1., help='ratio of the dataset to use. for debugging and overfitting')
@@ -42,7 +42,6 @@ class BaseOptions():
                             # choices=['vqvae', 'sdfusion', 'sdfusion-img2shape', 'sdfusion-txt2shape','sdfusion-mm2shape','sdfusion-bbox2shape', ],
                             help='chooses which model to use.'
                         )
-        # self.parser.add_argument('--ckpt', type=str, default=None, help='ckpt to load.')
 
         # diffusion stuff
         self.parser.add_argument('--df_cfg', type=str, default='configs/sdfusion_snet.yaml', help="diffusion model's config file")

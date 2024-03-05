@@ -3,7 +3,7 @@ from termcolor import colored, cprint
 import torch
 import utils.util as util
 
-def create_model(opt, accelerator=None):
+def create_model(opt, accelerator=None, input_instance=None):
     model = None
 
     if opt.model == 'vqvae':
@@ -41,6 +41,13 @@ def create_model(opt, accelerator=None):
         else:
             from models.sdfusion_ply2shape_acc_model import SDFusionModelPly2ShapeAcc
             model = SDFusionModelPly2ShapeAcc(opt, accelerator)
+
+    elif opt.model == 'sdfusion-ply2shape-refine':
+        if accelerator is None:
+            raise ValueError("Refine model must be used with accelerator")
+        else:
+            from models.sdfusion_ply2shape_refine_acc_model import SDFusionModelPly2ShapeRefineAcc
+            model = SDFusionModelPly2ShapeRefineAcc(opt, accelerator, input_instance)
         
     else:
         raise ValueError("Model [%s] not recognized." % opt.model)

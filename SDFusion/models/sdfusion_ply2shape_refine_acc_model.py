@@ -40,11 +40,11 @@ from planners.base_model import create_planner
 # rendering
 from utils.util_3d import init_mesh_renderer, render_sdf
 
-class SDFusionModelPly2ShapeAcc(BaseModel):
+class SDFusionModelPly2ShapeRefineAcc(BaseModel):
     def name(self):
         return 'SDFusion-Model-PointCloud-to-Shape-Refinement-Accelerate'
 
-    def __init__(self, opt, sdf, accelerator: Accelerator):
+    def __init__(self, opt, accelerator: Accelerator, input_instance: dict):
         super().__init__(opt)
         self.isTrain = opt.isTrain
         self.model_name = self.name()
@@ -84,16 +84,38 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         self.cond_model = nn.SyncBatchNorm.convert_sync_batchnorm(self.cond_model)
         self.cond_model.requires_grad_(False)
 
+        # load pre-trained weights
+        self.load_ckpt(ckpt=opt.pretrained_ckpt)
+
+        self.x = input_instance['sdf'].to(self.device) # (1, 1, res, res, res)
+
+        if 'initial_shape' in input_instance:
+            self.initial_shape = input_instance['initial_shape'].to(self.device)
+            with torch.no_grad():
+                latent = self.vqvae.encode_no_quant(self.initial_shape)
+        else:
+            latent = torch.randn([1, *self.z_shape], device=self.device)
+        
+        self.latent = nn.Parameter(latent, requires_grad=True) # (1, latent_dim, vq_res, vq_res, vq_res)
+        self.ply = input_instance['ply'].to(self.device) # (1, 3, N)
+        self.paths = input_instance['path']
+        
+        # transformation info for calculating collision loss
+        # "ply_points + ply_translation" aligns with "part * part_extent_ratio + part_translation"
+        self.ply_translation = input_instance['ply_translation'].to(self.device) # (1, 3)
+        self.part_translation = input_instance['part_translation'].to(self.device) # (1, 3)
+        self.part_extent = input_instance['part_extent'].to(self.device) # (1, 3)
+
+        self.batch_size = opt.batch_size
+
         if self.isTrain:
+            self.optimizer = optim.AdamW([self.latent], lr=opt.lr)
 
-            self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True] + \
-                            [p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
+            lr_lambda = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
+            self.scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda)
 
-            lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
-            self.scheduler1 = optim.lr_scheduler.LambdaLR(self.optimizer1, lr_lambda1)
-
-            self.optimizers = [self.optimizer1]
-            self.schedulers = [self.scheduler1]
+            self.optimizers = [self.optimizer]
+            self.schedulers = [self.scheduler]
 
             self.print_networks(verbose=False)
 
@@ -104,9 +126,6 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         self.noise_scheduler = DDIMScheduler()
 
         ######## END: Define Networks ########
-
-        self.sdf = nn.Parameter(sdf, requires_grad=True)
-        self.batch_size = opt.batch_size
 
         # setup renderer
         if 'snet' in opt.dataset_mode:
@@ -120,9 +139,13 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
         self.renderer = init_mesh_renderer(image_size=256, dist=dist, elev=elev, azim=azim, device=self.device)
 
+        self.loss_collision_weight = opt.loss_collision_weight
         self.loss_names = ['sds', 'collision', 'total']
         self.loss_meter_dict = {name: AverageMeter() for name in self.loss_names}
         self.loss_meter_epoch_dict = {name: AverageMeter() for name in self.loss_names}
+
+    def set_input(self, input=None, max_sample=None):
+        raise NotImplementedError('set_input() is not implemented')
 
     def switch_train(self):
         raise NotImplementedError('switch_train() is not implemented')
@@ -158,36 +181,38 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         else:
             return out
     
-    def get_sdf_refinement_loss(self, latents: torch.Tensor, ply: torch.Tensor):
+    def get_sdf_refinement_loss(self):
         '''
-        latent: the latent representation of the input sdf
+        latent: the latent representation of the input sdf, currently bsz = 1, expand before feeding into the model
         calculate the sdf refinement loss
         including: sds loss and collision loss
         return the total loss
         '''
 
         self.switch_eval()
-        loss_dict ={}
+        loss_dict = {}
+
+        latents = self.latent.expand(self.batch_size, -1, -1, -1, -1) # (B, latent_dim, res, res, res)
+        ply = self.ply.expand(self.batch_size, -1, -1) # (B, 3, N)
         
         # 1. sds loss
-        B = latents.shape[0] # latents: (B, latent_dim, res, res, res)
+        B = self.batch_size
         c = self.cond_model(ply).unsqueeze(1) # (B, 1, context_dim)
         uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
         c_full = torch.cat([uc, c])
 
         timesteps = torch.randint(
-            0, self.noise_scheduler.config.num_train_timesteps, (B*2,), device=latents.device,
+            0, self.noise_scheduler.config.num_train_timesteps, (B,), device=latents.device,
             dtype=torch.int64
         )
 
         noise = torch.randn(latents.shape, device=latents.device)
         # Add noise to the clean images according to the noise magnitude at each timestep
         latent_noisy = self.noise_scheduler.add_noise(latents, noise, timesteps)
-        latent_model_input = torch.cat([latent_noisy] * 2)
 
         # predict the noise residual
         with torch.no_grad():
-            noise_pred = self.apply_model(latent_model_input, timesteps, c_full)
+            noise_pred = self.apply_model(torch.cat([latent_noisy] * 2), torch.cat([timesteps]*2), c_full)
 
         # perform guidance
         noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
@@ -201,12 +226,37 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         loss_sds = F.mse_loss(latents, target, reduction="mean")
         
         loss_dict['sds'] = loss_sds
-    
 
+        # 2. collision loss
+
+        # 0) decode the latents to sdf
+        sdf = self.vqvae.decode(self.latent).expand(B, -1, -1, -1, -1) # (1, 1, res_sdf, res_sdf, res_sdf)
+
+        with torch.no_grad():
+            # 1) build mesh from sdf (latents), not differentiable
+            mesh = sdf_to_mesh_trimesh(sdf[0][0], spacing=(2./self.shape_res, 2./self.shape_res, 2./self.shape_res))
+            scale = torch.max(self.part_extent) / np.max(mesh.extents)
+            # 2) transform point cloud to the mesh coordinate
+            ply_transformed = (self.ply + self.ply_translation.view(1, 3, 1) - self.part_translation.view(1, 3, 1)) / scale # (1, 3, N)
+            ply_transformed = ply_transformed.transpose(1, 2).expand(B, -1, -1) # (B, N, 3)
+        
+        # 3) query the sdf value at the transformed point cloud
+        # input: (1, 1, res_sdf, res_sdf, res_sdf), (B, 1, 1, N, 3) -> (B, 1, 1, 1, N)
+        sdf_ply = F.grid_sample(sdf, ply_transformed.unsqueeze(1).unsqueeze(1), align_corners=True).squeeze(1).squeeze(1).squeeze(1) # (B, N)
+        # 4) calculate the collision loss
+        loss_collision = torch.mean(F.relu(-sdf_ply)) # (B, N) -> (B, 1) -> scalar 
+        loss_dict['collision'] = loss_collision * self.loss_collision_weight
+        
+        loss_dict['total'] = loss_dict['sds'] + loss_dict['collision']
+
+        return loss_dict
+    
     def forward(self):
 
         self.switch_eval()
-        return self.get_sdf_refinement_loss()
+        loss_dict = self.get_sdf_refinement_loss()
+
+        return loss_dict
 
     def backward(self): # not used
         raise NotImplementedError('backward() is not implemented')
@@ -222,7 +272,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         self.accelerator.backward(loss_dict['total'])
         
         # clip grad norm
-        torch.nn.utils.clip_grad_norm_(self.sdf, 0.1)
+        torch.nn.utils.clip_grad_norm_(self.latent, 0.1)
         
         for optimizer in self.optimizers:
             optimizer.step()
@@ -242,7 +292,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
         # print learning rate
         for i, scheduler in enumerate(self.schedulers):
-            print(f'learning rate at iter {self.start_iter}: {scheduler.get_last_lr()}', flush=True)
+            print(f'learning rate at iter {self.scheduler.last_epoch}: {scheduler.get_last_lr()}', flush=True)
 
         return ret
     
@@ -260,6 +310,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
         with torch.no_grad():
             self.img_gt = render_sdf(self.renderer, self.x)
+            self.gen_df = self.vqvae.decode(self.latent)
             self.img_gen_df = render_sdf(self.renderer, self.gen_df)
             spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
             meshes = [sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=spc) for i in range(self.gen_df.shape[0])]
@@ -276,14 +327,21 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
             "paths": self.paths,
             "points": self.ply.cpu().numpy(),
         }
+        
+        if hasattr(self, 'ply_translation'):
+            visuals_dict['ply_translation'] = self.ply_translation.cpu().numpy()
+            visuals_dict['part_translation'] = self.part_translation.cpu().numpy()
+            mesh_extents = torch.zeros(0, 3)
+            for mesh in meshes:
+                mesh_extents = torch.cat([mesh_extents, torch.tensor(mesh.extents).unsqueeze(0)], dim=0)
+            visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / torch.max(mesh_extents, dim=1)[0]).cpu().numpy()
+
         return visuals_dict
 
     def save(self, label, global_step, save_opt=False):
 
         state_dict = {
-            # 'vqvae': self.vqvae.module.state_dict(),
-            'df': self.df.module.state_dict(),
-            'global_step': global_step,
+            'latent': self.latent,
         }
 
         for i, optimizer in enumerate(self.optimizers):
@@ -291,7 +349,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         for i, scheduler in enumerate(self.schedulers):
             state_dict[f'sch{i}'] = scheduler.state_dict()
            
-        save_filename = 'df_%s.pth' % (label)
+        save_filename = 'latent_%s.pth' % (label)
         save_path = os.path.join(self.opt.ckpt_dir, save_filename)
 
         torch.save(state_dict, save_path)
@@ -325,7 +383,6 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
                     print(colored('[*] scheduler not loaded', 'red'))
                     for _ in range(state_dict['global_step']):
                         scheduler.step()
-            
 
         return iter_passed
 
