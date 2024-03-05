@@ -31,9 +31,9 @@ trunc_thres=0.2
 #####################
 
 ### display & log stuff ###
-display_freq=250
+display_freq=100
 print_freq=25
-total_iters=250000
+total_iters=100000
 save_steps_freq=2500
 ###########################
 
@@ -60,6 +60,9 @@ lr=$2
 port=$3
 gpu_ids=$4
 model_id=$5
+uc_scale=$6
+
+name="${name}-${model_id}-scale${uc_scale}-lr${lr}"
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --lr ${lr} --batch_size ${batch_size} \
@@ -69,7 +72,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --display_freq ${display_freq} --print_freq ${print_freq} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
             --ply_cond  --cond_ckpt ${cond_ckpt} --pretrained_ckpt ${ckpt_path} --model_id ${model_id} \
-            --initial_shape_path ${initial_shape_path}"
+            --initial_shape_path ${initial_shape_path} --uc_scale ${uc_scale}"
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 

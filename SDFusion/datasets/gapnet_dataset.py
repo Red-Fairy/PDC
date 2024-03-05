@@ -119,13 +119,21 @@ class GAPartNetDataset(BaseDataset):
                 mesh_path = sdf_h5_file.replace('part_sdf', 'part_meshes').replace('.h5', '.obj')
                 mesh = trimesh.load_mesh(mesh_path)
 
-                raw, pitch, yaw = torch.rand(3) * 2 * np.pi
+                rotate_angle_y = torch.rand(1) * 2 * np.pi
                 rot_matrix = torch.tensor([
-                    [np.cos(yaw)*np.cos(pitch), np.cos(yaw)*np.sin(pitch)*np.sin(raw)-np.sin(yaw)*np.cos(raw), np.cos(yaw)*np.sin(pitch)*np.cos(raw)+np.sin(yaw)*np.sin(raw), 0],
-                    [np.sin(yaw)*np.cos(pitch), np.sin(yaw)*np.sin(pitch)*np.sin(raw)+np.cos(yaw)*np.cos(raw), np.sin(yaw)*np.sin(pitch)*np.cos(raw)-np.cos(yaw)*np.sin(raw), 0],
-                    [-np.sin(pitch), np.cos(pitch)*np.sin(raw), np.cos(pitch)*np.cos(raw), 0],
+                    [np.cos(rotate_angle_y), 0, np.sin(rotate_angle_y), 0],
+                    [0, 1, 0, 0],
+                    [-np.sin(rotate_angle_y), 0, np.cos(rotate_angle_y), 0],
                     [0, 0, 0, 1]
                 ])
+
+                # raw, pitch, yaw = torch.rand(3) * 2 * np.pi
+                # rot_matrix = torch.tensor([
+                #     [np.cos(yaw)*np.cos(pitch), np.cos(yaw)*np.sin(pitch)*np.sin(raw)-np.sin(yaw)*np.cos(raw), np.cos(yaw)*np.sin(pitch)*np.cos(raw)+np.sin(yaw)*np.sin(raw), 0],
+                #     [np.sin(yaw)*np.cos(pitch), np.sin(yaw)*np.sin(pitch)*np.sin(raw)+np.cos(yaw)*np.cos(raw), np.sin(yaw)*np.sin(pitch)*np.cos(raw)-np.cos(yaw)*np.sin(raw), 0],
+                #     [-np.sin(pitch), np.cos(pitch)*np.sin(raw), np.cos(pitch)*np.cos(raw), 0],
+                #     [0, 0, 0, 1]
+                # ])
 
                 points = torch.cat([points, torch.ones(1, points.shape[1])], dim=0)
                 points = torch.mm(rot_matrix, points)[:-1]

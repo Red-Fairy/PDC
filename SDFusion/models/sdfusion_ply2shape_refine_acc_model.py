@@ -327,13 +327,13 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
             "paths": self.paths,
             "points": self.ply.cpu().numpy(),
         }
-        
+
         if hasattr(self, 'ply_translation'):
             visuals_dict['ply_translation'] = self.ply_translation.cpu().numpy()
             visuals_dict['part_translation'] = self.part_translation.cpu().numpy()
-            mesh_extents = torch.zeros(0, 3)
+            mesh_extents = torch.zeros([0, 3], device=self.device)
             for mesh in meshes:
-                mesh_extents = torch.cat([mesh_extents, torch.tensor(mesh.extents).unsqueeze(0)], dim=0)
+                mesh_extents = torch.cat([mesh_extents, torch.tensor(mesh.extents, device=self.device).unsqueeze(0)], dim=0)
             visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / torch.max(mesh_extents, dim=1)[0]).cpu().numpy()
 
         return visuals_dict
