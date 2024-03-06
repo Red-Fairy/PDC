@@ -34,6 +34,7 @@ from diffusers.optimization import get_cosine_schedule_with_warmup
 from accelerate import Accelerator
 
 from utils.util import AverageMeter
+from datasets.mesh_to_sdf import mesh_to_sdf
 
 from planners.base_model import create_planner
 
@@ -87,16 +88,17 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
         self.load_ckpt(ckpt=opt.pretrained_ckpt)
 
         self.x = input_instance['sdf'].to(self.device) # (1, 1, res, res, res)
+        self.ply = input_instance['ply'].to(self.device) # (1, 3, N)
 
         if 'initial_shape' in input_instance:
             self.initial_shape = input_instance['initial_shape'].to(self.device)
             with torch.no_grad():
                 latent = self.vqvae.encode_no_quant(self.initial_shape)
         else:
-            latent = torch.randn([1, *self.z_shape], device=self.device)
+            latent = self.inference()
+            # latent = torch.randn([1, *self.z_shape], device=self.device)
         
         self.latent = nn.Parameter(latent, requires_grad=True) # (1, latent_dim, vq_res, vq_res, vq_res)
-        self.ply = input_instance['ply'].to(self.device) # (1, 3, N)
         self.paths = input_instance['path']
         
         # transformation info for calculating collision loss
@@ -247,7 +249,7 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
             # input: (1, 1, res_sdf, res_sdf, res_sdf), (B, 1, 1, N, 3) -> (B, 1, 1, 1, N)
             sdf_ply = F.grid_sample(sdf, ply_transformed.unsqueeze(1).unsqueeze(1), align_corners=True).squeeze(1).squeeze(1).squeeze(1) # (B, N)
             # 4) calculate the collision loss
-            loss_collision = torch.sum(F.relu(-sdf_ply-0.01)) / B # (B, N) -> (B, 1) -> scalar
+            loss_collision = torch.sum(F.relu(-sdf_ply-0.005)) / B # (B, N) -> (B, 1) -> scalar
             # loss_collision = torch.mean(F.relu(-sdf_ply)) # (B, N) -> (B, 1) -> scalar 
             loss_collision_weight = self.loss_collision_weight * max(0, 2 * self.scheduler.last_epoch / self.opt.total_iters - 1)
             loss_dict['collision'] = loss_collision * loss_collision_weight
@@ -392,14 +394,40 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
                         scheduler.step()
 
         return iter_passed
+    
+    @torch.no_grad()
+    def inference(self, ddim_steps=50):
 
-    def set_planner(self, planner):
-        if not self.isTrain:
-            self.planner = planner
-            if self.planner is not None:
-                print(colored('[*] planner type: %s' % planner.__class__.__name__,
-                            'red'))
-            else:
-                print(colored('[*] planner type: None', 'red'))
-        else:
-            raise NotImplementedError('planner setter is only for inference')
+        self.switch_eval()
+            
+        B = 1
+        shape = self.z_shape
+        c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
+        uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
+        c_full = torch.cat([uc, c])
+
+        latents = torch.randn((B, *shape), device=self.device)
+        latents = latents * self.noise_scheduler.init_noise_sigma
+
+        self.noise_scheduler.set_timesteps(ddim_steps)
+
+        # w/ condition
+        for t in tqdm(self.noise_scheduler.timesteps):
+            # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
+            latent_model_input = torch.cat([latents] * 2)
+            latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
+
+            # predict the noise residual
+            with torch.no_grad():
+                timesteps = torch.full((B*2,), t, device=self.device, dtype=torch.int64)
+                noise_pred = self.apply_model(latent_model_input, timesteps, c_full)
+
+            # perform guidance
+            noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
+            noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
+
+            # compute the previous noisy sample x_t -> x_t-1
+            latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
+
+        return latents
+
