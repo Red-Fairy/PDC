@@ -72,7 +72,6 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
         self.df = DiffusionUNet(unet_params, vq_conf=vq_conf, conditioning_key=df_conf.model.params.conditioning_key).to(self.device)
         self.df.requires_grad_(False)
         self.guidance_scale = opt.uc_scale
-        # self.init_diffusion_params(scale=1, opt=opt)
 
         # init vqvae
         self.vqvae = load_vqvae(vq_conf, vq_ckpt=opt.vq_ckpt, opt=opt).to(self.device)
@@ -139,6 +138,7 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
 
         self.renderer = init_mesh_renderer(image_size=256, dist=dist, elev=elev, azim=azim, device=self.device)
 
+        self.use_collision_loss = opt.collision_loss
         self.loss_collision_weight = opt.loss_collision_weight
         self.loss_names = ['sds', 'collision', 'total']
         self.loss_meter_dict = {name: AverageMeter() for name in self.loss_names}
@@ -200,9 +200,12 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
         c = self.cond_model(ply).unsqueeze(1) # (B, 1, context_dim)
         uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
         c_full = torch.cat([uc, c])
-
+        
+        # sample timesteps
+        min_noise = 0.02 * self.noise_scheduler.config.num_train_timesteps
+        max_noise = 0.98 * self.noise_scheduler.config.num_train_timesteps * (1 - self.scheduler.last_epoch / self.opt.total_iters)
         timesteps = torch.randint(
-            0, self.noise_scheduler.config.num_train_timesteps, (B,), device=latents.device,
+            int(min_noise), int(max_noise), (B,), device=latents.device,
             dtype=torch.int64
         )
 
@@ -228,24 +231,27 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
         loss_dict['sds'] = loss_sds
 
         # 2. collision loss
+        if self.use_collision_loss:
+            # 0) decode the latents to sdf
+            sdf = self.vqvae.decode(self.latent).expand(B, -1, -1, -1, -1) # (1, 1, res_sdf, res_sdf, res_sdf)
 
-        # 0) decode the latents to sdf
-        sdf = self.vqvae.decode(self.latent).expand(B, -1, -1, -1, -1) # (1, 1, res_sdf, res_sdf, res_sdf)
-
-        with torch.no_grad():
-            # 1) build mesh from sdf (latents), not differentiable
-            mesh = sdf_to_mesh_trimesh(sdf[0][0], spacing=(2./self.shape_res, 2./self.shape_res, 2./self.shape_res))
-            scale = torch.max(self.part_extent) / np.max(mesh.extents)
-            # 2) transform point cloud to the mesh coordinate
-            ply_transformed = (self.ply + self.ply_translation.view(1, 3, 1) - self.part_translation.view(1, 3, 1)) / scale # (1, 3, N)
-            ply_transformed = ply_transformed.transpose(1, 2).expand(B, -1, -1) # (B, N, 3)
-        
-        # 3) query the sdf value at the transformed point cloud
-        # input: (1, 1, res_sdf, res_sdf, res_sdf), (B, 1, 1, N, 3) -> (B, 1, 1, 1, N)
-        sdf_ply = F.grid_sample(sdf, ply_transformed.unsqueeze(1).unsqueeze(1), align_corners=True).squeeze(1).squeeze(1).squeeze(1) # (B, N)
-        # 4) calculate the collision loss
-        loss_collision = torch.mean(F.relu(-sdf_ply)) # (B, N) -> (B, 1) -> scalar 
-        loss_dict['collision'] = loss_collision * self.loss_collision_weight
+            with torch.no_grad():
+                # 1) build mesh from sdf (latents), not differentiable
+                mesh = sdf_to_mesh_trimesh(sdf[0][0], spacing=(2./self.shape_res, 2./self.shape_res, 2./self.shape_res))
+                scale = torch.max(self.part_extent) / np.max(mesh.extents)
+                # 2) transform point cloud to the mesh coordinate
+                ply_transformed = (self.ply + self.ply_translation.view(1, 3, 1) - self.part_translation.view(1, 3, 1)) / scale # (1, 3, N)
+                ply_transformed = ply_transformed.transpose(1, 2).expand(B, -1, -1) # (B, N, 3)
+            
+            # 3) query the sdf value at the transformed point cloud
+            # input: (1, 1, res_sdf, res_sdf, res_sdf), (B, 1, 1, N, 3) -> (B, 1, 1, 1, N)
+            sdf_ply = F.grid_sample(sdf, ply_transformed.unsqueeze(1).unsqueeze(1), align_corners=True).squeeze(1).squeeze(1).squeeze(1) # (B, N)
+            # 4) calculate the collision loss
+            loss_collision = torch.sum(F.relu(-sdf_ply-0.01)) / B # (B, N) -> (B, 1) -> scalar
+            # loss_collision = torch.mean(F.relu(-sdf_ply)) # (B, N) -> (B, 1) -> scalar 
+            loss_dict['collision'] = loss_collision * self.loss_collision_weight
+        else:
+            loss_dict['collision'] = torch.tensor(0.0, device=self.device)
         
         loss_dict['total'] = loss_dict['sds'] + loss_dict['collision']
 
@@ -292,7 +298,7 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
 
         # print learning rate
         for i, scheduler in enumerate(self.schedulers):
-            print(f'learning rate at iter {self.scheduler.last_epoch}: {scheduler.get_last_lr()}', flush=True)
+            print(f'learning rate at iter {scheduler.last_epoch}: {scheduler.get_last_lr()}', flush=True)
 
         return ret
     

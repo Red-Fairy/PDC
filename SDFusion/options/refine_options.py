@@ -26,7 +26,8 @@ class RefineOptions(BaseOptions):
         # continue train
         self.parser.add_argument('--continue_train', action='store_true', help='continue training: load the latest model')
 
-        self.parser.add_argument('--loss_collision_weight', type=float, default=1.0, help='collision loss weight')
+        self.parser.add_argument('--collision_loss', action='store_true', help='use collision loss')
+        self.parser.add_argument('--loss_collision_weight', type=float, default=0.01, help='collision loss weight')
 
         self.parser.add_argument('--model_id', required=True, type=str, help='model id to optimize')
         self.parser.add_argument('--model_basepath', default='/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/')

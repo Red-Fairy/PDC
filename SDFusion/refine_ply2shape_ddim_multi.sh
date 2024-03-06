@@ -10,8 +10,9 @@ logs_dir='logs'
 ### hyper params ###
 batch_size=8
 
-ckpt_path='/raid/haoran/Project/PartDiffusion/PartDiffusion/SDFusion/logs/drawer-ply2shape-lr1e-5-norot-trainCond/ckpt/df_steps-140000.pth'
-initial_shape_path='/raid/haoran/Project/PartDiffusion/rectangle.obj'
+ckpt_path='/raid/haoran/Project/PartDiffusion/PartDiffusion/SDFusion/logs/drawer-ply2shape-lr1e-5-norot-trainCond/ckpt/df_steps-latest.pth'
+# initial_shape_path='/raid/haoran/Project/PartDiffusion/rectangle.obj'
+initial_shape_path='/raid/haoran/Project/PartDiffusion/PartDiffusion/SDFusion/logs/drawer-refine-SDSonly-noiseSchedule-26503_1-scale3-lr0.0001/images/train_step17400__0_26503_1.obj'
 
 ### model stuff ###
 model='sdfusion-ply2shape-refine'
@@ -33,7 +34,7 @@ trunc_thres=0.2
 ### display & log stuff ###
 display_freq=100
 print_freq=25
-total_iters=100000
+total_iters=50000
 save_steps_freq=2500
 ###########################
 
@@ -72,7 +73,8 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --display_freq ${display_freq} --print_freq ${print_freq} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
             --ply_cond  --cond_ckpt ${cond_ckpt} --pretrained_ckpt ${ckpt_path} --model_id ${model_id} \
-            --initial_shape_path ${initial_shape_path} --uc_scale ${uc_scale}"
+            --initial_shape_path ${initial_shape_path} --uc_scale ${uc_scale} \
+            --collision_loss --loss_collision_weight 0.001"
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 

@@ -70,8 +70,8 @@ class Visualizer():
         
         if self.isTrain:
             self.log_name = os.path.join(self.log_dir, 'loss_log.txt')
-            # with open(self.log_name, "a") as log_file:
-            with open(self.log_name, "w") as log_file:
+            # with open(self.log_name, "a") as log_file, append to the file
+            with open(self.log_name, "a") as log_file:
                 now = time.strftime("%c")
                 log_file.write('================ Training Loss (%s) ================\n' % now)
 

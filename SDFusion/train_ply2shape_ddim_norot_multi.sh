@@ -8,12 +8,6 @@ DATE_WITH_TIME=`date "+%Y-%m-%dT%H-%M-%S"`
 logs_dir='logs'
 
 ### hyper params ###
-batch_size=8
-name=$1
-lr=$2
-port=$3
-gpu_ids=$4
-freeze_iters=$5
 
 ### model stuff ###
 model='sdfusion-ply2shape'
@@ -62,6 +56,16 @@ if [ $debug = 1 ]; then
     name="DEBUG-${name}"
 fi
 
+batch_size=12
+name=$1
+lr=$2
+port=$3
+gpu_ids=$4
+uc_scale=$5
+
+name="${name}-norot-scale${uc_scale}-lr${lr}"
+
+
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --lr ${lr} --batch_size ${batch_size} --max_dataset_size ${max_dataset_size} \
             --model ${model} --df_cfg ${df_cfg} \
@@ -70,8 +74,8 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --display_freq ${display_freq} --print_freq ${print_freq} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
             --debug ${debug} --dataroot ${dataroot} \
-            --ply_cond --cond_ckpt ${cond_ckpt} --freeze_iters ${freeze_iters} \
-            --continue_train --load_iter 45000"
+            --ply_cond --cond_ckpt ${cond_ckpt} --uc_scale ${uc_scale} \
+            --continue_train "
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 
