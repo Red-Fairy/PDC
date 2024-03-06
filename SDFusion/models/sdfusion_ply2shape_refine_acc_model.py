@@ -98,8 +98,13 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
             with torch.no_grad():
                 latent = self.vqvae.encode_no_quant(self.initial_shape)
         else:
-            latent = self.inference()
-            # latent = torch.randn([1, *self.z_shape], device=self.device)
+            save_filename = 'latent_%s.pth' % (opt.model_id)
+            save_path = os.path.join(opt.ckpt_dir, save_filename)
+            if accelerator.is_main_process:
+                latent = self.inference()
+                torch.save(latent.detach().cpu(), save_path) # save the latent
+            accelerator.wait_for_everyone() # load the latent for all processes
+            latent = torch.load(save_path, map_location=self.device)
         
         self.latent = nn.Parameter(latent, requires_grad=True) # (1, latent_dim, vq_res, vq_res, vq_res)
         self.paths = input_instance['path']
@@ -397,7 +402,7 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
         return iter_passed
     
     @torch.no_grad()
-    def inference(self, ddim_steps=50):
+    def inference(self, ddim_steps=1000, eta=1.):
 
         self.switch_eval()
             
@@ -428,7 +433,7 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
             noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
 
             # compute the previous noisy sample x_t -> x_t-1
-            latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
+            latents = self.noise_scheduler.step(noise_pred, t, latents, eta).prev_sample
 
         return latents
 
