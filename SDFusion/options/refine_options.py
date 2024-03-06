@@ -30,7 +30,6 @@ class RefineOptions(BaseOptions):
         self.parser.add_argument('--loss_collision_weight', type=float, default=0.01, help='collision loss weight')
 
         self.parser.add_argument('--model_id', required=True, type=str, help='model id to optimize')
-        self.parser.add_argument('--model_basepath', default='/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/')
         self.parser.add_argument('--pretrained_ckpt', type=str, default=None, help='ckpt to load.')
 
         self.parser.add_argument('--initial_shape_path', type=str, default=None, help='path to the initialization shape')

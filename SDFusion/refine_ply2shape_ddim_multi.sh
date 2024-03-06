@@ -26,8 +26,10 @@ vq_cfg="/raid/haoran/Project/PartDiffusion/PartDiffusion/SDFusion/configs/vqvae_
 
 cond_ckpt="/raid/haoran/Project/PartDiffusion/PartDiffusion/pretrained_checkpoint/pointnet2.pth"
 
-res=64
+dataroot="/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_sdf"
 cat="slider_drawer"
+
+res=64
 trunc_thres=0.2
 #####################
 

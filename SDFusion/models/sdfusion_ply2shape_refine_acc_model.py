@@ -205,7 +205,7 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
         
         # sample timesteps
         min_noise = 0.02 * self.noise_scheduler.config.num_train_timesteps
-        max_noise = 0.98 * self.noise_scheduler.config.num_train_timesteps * (1 - self.scheduler.last_epoch / self.opt.total_iters)
+        max_noise = max(0.98 * self.noise_scheduler.config.num_train_timesteps * (1 - self.scheduler.last_epoch / self.opt.total_iters), 0.5)
         timesteps = torch.randint(
             int(min_noise), int(max_noise), (B,), device=latents.device,
             dtype=torch.int64

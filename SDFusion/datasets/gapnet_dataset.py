@@ -30,7 +30,7 @@ class GAPartNetDataset(BaseDataset):
         self.opt = opt
         self.max_dataset_size = opt.max_dataset_size
         self.res = res
-        dataroot = opt.dataroot
+        dataroot = os.path.join(opt.dataroot, cat)
 
         if self.phase == 'refine':
             assert opt.batch_size == 1

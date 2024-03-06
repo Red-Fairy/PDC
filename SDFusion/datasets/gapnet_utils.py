@@ -34,13 +34,13 @@ def pc_normalize(pc, scale_norm=True, return_stat=False):
 
 def get_single_model(opt):
 
-    basepath = opt.model_basepath
+    basepath = opt.dataroot
     cat = opt.cat
     model_id = opt.model_id
 
     ret = {}
 
-    sdf_path = os.path.join(basepath, 'part_sdf', cat , model_id + '.h5')
+    sdf_path = os.path.join(basepath, cat , model_id + '.h5')
     ret['path'] = [sdf_path]
     h5_f = h5py.File(sdf_path, 'r')
     sdf = h5_f['pc_sdf_sample'][:].astype(np.float32)

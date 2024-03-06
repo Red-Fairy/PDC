@@ -25,10 +25,10 @@ vq_cfg="/raid/haoran/Project/PartDiffusion/PartDiffusion/SDFusion/configs/vqvae_
 ### dataset stuff ###
 max_dataset_size=1000000
 dataset_mode='gapnet'
-dataroot="/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_sdf/slider_drawer"
+dataroot="/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_sdf"
+cat="slider_drawer"
 
 res=64
-cat="slider_drawer"
 trunc_thres=0.2
 #####################
 
