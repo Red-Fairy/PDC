@@ -87,6 +87,9 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
         # load pre-trained weights
         self.load_ckpt(ckpt=opt.pretrained_ckpt)
 
+        # noise scheduler
+        self.noise_scheduler = DDIMScheduler()
+
         self.x = input_instance['sdf'].to(self.device) # (1, 1, res, res, res)
         self.ply = input_instance['ply'].to(self.device) # (1, 3, N)
 
@@ -122,9 +125,6 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
 
         # prepare accelerate
         self.df, self.vqvae, self.cond_model = accelerator.prepare(self.df, self.vqvae, self.cond_model)
-
-        # noise scheduler
-        self.noise_scheduler = DDIMScheduler()
 
         ######## END: Define Networks ########
 
@@ -251,7 +251,8 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
             # 4) calculate the collision loss
             loss_collision = torch.sum(F.relu(-sdf_ply-0.005)) / B # (B, N) -> (B, 1) -> scalar
             # loss_collision = torch.mean(F.relu(-sdf_ply)) # (B, N) -> (B, 1) -> scalar 
-            loss_collision_weight = self.loss_collision_weight * max(0, 2 * self.scheduler.last_epoch / self.opt.total_iters - 1)
+            # loss_collision_weight = self.loss_collision_weight * max(0, 2 * self.scheduler.last_epoch / self.opt.total_iters - 1)
+            loss_collision_weight = self.loss_collision_weight
             loss_dict['collision'] = loss_collision * loss_collision_weight
         else:
             loss_dict['collision'] = torch.tensor(0.0, device=self.device)
