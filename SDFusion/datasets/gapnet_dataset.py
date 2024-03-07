@@ -36,7 +36,7 @@ class GAPartNetDataset(BaseDataset):
             assert opt.batch_size == 1
 
         self.sdf_filepaths = [os.path.join(dataroot, f) for f in os.listdir(dataroot) if f.endswith('.h5')]
-        self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace('part_sdf', 'part_ply').replace('.h5', '.ply')), self.sdf_filepaths))
+        self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace('part_sdf', 'part_ply_fps').replace('.h5', '.ply')), self.sdf_filepaths))
 
         self.bbox_cond = opt.bbox_cond
         self.joint_rotate = opt.joint_rotate

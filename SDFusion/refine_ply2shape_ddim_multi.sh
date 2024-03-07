@@ -35,7 +35,7 @@ trunc_thres=0.2
 ### display & log stuff ###
 display_freq=100
 print_freq=25
-total_iters=25000
+total_iters=10000
 save_steps_freq=2500
 ###########################
 

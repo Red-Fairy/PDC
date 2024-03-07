@@ -13,7 +13,7 @@ import skimage
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--cat', type=str, default='slider_drawer', help='category name')
-parser.add_argument('--length', type=float, default=1.2, help='length of the bounding box')
+parser.add_argument('--padding', type=float, default=0.2, help='length of the bounding box')
 # parser.add_argument('--mesh_scale', type=float, default=1, help='scale of the mesh')
 parser.add_argument('--res', type=int, default=64, help='resolution of the sdf')
 parser.add_argument('--truncation', type=float, default=0.2, help='truncation of the sdf')
@@ -24,7 +24,6 @@ parser.add_argument('--scale', action='store_true', help='whether to scale the m
 args = parser.parse_args()
 
 CAT = args.cat
-LENGTH = args.length
 SPACING = 2. / args.res
 
 ROTATION = args.rotation
@@ -37,9 +36,9 @@ suffix = ''
 if __name__ == '__main__':
     mesh_basedir = f'/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_meshes/{CAT}'
     sdf_basedir = f'/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_sdf/{CAT}'
-    part_transformed_basedir = f'/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_transformation/{CAT}'
+    part_bbox_basedir = f'/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_bbox_aligned/{CAT}'
     os.makedirs(sdf_basedir, exist_ok=True)
-    os.makedirs(part_transformed_basedir, exist_ok=True)
+    os.makedirs(part_bbox_basedir, exist_ok=True)
 
     filenames = [f for f in os.listdir(mesh_basedir) if f.endswith('.obj')]
 
@@ -52,6 +51,14 @@ if __name__ == '__main__':
         S = np.max(mesh.bounding_box.extents)
         mesh.apply_translation(-mesh.centroid)
         mesh.apply_scale(1. / np.max(np.abs(mesh.bounds)))
+
+        bbox = {
+            'centroid': T.tolist(),
+            'extents': S.tolist()
+        }
+
+        with open(os.path.join(part_bbox_basedir, f'{object_id}_{part_id}.json'), 'w') as f:
+            json.dump(bbox, f)
 
         # if ROTATION:
         #     ## rotate the mesh
@@ -81,7 +88,7 @@ if __name__ == '__main__':
         #     bbox = bbox * scale
         #     suffix += f'_scale{scale:.2f}'
 
-        sdf = mesh_to_sdf(mesh, args.res, padding=args.length-1)
+        sdf = mesh_to_sdf(mesh, args.res, padding=args.padding)
 
         # sdf to truncated sdf, thres=args.thres
         sdf = np.clip(sdf, -args.truncation, args.truncation)
@@ -99,15 +106,9 @@ if __name__ == '__main__':
         mesh_recon.export(os.path.join(sdf_basedir, recon_filename))
         # print(mesh_recon.centroid)
 
-        transformation_dict = {'T': T.tolist(), 'S': S / np.max(mesh_recon.bounding_box.extents)}
-        
-        part_transformed_filename = os.path.join(part_transformed_basedir, f'{object_id}_{part_id}.json')
-        with open(part_transformed_filename, 'w') as f:
-            json.dump(transformation_dict, f)
-
-        # sdf = sdf.reshape(-1, 1)
-        # h5_filename = file_name[:-4] + '_sdf_res_64.h5'
-        # h5f = h5py.File(os.path.join(sdf_basedir, h5_filename), 'w')
-        # h5f.create_dataset('pc_sdf_sample', data=sdf.astype(np.float32), compression='gzip', compression_opts=4)
-        # h5f.close()
-        # cprint(f'process mesh: {file_name}', 'green')
+        sdf = sdf.reshape(-1, 1)
+        h5_filename = file_name[:-4] + '_sdf_res_64.h5'
+        h5f = h5py.File(os.path.join(sdf_basedir, h5_filename), 'w')
+        h5f.create_dataset('pc_sdf_sample', data=sdf.astype(np.float32), compression='gzip', compression_opts=4)
+        h5f.close()
+        cprint(f'process mesh: {file_name}', 'green')

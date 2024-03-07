@@ -210,7 +210,7 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
         
         # sample timesteps
         min_noise = 0.02 * self.noise_scheduler.config.num_train_timesteps
-        max_noise = max(0.98 * self.noise_scheduler.config.num_train_timesteps * (1 - self.scheduler.last_epoch / self.opt.total_iters), 0.5)
+        max_noise = max(0.98 * (1 - self.scheduler.last_epoch / self.opt.total_iters), 0.5) * self.noise_scheduler.config.num_train_timesteps
         timesteps = torch.randint(
             int(min_noise), int(max_noise), (B,), device=latents.device,
             dtype=torch.int64
@@ -254,7 +254,7 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
             # input: (1, 1, res_sdf, res_sdf, res_sdf), (B, 1, 1, N, 3) -> (B, 1, 1, 1, N)
             sdf_ply = F.grid_sample(sdf, ply_transformed.unsqueeze(1).unsqueeze(1), align_corners=True).squeeze(1).squeeze(1).squeeze(1) # (B, N)
             # 4) calculate the collision loss
-            loss_collision = torch.sum(F.relu(-sdf_ply-0.005)) / B # (B, N) -> (B, 1) -> scalar
+            loss_collision = torch.sum(F.relu(-sdf_ply-0.001)) / B # (B, N) -> (B, 1) -> scalar
             # loss_collision = torch.mean(F.relu(-sdf_ply)) # (B, N) -> (B, 1) -> scalar 
             # loss_collision_weight = self.loss_collision_weight * max(0, 2 * self.scheduler.last_epoch / self.opt.total_iters - 1)
             loss_collision_weight = self.loss_collision_weight
