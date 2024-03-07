@@ -3,6 +3,7 @@
 dataset/*
 pretrained_checkpoint/*
 dataset_gallery/*
+ignore_files/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
