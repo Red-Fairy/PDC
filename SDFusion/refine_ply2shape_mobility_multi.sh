@@ -65,7 +65,7 @@ model_id=$5
 uc_scale=$6
 collision_weight=$7
 
-name="${name}-${model_id}-scale${uc_scale}-lr${lr}-collision${collision_weight}"
+name="${name}-refine-mobility-${model_id}-scale${uc_scale}-lr${lr}-collision${collision_weight}"
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --lr ${lr} --batch_size ${batch_size} \
