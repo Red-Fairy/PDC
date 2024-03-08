@@ -28,19 +28,28 @@ def eval_main_worker(opt, model, test_dl, visualizer):
 
 	for i, test_data in tqdm(enumerate(test_dl)):
 
-		model.inference(test_data, transform_info=True, ddim_eta=0.2)
+		# broadcast the test_data for testing diversity
+		if opt.test_diversity:
+			for k, v in test_data.items():
+				if isinstance(v, torch.Tensor):
+					n_dim = len(v.shape)
+					test_data[k] = v.repeat(opt.batch_size, *[1]*(n_dim-1))
+				elif isinstance(v, list):
+					test_data[k] = [x for x in v for _ in range(opt.batch_size)]
+
+		model.inference(test_data, transform_info=True, ddim_eta=opt.ddim_eta, ddim_steps=opt.ddim_steps)
 		visualizer.display_current_results(model.get_current_visuals(), i, phase='test')
 
 if __name__ == "__main__":
 	## set random seed
 	torch.backends.cudnn.benchmark = False     
 	torch.backends.cudnn.deterministic = True
-	seed = 42
-	random.seed(seed)
-	np.random.seed(seed)
-	torch.manual_seed(seed)
-	torch.cuda.manual_seed(seed)
-	torch.cuda.manual_seed_all(seed)
+	# seed = 42
+	# random.seed(seed)
+	# np.random.seed(seed)
+	# torch.manual_seed(seed)
+	# torch.cuda.manual_seed(seed)
+	# torch.cuda.manual_seed_all(seed)
 
 	# this will parse args, setup log_dirs, multi-gpus
 	opt = TestOptions().parse_and_setup()

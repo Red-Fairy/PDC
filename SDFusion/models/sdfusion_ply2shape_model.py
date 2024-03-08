@@ -278,7 +278,7 @@ class SDFusionModelPly2Shape(BaseModel):
         latents = torch.randn((B, *shape), device=self.device)
         latents = latents * self.noise_scheduler.init_noise_sigma
 
-        self.noise_scheduler.set_timesteps(self.ddim_steps)
+        self.noise_scheduler.set_timesteps(ddim_steps)
 
         # w/ condition
         for t in tqdm(self.noise_scheduler.timesteps):

@@ -58,7 +58,8 @@ class Visualizer():
         else:
             self.log_dir = os.path.join(opt.results_dir, opt.name)
 
-        self.img_dir = os.path.join(self.log_dir, 'images') if self.isTrain else os.path.join(self.log_dir, f'test_{opt.load_iter}_images')
+        self.img_dir = os.path.join(self.log_dir, 'images') if self.isTrain else \
+                            os.path.join(self.log_dir, f'test_{opt.load_iter}_scale{opt.uc_scale}_eta{opt.ddim_eta}_steps{opt.ddim_steps}_images')
         self.name = opt.name
         self.opt = opt
 

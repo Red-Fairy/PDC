@@ -5,13 +5,12 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 DATE_WITH_TIME=`date "+%Y-%m-%dT%H-%M-%S"`
 
-logs_dir='logs'
+logs_dir='logs_refine'
 
 ### hyper params ###
 batch_size=8
 
 ckpt_path='/raid/haoran/Project/PartDiffusion/PartDiffusion/SDFusion/logs/drawer-ply2shape-norot-scale3-lr0.00001/ckpt/df_steps-latest.pth'
-# initial_shape_path='/raid/haoran/Project/PartDiffusion/rectangle.obj'
 
 ### model stuff ###
 model='sdfusion-ply2shape-refine'
@@ -64,6 +63,7 @@ gpu_ids=$4
 model_id=$5
 uc_scale=$6
 collision_weight=$7
+initial_shape_path=''
 
 name="${name}-refine-mobility-${model_id}-scale${uc_scale}-lr${lr}-collision${collision_weight}"
 
@@ -77,6 +77,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --ply_cond  --cond_ckpt ${cond_ckpt} --pretrained_ckpt ${ckpt_path} --model_id ${model_id} \
             --dataroot ${dataroot} --uc_scale ${uc_scale} \
             --collision_loss --loss_collision_weight ${collision_weight} --use_mobility_constraint"
+            # --initial_shape_path ${initial_shape_path}
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 

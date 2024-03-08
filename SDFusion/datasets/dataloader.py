@@ -20,7 +20,7 @@ def CreateDataLoader(opt):
 
     test_dl = torch.utils.data.DataLoader(
             test_dataset,
-            batch_size=opt.batch_size,
+            batch_size=opt.batch_size if (opt.isTrain or not opt.test_diversity) else 1,
             sampler=data_sampler(test_dataset, shuffle=False),
             drop_last=False,
             )

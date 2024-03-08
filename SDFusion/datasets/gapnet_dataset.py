@@ -104,7 +104,7 @@ class GAPartNetDataset(BaseDataset):
                 transform = json.load(f)
                 part_translate, part_extent = torch.tensor(transform['centroid']).float(), torch.tensor(transform['extents']).float()
 
-            if self.opt.use_mobility_constraint:
+            if self.opt.isTrain and self.opt.use_mobility_constraint:
                 mobility_path = sdf_h5_file.replace('part_sdf', 'part_mobility').replace('.h5', '.json')
                 with open(mobility_path, 'r') as f:
                     mobility = json.load(f)

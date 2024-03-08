@@ -255,10 +255,10 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
                 ply_transformed = (self.ply + self.ply_translation.view(1, 3, 1) - self.part_translation.view(1, 3, 1)) / scale # (1, 3, N)
                 # 3) if use mobility constraint, apply the constraint, randomly sample a distance
                 if self.opt.use_mobility_constraint:
-                    dist = torch.rand(1, device=self.device) * (self.move_limit[1] - self.move_limit[0]) + self.move_limit[0] # (1,)
-                    dist_vec = self.move_axis * dist # (3,)
-                    ply_transformed = ply_transformed - dist_vec.view(1, 3, 1) # (1, 3, N) move the part, i.e., reversely move the point cloud
-                ply_transformed = ply_transformed.transpose(1, 2).expand(B, -1, -1) # (B, N, 3)
+                    dist = torch.rand([B, 1, 1], device=self.device) * (self.move_limit[1] - self.move_limit[0]) + self.move_limit[0] # (B, 1, 1)
+                    dist_vec = self.move_axis.view(1, 3, 1) * dist.repeat(1, 3, 1) # (B, 3, 1)
+                    ply_transformed = ply_transformed.expand(B, -1, -1) - dist_vec # (B, 3, N) move the part, i.e., reversely move the point cloud
+                ply_transformed = ply_transformed.transpose(1, 2) # (B, N, 3)
             
             # 3) query the sdf value at the transformed point cloud
             # input: (1, 1, res_sdf, res_sdf, res_sdf), (B, 1, 1, N, 3) -> (B, 1, 1, 1, N)
