@@ -115,6 +115,10 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
         self.part_translation = input_instance['part_translation'].to(self.device) # (1, 3)
         self.part_extent = input_instance['part_extent'].to(self.device) # (1, 3)
 
+        if self.opt.use_mobility_constraint:
+            self.move_axis = input_instance['move_axis'].to(self.device) # (3,)
+            self.move_limit = input_instance['move_limit'].to(self.device) # (2,) range of motion
+
         self.batch_size = opt.batch_size
 
         if self.isTrain:
@@ -248,6 +252,11 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
                 scale = torch.max(self.part_extent) / np.max(mesh.extents)
                 # 2) transform point cloud to the mesh coordinate
                 ply_transformed = (self.ply + self.ply_translation.view(1, 3, 1) - self.part_translation.view(1, 3, 1)) / scale # (1, 3, N)
+                # 3) if use mobility constraint, apply the constraint, randomly sample a distance
+                if self.opt.use_mobility_constraint:
+                    dist = torch.rand(1, device=self.device) * (self.move_limit[1] - self.move_limit[0]) + self.move_limit[0] # (1,)
+                    dist_vec = self.move_axis * dist # (3,)
+                    ply_transformed = ply_transformed - dist_vec.view(1, 3, 1) # (1, 3, N) move the part, i.e., reversely move the point cloud
                 ply_transformed = ply_transformed.transpose(1, 2).expand(B, -1, -1) # (B, N, 3)
             
             # 3) query the sdf value at the transformed point cloud

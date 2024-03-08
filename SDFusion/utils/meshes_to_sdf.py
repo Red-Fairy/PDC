@@ -48,7 +48,7 @@ if __name__ == '__main__':
 
         mesh = trimesh.load(os.path.join(mesh_basedir, file_name))
         T = np.array(mesh.bounding_box.centroid)
-        S = np.max(mesh.bounding_box.extents)
+        S = mesh.bounding_box.extents
         mesh.apply_translation(-mesh.centroid)
         mesh.apply_scale(1. / np.max(np.abs(mesh.bounds)))
 
@@ -88,27 +88,27 @@ if __name__ == '__main__':
         #     bbox = bbox * scale
         #     suffix += f'_scale{scale:.2f}'
 
-        sdf = mesh_to_sdf(mesh, args.res, padding=args.padding)
+        # sdf = mesh_to_sdf(mesh, args.res, padding=args.padding)
 
-        # sdf to truncated sdf, thres=args.thres
-        sdf = np.clip(sdf, -args.truncation, args.truncation)
+        # # sdf to truncated sdf, thres=args.thres
+        # sdf = np.clip(sdf, -args.truncation, args.truncation)
 
-        ''' save the mesh_recon '''
-        vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf, level=0.02, spacing=(SPACING, SPACING, SPACING))
-        mesh_recon = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_normals=normals)
-        centroid = mesh_recon.bounding_box.centroid
-        print(centroid)
-        print(np.max(mesh_recon.bounding_box.extents))
-        mesh_recon.apply_translation(-centroid)
-        # (x_min, y_min, z_min), (x_max, y_max, z_max) = mesh_recon.bounds
-        # print(x_min, y_min, z_min, x_max, y_max, z_max)
-        recon_filename = os.path.join(sdf_basedir, f'{object_id}_{part_id}.obj')
-        mesh_recon.export(os.path.join(sdf_basedir, recon_filename))
-        # print(mesh_recon.centroid)
+        # ''' save the mesh_recon '''
+        # vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf, level=0.02, spacing=(SPACING, SPACING, SPACING))
+        # mesh_recon = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_normals=normals)
+        # centroid = mesh_recon.bounding_box.centroid
+        # print(centroid)
+        # print(np.max(mesh_recon.bounding_box.extents))
+        # mesh_recon.apply_translation(-centroid)
+        # # (x_min, y_min, z_min), (x_max, y_max, z_max) = mesh_recon.bounds
+        # # print(x_min, y_min, z_min, x_max, y_max, z_max)
+        # recon_filename = os.path.join(sdf_basedir, f'{object_id}_{part_id}.obj')
+        # mesh_recon.export(os.path.join(sdf_basedir, recon_filename))
+        # # print(mesh_recon.centroid)
 
-        sdf = sdf.reshape(-1, 1)
-        h5_filename = file_name[:-4] + '_sdf_res_64.h5'
-        h5f = h5py.File(os.path.join(sdf_basedir, h5_filename), 'w')
-        h5f.create_dataset('pc_sdf_sample', data=sdf.astype(np.float32), compression='gzip', compression_opts=4)
-        h5f.close()
-        cprint(f'process mesh: {file_name}', 'green')
+        # sdf = sdf.reshape(-1, 1)
+        # h5_filename = file_name[:-4] + '_sdf_res_64.h5'
+        # h5f = h5py.File(os.path.join(sdf_basedir, h5_filename), 'w')
+        # h5f.create_dataset('pc_sdf_sample', data=sdf.astype(np.float32), compression='gzip', compression_opts=4)
+        # h5f.close()
+        # cprint(f'process mesh: {file_name}', 'green')

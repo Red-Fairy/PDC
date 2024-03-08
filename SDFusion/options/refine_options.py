@@ -34,4 +34,6 @@ class RefineOptions(BaseOptions):
 
         self.parser.add_argument('--initial_shape_path', type=str, default=None, help='path to the initialization shape')
 
+        self.parser.add_argument('--use_mobility_constraint', action='store_true', help='use mobility constraint')
+
         self.isTrain = True

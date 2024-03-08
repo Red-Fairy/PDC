@@ -56,9 +56,17 @@ def get_single_model(opt):
     transform_path = sdf_path.replace('part_sdf', 'part_bbox_aligned').replace('.h5', '.json')
     with open(transform_path, 'r') as f:
         transform = json.load(f)
-        part_translate, part_extent = torch.from_numpy(np.array(transform['centroid'])).float(), torch.from_numpy(np.array(transform['extents'])).float()
+        part_translate, part_extent = torch.tensor(transform['centroid']).float(), torch.tensor(transform['extents']).float()
     ret['part_translation'] = part_translate.unsqueeze(0) # (1, 3)
     ret['part_extent'] = part_extent.unsqueeze(0) # (1, 3)
+
+    if opt.use_mobility_constraint:
+        mobility_path = sdf_path.replace('part_sdf', 'part_mobility').replace('.h5', '.json')
+        with open(mobility_path, 'r') as f:
+            mobility = json.load(f)
+            move_axis, move_limit = torch.tensor(mobility['move_axis']).float(), torch.tensor(mobility['move_limit']).float()
+        ret['move_axis'] = move_axis
+        ret['move_limit'] = move_limit
 
     if opt.initial_shape_path is not None:
         initial_mesh = trimesh.load_mesh(opt.initial_shape_path)
