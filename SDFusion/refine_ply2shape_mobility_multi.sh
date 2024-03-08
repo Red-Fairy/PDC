@@ -76,7 +76,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
             --ply_cond  --cond_ckpt ${cond_ckpt} --pretrained_ckpt ${ckpt_path} --model_id ${model_id} \
             --dataroot ${dataroot} --uc_scale ${uc_scale} \
-            --collision_loss --loss_collision_weight ${collision_weight}"
+            --collision_loss --loss_collision_weight ${collision_weight} --use_mobility_constraint"
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 

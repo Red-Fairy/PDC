@@ -243,6 +243,7 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
 
         # 2. collision loss
         if self.use_collision_loss:
+            B = 1 if not self.opt.use_mobility_constraint else self.opt.mobility_sample_count
             # 0) decode the latents to sdf
             sdf = self.vqvae.decode(self.latent).expand(B, -1, -1, -1, -1) # (1, 1, res_sdf, res_sdf, res_sdf)
 
@@ -263,7 +264,8 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
             # input: (1, 1, res_sdf, res_sdf, res_sdf), (B, 1, 1, N, 3) -> (B, 1, 1, 1, N)
             sdf_ply = F.grid_sample(sdf, ply_transformed.unsqueeze(1).unsqueeze(1), align_corners=True).squeeze(1).squeeze(1).squeeze(1) # (B, N)
             # 4) calculate the collision loss
-            loss_collision = torch.sum(F.relu(-sdf_ply-0.001)) / B # (B, N) -> (B, 1) -> scalar
+            loss_collision = torch.sum(torch.max(F.relu(-sdf_ply-0.001), dim=0)[0]) # (B, N) -> (B, 1) -> scalar
+            # loss_collision = torch.sum(F.relu(-sdf_ply-0.001)) / B # (B, N) -> (B, 1) -> scalar
             # loss_collision = torch.mean(F.relu(-sdf_ply)) # (B, N) -> (B, 1) -> scalar 
             # loss_collision_weight = self.loss_collision_weight * max(0, 2 * self.scheduler.last_epoch / self.opt.total_iters - 1)
             loss_collision_weight = self.loss_collision_weight
