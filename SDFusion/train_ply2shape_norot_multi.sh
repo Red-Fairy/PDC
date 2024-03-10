@@ -63,7 +63,7 @@ port=$3
 gpu_ids=$4
 uc_scale=$5
 
-name="${name}-norot-scale${uc_scale}-lr${lr}"
+name="${name}-ply2shape-norot-scale${uc_scale}-lr${lr}"
 
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
