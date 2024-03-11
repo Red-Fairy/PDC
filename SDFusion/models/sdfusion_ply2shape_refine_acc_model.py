@@ -253,21 +253,22 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
                 # scale = torch.max(self.part_extent) / np.max(mesh.extents)
                 scale = torch.max(self.part_extent) / (4 / 2.2)
                 # 2) transform point cloud to the mesh coordinate
-                ply_transformed = (self.ply + self.ply_translation.view(1, 3, 1) - self.part_translation.view(1, 3, 1)) / scale # (1, 3, N)
+                ply_transformed = (self.ply + self.ply_translation.view(1, 3, 1) - self.part_translation.view(1, 3, 1)) # (1, 3, N)
                 # 3) if use mobility constraint, apply the constraint, randomly sample a distance
                 if self.opt.use_mobility_constraint:
                     dist = torch.rand([B, 1, 1], device=self.device) * (self.move_limit[1] - self.move_limit[0]) + self.move_limit[0] # (B, 1, 1)
                     dist_vec = self.move_axis.view(1, 3, 1) * dist.repeat(1, 3, 1) # (B, 3, 1)
                     ply_transformed = ply_transformed.expand(B, -1, -1) - dist_vec # (B, 3, N) move the part, i.e., reversely move the point cloud
+                ply_transformed = ply_transformed / scale # (B, 3, N)
                 ply_transformed = ply_transformed.transpose(1, 2) # (B, N, 3)
             
             # 3) query the sdf value at the transformed point cloud
             # input: (1, 1, res_sdf, res_sdf, res_sdf), (B, 1, 1, N, 3) -> (B, 1, 1, 1, N)
             sdf_ply = F.grid_sample(sdf, ply_transformed.unsqueeze(1).unsqueeze(1), align_corners=True).squeeze(1).squeeze(1).squeeze(1) # (B, N)
             # 4) calculate the collision loss
-            loss_collision = torch.sum(torch.max(F.relu(-sdf_ply), dim=0)[0]) # (B, N) -> (B, 1) -> scalar
-            # loss_collision = torch.sum(F.relu(-sdf_ply-0.001)) / B # (B, N) -> (B, 1) -> scalar
-            # loss_collision = torch.mean(F.relu(-sdf_ply)) # (B, N) -> (B, 1) -> scalar 
+            loss_collision = torch.sum(torch.max(F.relu(-sdf_ply), dim=0)[0]) # (B, N) -> (1, N) -> scalar
+            # loss_collision = torch.sum(F.relu(-sdf_ply-0.001)) / B # (B, N) -> (1, N) -> scalar
+            # loss_collision = torch.mean(F.relu(-sdf_ply)) # (B, N) -> (1, N) -> scalar 
             loss_collision_weight = self.loss_collision_weight * max(0, 2 * self.scheduler.last_epoch / self.opt.total_iters - 1)
             # loss_collision_weight = self.loss_collision_weight
             loss_dict['collision'] = loss_collision * loss_collision_weight

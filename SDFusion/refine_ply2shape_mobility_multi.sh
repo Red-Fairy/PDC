@@ -5,8 +5,6 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 DATE_WITH_TIME=`date "+%Y-%m-%dT%H-%M-%S"`
 
-logs_dir='logs_refine'
-
 ### hyper params ###
 batch_size=8
 
@@ -63,9 +61,12 @@ gpu_ids=$4
 model_id=$5
 uc_scale=$6
 collision_weight=$7
-initial_shape_path='/raid/haoran/Project/PartDiffusion/rectangle.obj'
+visual_mode='sdf'
+logs_dir="logs_refine_${model_id}"
 
-name="${name}-refine-mobility-${model_id}-scale${uc_scale}-lr${lr}-collision${collision_weight}"
+initial_shape_path='/data/haoran/PartDiffusion/ignore_files/26503_1-GenSDS.obj'
+
+name="${name}-refine-mobility-scale${uc_scale}-lr${lr}-collision${collision_weight}"
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --lr ${lr} --batch_size ${batch_size} \
@@ -76,8 +77,10 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
             --ply_cond  --cond_ckpt ${cond_ckpt} --pretrained_ckpt ${ckpt_path} --model_id ${model_id} \
             --dataroot ${dataroot} --uc_scale ${uc_scale} \
-            --collision_loss --loss_collision_weight ${collision_weight} --use_mobility_constraint \
-            --initial_shape_path ${initial_shape_path} "
+            --collision_loss --loss_collision_weight ${collision_weight} \
+            --use_mobility_constraint \
+            --visual_mode ${visual_mode} "
+            # --initial_shape_path ${initial_shape_path} "
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 
