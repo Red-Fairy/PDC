@@ -62,7 +62,7 @@ model_id=$5
 uc_scale=$6
 collision_weight=$7
 visual_mode='sdf'
-logs_dir="logs_refine_${model_id}"
+logs_dir="logs_refine/${model_id}"
 
 initial_shape_path='/data/haoran/PartDiffusion/ignore_files/26503_1-GenSDS.obj'
 

@@ -14,6 +14,7 @@ import cv2
 import matplotlib.pyplot as plt
 
 import open3d
+import h5py
 
 def parse_line(line):
     info_d = {}
@@ -146,7 +147,9 @@ class Visualizer():
         if self.opt.visual_mode == 'sdf': # save the sdf file
             for i in range(visuals['sdf'].shape[0]):
                 sdf_path = os.path.join(self.img_dir, filename_format.format(object_ids[0], part_ids[0], i, 'sdf'))
-                np.save(sdf_path, visuals['sdf'][i])
+                # save as h5py file
+                with h5py.File(sdf_path, 'w') as f:
+                    f.create_dataset('sdf', data=visuals['sdf'][i], compression='gzip', compression_opts=4)
 
         if self.opt.bbox_cond:
             bboxes = visuals['bboxes']

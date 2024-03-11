@@ -69,8 +69,11 @@ def get_single_model(opt):
         ret['move_limit'] = move_limit
 
     if opt.initial_shape_path is not None:
-        initial_mesh = trimesh.load_mesh(opt.initial_shape_path)
-        sdf = mesh_to_sdf(initial_mesh, res=opt.res, padding=0.2, trunc=opt.trunc_thres, device='cuda')
-        ret['initial_shape'] = sdf.unsqueeze(0)
+        if opt.initial_shape_path != 'cheat':
+            initial_mesh = trimesh.load_mesh(opt.initial_shape_path)
+            sdf = mesh_to_sdf(initial_mesh, res=opt.res, padding=0.2, trunc=opt.trunc_thres, device='cuda')
+            ret['initial_shape'] = sdf.unsqueeze(0)
+        else: # cheating for debug propose, use the ground truth shape
+            ret['initial_shape'] = ret['sdf']
 
     return ret
