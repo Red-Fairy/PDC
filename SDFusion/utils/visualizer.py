@@ -143,6 +143,11 @@ class Visualizer():
                 ply_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], i, 'ply'))
                 open3d.io.write_point_cloud(ply_path, ply_file)
 
+        if self.opt.visual_mode == 'sdf': # save the sdf file
+            for i in range(visuals['sdf'].shape[0]):
+                sdf_path = os.path.join(self.img_dir, filename_format.format(object_ids[0], part_ids[0], i, 'sdf'))
+                np.save(sdf_path, visuals['sdf'][i])
+
         if self.opt.bbox_cond:
             bboxes = visuals['bboxes']
             data_dict = {

@@ -269,8 +269,8 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
             loss_collision = torch.sum(torch.max(F.relu(-sdf_ply), dim=0)[0]) # (B, N) -> (1, N) -> scalar
             # loss_collision = torch.sum(F.relu(-sdf_ply-0.001)) / B # (B, N) -> (1, N) -> scalar
             # loss_collision = torch.mean(F.relu(-sdf_ply)) # (B, N) -> (1, N) -> scalar 
-            loss_collision_weight = self.loss_collision_weight * max(0, 2 * self.scheduler.last_epoch / self.opt.total_iters - 1)
-            # loss_collision_weight = self.loss_collision_weight
+            # loss_collision_weight = self.loss_collision_weight * max(0, 2 * self.scheduler.last_epoch / self.opt.total_iters - 1)
+            loss_collision_weight = self.loss_collision_weight
             loss_dict['collision'] = loss_collision * loss_collision_weight
         else:
             loss_dict['collision'] = torch.tensor(0.0, device=self.device)
