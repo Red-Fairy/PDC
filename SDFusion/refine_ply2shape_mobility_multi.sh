@@ -85,7 +85,7 @@ echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs
 if [ $multi_gpu = 1 ]; then
     accelerate launch --multi_gpu --gpu_ids $gpu_ids --main_process_port $port --mixed_precision 'no' refine_accelerate.py $args
 else
-    python train.py $args
+    CUDA_VISIBLE_DEVICES=$gpu_ids accelerate launch --gpu_ids $gpu_ids refine_accelerate.py $args
 fi
 
 

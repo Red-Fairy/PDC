@@ -249,8 +249,9 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
 
             with torch.no_grad():
                 # 1) build mesh from sdf (latents), not differentiable
-                mesh = sdf_to_mesh_trimesh(sdf[0][0], spacing=(2./self.shape_res, 2./self.shape_res, 2./self.shape_res))
-                scale = torch.max(self.part_extent) / np.max(mesh.extents)
+                # mesh = sdf_to_mesh_trimesh(sdf[0][0], spacing=(2./self.shape_res, 2./self.shape_res, 2./self.shape_res))
+                # scale = torch.max(self.part_extent) / np.max(mesh.extents)
+                scale = torch.max(self.part_extent) / (4 / 2.2)
                 # 2) transform point cloud to the mesh coordinate
                 ply_transformed = (self.ply + self.ply_translation.view(1, 3, 1) - self.part_translation.view(1, 3, 1)) / scale # (1, 3, N)
                 # 3) if use mobility constraint, apply the constraint, randomly sample a distance
@@ -352,6 +353,7 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
             "meshes": meshes,
             "paths": self.paths,
             "points": self.ply.cpu().numpy(),
+            "sdf": self.gen_df.cpu().numpy(),
         }
 
         if hasattr(self, 'ply_translation'):
@@ -360,7 +362,8 @@ class SDFusionModelPly2ShapeRefineAcc(BaseModel):
             mesh_extents = torch.zeros([0, 3], device=self.device)
             for mesh in meshes:
                 mesh_extents = torch.cat([mesh_extents, torch.tensor(mesh.extents, device=self.device).unsqueeze(0)], dim=0)
-            visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / torch.max(mesh_extents, dim=1)[0]).cpu().numpy()
+            visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / (4 / 2.2)).cpu().numpy()
+            # visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / torch.max(mesh_extents, dim=1)[0]).cpu().numpy()
 
         return visuals_dict
 

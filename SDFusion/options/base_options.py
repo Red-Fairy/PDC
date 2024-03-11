@@ -80,6 +80,11 @@ class BaseOptions():
         # continue_train or test-time load_iter
         self.parser.add_argument('--load_iter', default='latest', type=str, help='which iter to load?')
 
+        # visual mode
+        self.parser.add_argument('--visual_mode', type=str, choices=['sdf', 'mesh'], default='mesh', 
+                                help='sdf or mesh, if sdf move the point cloud to the center; \
+                                    if mesh, both point cloud and mesh are translated')
+
         self.initialized = True
 
     def parse_and_setup(self, accelerator: Accelerator = None):
