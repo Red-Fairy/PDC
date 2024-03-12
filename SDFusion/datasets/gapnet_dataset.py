@@ -38,6 +38,9 @@ class GAPartNetDataset(BaseDataset):
         self.sdf_filepaths = [os.path.join(dataroot, f) for f in os.listdir(dataroot) if f.endswith('.h5')]
         self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace('part_sdf', 'part_ply_fps').replace('.h5', '.ply')), self.sdf_filepaths))
 
+        if not self.isTrain and opt.model_id is not None:
+            self.sdf_filepaths = [f for f in self.sdf_filepaths if opt.model_id in f]
+
         self.bbox_cond = opt.bbox_cond
         self.joint_rotate = opt.joint_rotate
 
