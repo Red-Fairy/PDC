@@ -84,6 +84,10 @@ class BaseOptions():
         self.parser.add_argument('--visual_mode', type=str, choices=['sdf', 'mesh'], default='mesh', 
                                 help='sdf or mesh, if sdf move the point cloud to the center; \
                                     if mesh, both point cloud and mesh are translated')
+        
+        # use mobility constraint during inference/refinement
+        self.parser.add_argument('--use_mobility_constraint', action='store_true', help='use mobility constraint')
+        self.parser.add_argument('--mobility_sample_count', type=int, default=50, help='mobility sample count')
 
         self.initialized = True
 

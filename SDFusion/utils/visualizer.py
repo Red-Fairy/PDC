@@ -125,6 +125,16 @@ class Visualizer():
 
         filename_format = f'{phase}_step{current_iters:05d}' + '_{}_{}-{}.{}' if phase == 'train' else '{}_{}-{}.{}'
 
+        for i, visual_mesh in enumerate(visual_meshes):
+            instance_label = i if self.isTrain or self.opt.test_diversity else ''
+            mesh_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], instance_label, 'obj'))
+            visual_mesh.export(mesh_path, 'obj')
+        
+        if 'meshes_pred' in visuals:
+            for i, visual_mesh in enumerate(visuals['meshes_pred']):
+                mesh_path = os.path.join(self.img_dir, filename_format.format(object_ids[0], part_ids[0], i, 'pred.obj'))
+                visual_mesh.export(mesh_path, 'obj')
+
         if self.opt.ply_cond:
             # save the visualized ply files, points are stored in visuals['points']
             for i in range(visuals['points'].shape[0]):
@@ -140,13 +150,15 @@ class Visualizer():
                     elif self.opt.visual_mode == 'mesh':
                         ply_file.points = open3d.utility.Vector3dVector(visuals['points'][i].T)
                         ply_file.translate(visuals['ply_translation'][i])
-
-                ply_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], i, 'ply'))
+                
+                instance_label = i if self.isTrain or self.opt.test_diversity else ''
+                ply_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], instance_label, 'ply'))
                 open3d.io.write_point_cloud(ply_path, ply_file)
 
         if self.opt.visual_mode == 'sdf': # save the sdf file
             for i in range(visuals['sdf'].shape[0]):
-                sdf_path = os.path.join(self.img_dir, filename_format.format(object_ids[0], part_ids[0], i, 'sdf'))
+                instance_label = i if self.isTrain or self.opt.test_diversity else ''
+                sdf_path = os.path.join(self.img_dir, filename_format.format(object_ids[0], part_ids[0], instance_label, 'sdf'))
                 # save as h5py file
                 with h5py.File(sdf_path, 'w') as f:
                     f.create_dataset('sdf', data=visuals['sdf'][i], compression='gzip', compression_opts=4)
@@ -163,9 +175,6 @@ class Visualizer():
             suffix = f'train_step{current_iters:05d}_{label}.png' if phase == 'train' else f'{label}.png'
             img_path = os.path.join(self.img_dir, suffix)
             util.save_image(image_numpy, img_path)
-        for i, visual_mesh in enumerate(visual_meshes):
-            mesh_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], i, 'obj'))
-            visual_mesh.export(mesh_path, 'obj')
         # log to tensorboard
         self.log_tensorboard_visuals(visuals, current_iters, phase=phase)
 

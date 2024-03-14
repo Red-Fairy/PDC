@@ -38,7 +38,7 @@ class GAPartNetDataset(BaseDataset):
         self.sdf_filepaths = [os.path.join(dataroot, f) for f in os.listdir(dataroot) if f.endswith('.h5')]
         self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace('part_sdf', 'part_ply_fps').replace('.h5', '.ply')), self.sdf_filepaths))
 
-        if not self.isTrain and opt.model_id is not None:
+        if not self.opt.isTrain and opt.model_id is not None:
             self.sdf_filepaths = [f for f in self.sdf_filepaths if opt.model_id in f]
 
         self.bbox_cond = opt.bbox_cond
@@ -107,13 +107,13 @@ class GAPartNetDataset(BaseDataset):
                 transform = json.load(f)
                 part_translate, part_extent = torch.tensor(transform['centroid']).float(), torch.tensor(transform['extents']).float()
 
-            # if self.opt.isTrain and self.opt.use_mobility_constraint:
-            #     mobility_path = sdf_h5_file.replace('part_sdf', 'part_mobility').replace('.h5', '.json')
-            #     with open(mobility_path, 'r') as f:
-            #         mobility = json.load(f)
-            #         move_axis, move_limit = torch.tensor(mobility['move_axis']).float(), torch.tensor(mobility['move_limit']).float()
-            #     ret['move_axis'] = move_axis
-            #     ret['move_limit'] = move_limit
+            if self.opt.use_mobility_constraint:
+                mobility_path = sdf_h5_file.replace('part_sdf', 'part_mobility').replace('.h5', '.json')
+                with open(mobility_path, 'r') as f:
+                    mobility = json.load(f)
+                    move_axis, move_limit = torch.tensor(mobility['move_axis']).float(), torch.tensor(mobility['move_limit']).float()
+                ret['move_axis'] = move_axis
+                ret['move_limit'] = move_limit
 
             if self.ply_input_rotate:
                 raw, pitch, yaw = torch.rand(3) * 2 * np.pi

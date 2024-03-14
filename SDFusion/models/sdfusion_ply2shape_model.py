@@ -26,6 +26,7 @@ from models.networks.vqvae_networks.network import VQVAE
 from models.networks.diffusion_networks.network import DiffusionUNet
 from models.model_utils import load_vqvae
 from models.networks.ply_networks.pointnet2 import PointNet2
+from models.utils import get_collision_loss
 
 from diffusers import DDIMScheduler
 from diffusers.optimization import get_cosine_schedule_with_warmup
@@ -156,9 +157,16 @@ class SDFusionModelPly2Shape(BaseModel):
         # transformation info for calculating collision loss
         # "ply_points + ply_translation" aligns with "part * part_extent + part_translation"
         if transform_info:
-            self.ply_translation = input['ply_translation']
-            self.part_translation = input['part_translation']
-            self.part_extent = input['part_extent']
+            self.ply_translation = input['ply_translation'].to(self.device)
+            self.part_translation = input['part_translation'].to(self.device)
+            self.part_extent = input['part_extent'].to(self.device)
+
+        if self.opt.use_mobility_constraint:
+            self.move_axis = input['move_axis'].to(self.device) # (3,)
+            self.move_limit = input['move_limit'].to(self.device) # (2,) range of motion
+        else:
+            self.move_axis = None
+            self.move_limit = None
 
     def switch_train(self):
         self.df.train()
@@ -169,12 +177,6 @@ class SDFusionModelPly2Shape(BaseModel):
         self.df.eval()
         self.cond_model.eval()
         self.vqvae.eval()
-
-    # def q_sample(self, x_start, t, noise=None):
-    #     noise = default(noise, lambda: torch.randn_like(x_start))
-
-    #     return (extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
-    #             extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise)
 
     # check: ddpm.py, line 891
     def apply_model(self, x_noisy, t, cond, return_ids=False):
@@ -258,11 +260,6 @@ class SDFusionModelPly2Shape(BaseModel):
                   infer_all=False, max_sample=16, transform_info=False):
 
         self.switch_eval()
-
-        # if not infer_all:
-        #     self.set_input(data, max_sample=max_sample)
-        # else:
-        #     self.set_input(data)
         
         self.set_input(data, transform_info=transform_info)
         
@@ -296,6 +293,77 @@ class SDFusionModelPly2Shape(BaseModel):
             noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
 
             # compute the previous noisy sample x_t -> x_t-1
+            latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
+
+        # decode z
+        self.gen_df = self.vqvae.decode_no_quant(latents)
+
+    def guided_inference(self, data, ddim_steps=None, ddim_eta=0., n_sample_x0=1, transform_info=False):
+        
+        self.switch_eval()
+
+        self.set_input(data, transform_info=transform_info)
+
+        if ddim_steps is None:
+            ddim_steps = self.ddim_steps
+        else:
+            self.ddim_steps = ddim_steps
+
+        B = self.x.shape[0]
+        assert B == 1 # only support batch size 1 for now
+        shape = self.z_shape
+        c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
+        uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
+        c_full = torch.cat([uc, c])
+
+        latents = torch.randn((B, *shape), device=self.device) # (B, *shape)
+        latents = latents * self.noise_scheduler.init_noise_sigma
+
+        self.noise_scheduler.set_timesteps(ddim_steps)
+
+        # w/ condition
+        for i, t in tqdm(enumerate(self.noise_scheduler.timesteps)):
+            # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
+            latent_model_input = torch.cat([latents] * 2)
+            latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
+
+            # predict the noise residual
+            with torch.no_grad():
+                timesteps = torch.full((B*2,), t, device=self.device, dtype=torch.int64)
+                noise_pred = self.apply_model(latent_model_input, timesteps, c_full)
+
+            # perform guidance
+            noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
+            noise_pred = noise_pred_cond
+
+            # compute the previous noisy sample x_t -> x_t-1
+            with torch.enable_grad():
+                latents_grad = latents.detach().requires_grad_(True)
+                pred_x0 = self.noise_scheduler.step(noise_pred, t, latents_grad, eta=ddim_eta).pred_original_sample
+
+                setattr(self, f'pred_sdf_x0_{i}', self.vqvae.decode_no_quant(pred_x0).detach())
+                
+                # add noise to pred_x0, with std = sigma_t / sqrt(1 + sigma_t^2)
+                # prev_t = t - self.noise_scheduler.config.num_train_timesteps // self.noise_scheduler.num_inference_steps
+                # sigma_t = self.noise_scheduler._get_variance(t, prev_t) ** 0.5
+                # noise = torch.randn([n_sample_x0, *shape], device=self.device) * (sigma_t / (1 + sigma_t ** 2) ** 0.5) # (n_sample_x0, *shape)
+                # pred_x0_noisy = pred_x0.expand(n_sample_x0, -1, -1, -1, -1) + noise
+                
+                pred_x0_noisy = pred_x0.expand(n_sample_x0, -1, -1, -1, -1)
+
+                pred_x0_noisy_sdf = self.vqvae.decode(pred_x0_noisy)
+
+                collision_loss = get_collision_loss(pred_x0_noisy_sdf, self.ply, self.ply_translation, self.part_extent, self.part_translation,
+                                                    move_limit=self.move_limit[0], move_axis=self.move_axis[0], loss_collision_weight=1)
+                print('Collision Loss:', collision_loss, '\n')
+                
+                if i >= ddim_steps // 2:
+                    grad = torch.autograd.grad(collision_loss, latents_grad)[0] # (B, *shape)
+                    grad = 20 * grad / (grad.norm() + 1e-8) # clip grad norm
+                    noise_pred = noise_pred + (1 - self.noise_scheduler.alphas_cumprod[t]) ** 0.5 * grad
+            
+            noise_pred = noise_pred + (self.guidance_scale - 1) * (noise_pred_cond - noise_pred_uncond)
+
             latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
 
         # decode z
@@ -389,6 +457,8 @@ class SDFusionModelPly2Shape(BaseModel):
             spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
             meshes = [sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=spc) for i in range(self.gen_df.shape[0])]
 
+            meshes_pred = [sdf_to_mesh_trimesh(getattr(self, f'pred_sdf_x0_{t}')[0][0], spacing=spc) for t in range(self.ddim_steps)]
+
         vis_tensor_names = [
             'img_gt',
             'img_gen_df',
@@ -399,7 +469,8 @@ class SDFusionModelPly2Shape(BaseModel):
             "img": OrderedDict(visuals),
             "meshes": meshes,
             "paths": self.paths,
-            "points": self.ply.cpu().numpy() # (B, 3, N)
+            "points": self.ply.cpu().numpy(), # (B, 3, N)
+            "meshes_pred": meshes_pred
         }
         
         if hasattr(self, 'ply_translation'):
@@ -408,7 +479,8 @@ class SDFusionModelPly2Shape(BaseModel):
             mesh_extents = torch.zeros(0, 3)
             for mesh in meshes:
                 mesh_extents = torch.cat([mesh_extents, torch.tensor(mesh.extents).unsqueeze(0)], dim=0)
-            visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / torch.max(mesh_extents, dim=1)[0]).cpu().numpy()
+            # visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / torch.max(mesh_extents, dim=1)[0]).cpu().numpy()
+            visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / (4 / 2.2)).cpu().numpy()
 
         return visuals_dict
 
