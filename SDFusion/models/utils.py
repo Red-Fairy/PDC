@@ -12,7 +12,7 @@ from utils.util_3d import init_mesh_renderer, render_sdf
 
 def get_collision_loss(sdf, ply, ply_translation, part_extent, part_translation, 
                        move_limit=None, move_axis=None, sdf_scale=4/2.2, 
-                       loss_collision_weight=1.0, margin=0.001):
+                       loss_collision_weight=1.0, margin=0.001, linspace=False):
     '''
     sdf: sdf values, (B, 1, res, res, res), multiple generated sdf with the same point cloud condition
     ply: point cloud, (1, 3, N)
@@ -30,7 +30,10 @@ def get_collision_loss(sdf, ply, ply_translation, part_extent, part_translation,
 
     # 2) if use mobility constraint, apply the constraint, randomly sample a distance
     if move_limit is not None:
-        dist = torch.rand([B, 1, 1], device=sdf.device) * (move_limit[1] - move_limit[0]) + move_limit[0] # (B, 1, 1)
+        if not linspace:
+            dist = torch.rand([B, 1, 1], device=sdf.device) * (move_limit[1] - move_limit[0]) + move_limit[0] # (B, 1, 1)
+        else:
+            dist = torch.linspace(move_limit[0], move_limit[1], B, device=sdf.device).view(-1, 1, 1)
         dist_vec = move_axis.view(1, 3, 1) * dist.repeat(1, 3, 1) # (B, 3, 1)
         ply_transformed = ply_transformed - dist_vec # (B, 3, N) move the part, i.e., reversely move the point cloud
 

@@ -52,11 +52,11 @@ if [ $debug = 1 ]; then
     name="DEBUG-${name}"
 fi
 
-batch_size=4
+batch_size=32
 name=$1
 gpu_ids=$2
 load_iter=$3
-model_id=''
+model_id='19836_2'
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --batch_size ${batch_size} --max_dataset_size ${max_dataset_size} \
@@ -66,8 +66,8 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --total_iters ${total_iters} \
             --debug ${debug} --dataroot ${dataroot} \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} --test_diversity \
-            --ddim_eta 0 --ddim_steps 100 --uc_scale 10 \
-            --model_id ${model_id}"
+            --ddim_eta 0 --ddim_steps 100 --uc_scale 3 \
+            --model_id ${model_id} --use_mobility_constraint --print_collision_loss"
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
 

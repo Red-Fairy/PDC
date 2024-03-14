@@ -297,6 +297,14 @@ class SDFusionModelPly2Shape(BaseModel):
         # decode z
         self.gen_df = self.vqvae.decode_no_quant(latents)
 
+        if self.opt.print_collision_loss:
+            for i in range(B):
+                gen_sdf_i = self.gen_df[i:i+1].repeat(32, 1, 1, 1, 1)
+                collision_loss = get_collision_loss(gen_sdf_i, self.ply[i:i+1], self.ply_translation[i:i+1], 
+                                                    self.part_extent[i:i+1], self.part_translation[i:i+1],
+                                                    move_limit=self.move_limit[i], move_axis=self.move_axis[i])
+                print(f'Collision Loss for Instance {i}:', collision_loss, '\n')
+
     def guided_inference(self, data, ddim_steps=None, ddim_eta=0., n_sample_x0=1, transform_info=False):
         
         self.switch_eval()
