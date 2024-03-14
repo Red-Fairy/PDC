@@ -254,7 +254,6 @@ class SDFusionModelPly2Shape(BaseModel):
         loss = self.get_loss(model_output, target).mean()
         return loss
 
-    # check: ddpm.py, log_images(). line 1317~1327
     @torch.no_grad()
     def inference(self, data, sample=True, ddim_steps=None, ddim_eta=0., quantize_denoised=True,
                   infer_all=False, max_sample=16, transform_info=False):
@@ -370,41 +369,6 @@ class SDFusionModelPly2Shape(BaseModel):
         self.gen_df = self.vqvae.decode_no_quant(latents)
 
     @torch.no_grad()
-    def uncond(self, ngen=1, ddim_steps=200, ddim_eta=0.):
-
-        self.switch_eval()
-            
-        if ddim_steps is None:
-            ddim_steps = self.ddim_steps
-            
-        # get noise, denoise, and decode with vqvae
-        B = ngen
-        shape = self.z_shape
-        c = None
-
-        latents = torch.randn((B, *shape), device=self.device)
-        latents = latents * self.noise_scheduler.init_noise_sigma
-
-        self.noise_scheduler.set_timesteps(self.ddim_steps)
-        
-        for t in tqdm(self.noise_scheduler.timesteps):
-            # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
-            latent_model_input = torch.cat([latents])
-            latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
-
-            # predict the noise residual
-            with torch.no_grad():
-                timesteps = torch.full((B,), t, device=self.device, dtype=torch.int64)
-                noise_pred = self.apply_model(latent_model_input, timesteps, c)
-
-            # compute the previous noisy sample x_t -> x_t-1
-            latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
-
-        # decode z
-        self.gen_df = self.vqvae.decode_no_quant(latents)
-        return self.gen_df
-
-    @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
         
         ret = OrderedDict([
@@ -457,8 +421,6 @@ class SDFusionModelPly2Shape(BaseModel):
             spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
             meshes = [sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=spc) for i in range(self.gen_df.shape[0])]
 
-            meshes_pred = [sdf_to_mesh_trimesh(getattr(self, f'pred_sdf_x0_{t}')[0][0], spacing=spc) for t in range(self.ddim_steps)]
-
         vis_tensor_names = [
             'img_gt',
             'img_gen_df',
@@ -470,8 +432,11 @@ class SDFusionModelPly2Shape(BaseModel):
             "meshes": meshes,
             "paths": self.paths,
             "points": self.ply.cpu().numpy(), # (B, 3, N)
-            "meshes_pred": meshes_pred
         }
+
+        if hasattr(self, f'pred_sdf_x0_{self.ddim_steps-1}'):
+            meshes_pred = [sdf_to_mesh_trimesh(getattr(self, f'pred_sdf_x0_{self.ddim_steps-1}')[0][0], spacing=spc) for i in range(self.gen_df.shape[0])]
+            visuals_dict['meshes_pred'] = meshes_pred
         
         if hasattr(self, 'ply_translation'):
             visuals_dict['ply_translation'] = self.ply_translation.cpu().numpy()
