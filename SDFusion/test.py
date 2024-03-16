@@ -37,7 +37,11 @@ def eval_main_worker(opt, model, test_dl, visualizer):
 				elif isinstance(v, list):
 					test_data[k] = [x for x in v for _ in range(opt.batch_size)]
 
-		model.inference(test_data, transform_info=True, ddim_eta=opt.ddim_eta, ddim_steps=opt.ddim_steps)
+		model.inference(test_data,
+				  ddim_eta=opt.ddim_eta, ddim_steps=opt.ddim_steps,
+				  print_collision_loss=True,
+				  use_cut_bbox=True)
+		
 		visualizer.display_current_results(model.get_current_visuals(), i, phase='test')
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ from models.networks.diffusion_networks.network import DiffusionUNet
 from models.model_utils import load_vqvae
 from models.networks.ply_networks.pointnet2 import PointNet2
 from models.networks.ply_networks.pointnet import PointNetEncoder
-from models.utils import get_collision_loss
+from models.loss_utils import get_collision_loss
 
 from diffusers import DDIMScheduler
 from diffusers.optimization import get_cosine_schedule_with_warmup

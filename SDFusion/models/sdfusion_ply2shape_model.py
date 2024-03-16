@@ -26,7 +26,7 @@ from models.networks.vqvae_networks.network import VQVAE
 from models.networks.diffusion_networks.network import DiffusionUNet
 from models.model_utils import load_vqvae
 from models.networks.ply_networks.pointnet2 import PointNet2
-from models.utils import get_collision_loss
+from models.loss_utils import get_collision_loss
 
 from diffusers import DDIMScheduler
 from diffusers.optimization import get_cosine_schedule_with_warmup
@@ -37,6 +37,7 @@ from utils.util import AverageMeter
 
 # rendering
 from utils.util_3d import init_mesh_renderer, render_sdf
+from datasets.convert_utils import sdf_to_mesh_trimesh, mesh_to_sdf
 
 class SDFusionModelPly2Shape(BaseModel):
     def name(self):
@@ -148,7 +149,7 @@ class SDFusionModelPly2Shape(BaseModel):
         self.loss_meter_epoch = AverageMeter()
         self.loss_meter_epoch.reset()
     
-    def set_input(self, input=None, max_sample=None, transform_info=False):
+    def set_input(self, input=None):
         
         self.x = input['sdf'].to(self.device)
         self.ply = input['ply'].to(self.device)
@@ -156,17 +157,20 @@ class SDFusionModelPly2Shape(BaseModel):
 
         # transformation info for calculating collision loss
         # "ply_points + ply_translation" aligns with "part * part_extent + part_translation"
-        if transform_info:
+        if 'ply_translation' in input:
             self.ply_translation = input['ply_translation'].to(self.device)
             self.part_translation = input['part_translation'].to(self.device)
             self.part_extent = input['part_extent'].to(self.device)
 
-        if self.opt.use_mobility_constraint:
+        if 'move_axis' in input:
             self.move_axis = input['move_axis'].to(self.device) # (3,)
             self.move_limit = input['move_limit'].to(self.device) # (2,) range of motion
         else:
             self.move_axis = None
             self.move_limit = None
+
+        if 'bbox_mesh' in input:
+            self.bbox_mesh = input['bbox_mesh'].to(self.device)
 
     def switch_train(self):
         self.df.train()
@@ -255,15 +259,17 @@ class SDFusionModelPly2Shape(BaseModel):
         return loss
 
     @torch.no_grad()
-    def inference(self, data, sample=True, ddim_steps=None, ddim_eta=0., quantize_denoised=True,
-                  infer_all=False, max_sample=16, transform_info=False):
+    def inference(self, data, ddim_steps=None, ddim_eta=0., print_collision_loss=False,
+                  use_cut_bbox=False, cut_bbox_limit=[0.5, 0.75],
+                  use_bbox_init=False):
 
         self.switch_eval()
-        
-        self.set_input(data, transform_info=transform_info)
+        self.set_input(data)
         
         if ddim_steps is None:
             ddim_steps = self.ddim_steps
+        else:
+            self.ddim_steps = ddim_steps
             
         B = self.opt.batch_size
         shape = self.z_shape
@@ -271,13 +277,14 @@ class SDFusionModelPly2Shape(BaseModel):
         uc = uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
         c_full = torch.cat([uc, c])
 
-        latents = torch.randn((B, *shape), device=self.device)
-        latents = latents * self.noise_scheduler.init_noise_sigma
+        if not use_bbox_init:
+            latents = torch.randn((B, *shape), device=self.device)
+            latents = latents * self.noise_scheduler.init_noise_sigma
 
         self.noise_scheduler.set_timesteps(ddim_steps)
 
         # w/ condition
-        for t in tqdm(self.noise_scheduler.timesteps):
+        for i, t in tqdm(enumerate(self.noise_scheduler.timesteps)):
             # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
             latent_model_input = torch.cat([latents] * 2)
             latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
@@ -292,24 +299,57 @@ class SDFusionModelPly2Shape(BaseModel):
             noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
 
             # compute the previous noisy sample x_t -> x_t-1
-            latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
+            out = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta)
+            latents, pred_x0 = out.prev_sample, out.pred_original_sample
+
+            if B == 1:
+                setattr(self, f'pred_sdf_x0_{i}', self.vqvae.decode_no_quant(pred_x0).detach())
+
+          # cut the generated sdf using bbox
+            if use_cut_bbox and i > ddim_steps * cut_bbox_limit[0] and i < ddim_steps * cut_bbox_limit[1]:
+                self.gen_df = self.vqvae.decode_no_quant(latents)
+
+                # build a grid of points with resolution gen_df.shape[-3:]
+                res = self.gen_df.shape[-1]
+                grid = np.array([[x, y, z] for x in np.linspace(-1, 1, res) 
+                                    for y in np.linspace(-1, 1, res)
+                                    for z in np.linspace(-1, 1, res)]) # (res^3, 3)
+                grid = torch.from_numpy(grid).float().to(latents.device) # (res^3, 3)
+
+                for i in range(B):
+                    # for each bounding box, calculate each point's distance to the surface
+                    # if the point is outside the surface, replace the original distance in gen_df with the distance to the surface
+                    # if the point is inside the surface, keep the original distance in gen_df
+                    min_corners = self.part_translation[i] - self.part_extent[i] / 2
+                    max_corners = self.part_translation[i] + self.part_extent[i] / 2
+                    mask = torch.any((grid < min_corners) | (grid > max_corners), dim=1).view(1, res, res, res) # outsiders
+                    replace_val = 0.02
+                    self.gen_df[i][(self.gen_df[i] < replace_val) & mask] = replace_val
+                    print(self.gen_df[i].min(), self.gen_df[i].max())
+                    # convert to trimesh
+                    # TODO: transformation between trimesh and sdf
+                    # mesh_i = sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=(2./res, 2./res, 2./res))
+                    # self.gen_df[i] = mesh_to_sdf(mesh_i, res=res, padding=0.2, trunc=0.2, device=self.device)
+
+                latents = self.vqvae(self.gen_df, forward_no_quant=True, encode_only=True)
 
         # decode z
         self.gen_df = self.vqvae.decode_no_quant(latents)
 
-        if self.opt.print_collision_loss:
+        if print_collision_loss:
             for i in range(B):
                 gen_sdf_i = self.gen_df[i:i+1].repeat(32, 1, 1, 1, 1)
                 collision_loss = get_collision_loss(gen_sdf_i, self.ply[i:i+1], self.ply_translation[i:i+1], 
                                                     self.part_extent[i:i+1], self.part_translation[i:i+1],
-                                                    move_limit=self.move_limit[i], move_axis=self.move_axis[i])
-                print(f'Collision Loss for Instance {i}:', collision_loss, '\n')
+                                                    move_limit=self.move_limit[i], move_axis=self.move_axis[i],
+                                                    use_bbox=True, linspace=True)
+                print(f'Collision Loss for Instance {i}:', collision_loss.item())
 
-    def guided_inference(self, data, ddim_steps=None, ddim_eta=0., n_sample_x0=1, transform_info=False):
+    def guided_inference(self, data, ddim_steps=None, ddim_eta=0., n_sample_x0=1):
         
         self.switch_eval()
 
-        self.set_input(data, transform_info=transform_info)
+        self.set_input(data)
 
         if ddim_steps is None:
             ddim_steps = self.ddim_steps
@@ -443,7 +483,7 @@ class SDFusionModelPly2Shape(BaseModel):
         }
 
         if hasattr(self, f'pred_sdf_x0_{self.ddim_steps-1}'):
-            meshes_pred = [sdf_to_mesh_trimesh(getattr(self, f'pred_sdf_x0_{self.ddim_steps-1}')[0][0], spacing=spc) for i in range(self.gen_df.shape[0])]
+            meshes_pred = [sdf_to_mesh_trimesh(getattr(self, f'pred_sdf_x0_{i}')[0][0], spacing=spc) for i in range(self.ddim_steps)]
             visuals_dict['meshes_pred'] = meshes_pred
         
         if hasattr(self, 'ply_translation'):

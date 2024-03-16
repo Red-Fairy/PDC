@@ -1,12 +1,13 @@
 import os
 os.environ['PYOPENGL_PLATFORM'] = 'egl'
-from util_3d import mesh_to_sdf
+# from util_3d import mesh_to_sdf
+from datasets.convert_utils import mesh_to_sdf
 import h5py
 import numpy as np
 import trimesh
 from termcolor import colored, cprint
 import argparse
-from mesh_to_sdf import mesh_to_voxels
+# from mesh_to_sdf import mesh_to_voxels
 from tqdm import tqdm
 import json
 import skimage
@@ -44,13 +45,11 @@ if __name__ == '__main__':
 
     for file_name in tqdm(filenames):
 
-        object_id, part_id = file_name.split('_')[2], file_name.split('_')[3].split('.')[0]
+        object_id, part_id = file_name.split('_')[-2], file_name.split('_')[-1].split('.')[0]
 
         mesh = trimesh.load(os.path.join(mesh_basedir, file_name))
         T = np.array(mesh.bounding_box.centroid)
         S = mesh.bounding_box.extents
-        mesh.apply_translation(-mesh.centroid)
-        mesh.apply_scale(1. / np.max(np.abs(mesh.bounds)))
 
         bbox = {
             'centroid': T.tolist(),
@@ -88,10 +87,7 @@ if __name__ == '__main__':
         #     bbox = bbox * scale
         #     suffix += f'_scale{scale:.2f}'
 
-        # sdf = mesh_to_sdf(mesh, args.res, padding=args.padding)
-
-        # # sdf to truncated sdf, thres=args.thres
-        # sdf = np.clip(sdf, -args.truncation, args.truncation)
+        sdf = mesh_to_sdf(mesh, args.res, padding=args.padding, trunc=args.truncation)
 
         # ''' save the mesh_recon '''
         # vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf, level=0.02, spacing=(SPACING, SPACING, SPACING))
@@ -106,9 +102,9 @@ if __name__ == '__main__':
         # mesh_recon.export(os.path.join(sdf_basedir, recon_filename))
         # # print(mesh_recon.centroid)
 
-        # sdf = sdf.reshape(-1, 1)
-        # h5_filename = file_name[:-4] + '_sdf_res_64.h5'
-        # h5f = h5py.File(os.path.join(sdf_basedir, h5_filename), 'w')
-        # h5f.create_dataset('pc_sdf_sample', data=sdf.astype(np.float32), compression='gzip', compression_opts=4)
-        # h5f.close()
-        # cprint(f'process mesh: {file_name}', 'green')
+        sdf = sdf.reshape(-1, 1)
+        h5_filename = file_name[:-4] + '_sdf_res_64.h5'
+        h5f = h5py.File(os.path.join(sdf_basedir, h5_filename), 'w')
+        h5f.create_dataset('pc_sdf_sample', data=sdf.cpu().numpy().astype(np.float32), compression='gzip', compression_opts=4)
+        h5f.close()
+        cprint(f'process mesh: {file_name}', 'green')

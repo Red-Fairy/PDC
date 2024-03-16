@@ -23,6 +23,19 @@ from pytorch3d.structures import Pointclouds, Meshes
 from kaolin.metrics.trianglemesh import point_to_mesh_distance
 from kaolin.ops.mesh import check_sign, index_vertices_by_faces
 
+def sdf_to_mesh_trimesh(sdf, spacing=(0.01,0.01,0.01), level=0.02):
+    if torch.is_tensor(sdf):
+        sdf = sdf.detach().cpu().numpy()
+    vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf, level=level, spacing=spacing)
+    mesh_mar = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_normals=normals)
+
+    mar_bounding = mesh_mar.bounding_box
+    mar_cen = mesh_mar.bounding_box.centroid
+    new_vertices = mesh_mar.vertices - mar_cen
+    mesh = trimesh.Trimesh(new_vertices, mesh_mar.faces)
+
+    return mesh
+
 def mesh_to_sdf(mesh, res=64, padding=0.2, trunc=0.2, device='cuda'):
     def to_tensor(data, device='cuda'):
         if isinstance(data, torch.Tensor):
@@ -47,10 +60,13 @@ def mesh_to_sdf(mesh, res=64, padding=0.2, trunc=0.2, device='cuda'):
         if isinstance(mesh, trimesh.Scene):
             mesh = mesh.dump().sum()
 
-        vertices = mesh.vertices - mesh.bounding_box.centroid
-        vertices *= 2 / (np.max(mesh.bounding_box.extents) + padding)
+        mesh.apply_translation(-mesh.bounding_box.centroid)
+        mesh.apply_scale(1 / np.max(mesh.bounding_box.extents)) # first scale to unit cube, i.e., max(extents) = 2
+        # print(np.max(np.abs(mesh.bounds)), np.max(mesh.bounding_box.extents), np.max(mesh.extents))
+        mesh.apply_scale(2 / (2 + padding)) # then padding 0.2
+        # print(np.max(np.abs(mesh.bounds)), np.max(mesh.bounding_box.extents), np.max(mesh.extents))
 
-        return trimesh.Trimesh(vertices=vertices, faces=mesh.faces)
+        return mesh
 
     class KaolinMeshModel():
         def __init__(self, store_meshes=None, device="cuda"):
@@ -98,12 +114,12 @@ def mesh_to_sdf(mesh, res=64, padding=0.2, trunc=0.2, device='cuda'):
     
     voxel_resolution = res
 
-    save_spacing_centroid_dic = {}
-    ###### calculate spacing before mesh scale to unit cube
-    spacing = compute_unit_cube_spacing_padding(mesh, padding, voxel_resolution)
-    save_spacing_centroid_dic['spacing'] = str(spacing)
-    save_spacing_centroid_dic['padding'] = str(padding)
-    save_spacing_centroid_dic['centroid'] = np.array(mesh.bounding_box.centroid).tolist()
+    # save_spacing_centroid_dic = {}
+    # ###### calculate spacing before mesh scale to unit cube
+    # spacing = compute_unit_cube_spacing_padding(mesh, padding, voxel_resolution)
+    # save_spacing_centroid_dic['spacing'] = str(spacing)
+    # save_spacing_centroid_dic['padding'] = str(padding)
+    # save_spacing_centroid_dic['centroid'] = np.array(mesh.bounding_box.centroid).tolist()
 
     mesh = scale_to_unit_cube_padding(mesh, padding)
 

@@ -20,7 +20,7 @@ from omegaconf import OmegaConf
 
 import open3d
 import trimesh
-from datasets.mesh_to_sdf import mesh_to_sdf
+from datasets.convert_utils import mesh_to_sdf
 from datasets.gapnet_utils import pc_normalize
 
 class GAPartNetDataset(BaseDataset):
@@ -77,7 +77,6 @@ class GAPartNetDataset(BaseDataset):
         ret = {'path': sdf_h5_file}
 
         if not self.joint_rotate: # if joint rotate, 'sdf' will be calculated on the fly
-
             h5_f = h5py.File(sdf_h5_file, 'r')
             sdf = h5_f['pc_sdf_sample'][:].astype(np.float32)
             sdf = torch.Tensor(sdf).view(1, self.res, self.res, self.res)
@@ -86,6 +85,11 @@ class GAPartNetDataset(BaseDataset):
             if thres != 0.0:
                 sdf = torch.clamp(sdf, min=-thres, max=thres)
             ret['sdf'] = sdf
+
+        if self.phase == 'test' and self.opt.use_bbox_mesh:
+            bbox_filepath = sdf_h5_file.replace('part_sdf', 'bbox_mesh').replace('.h5', '.obj')
+            mesh_sdf = mesh_to_sdf(trimesh.load_mesh(bbox_filepath), self.res, trunc=self.opt.trunc_thres, padding=0.2)
+            ret['bbox_mesh'] = mesh_sdf
 
         if self.bbox_cond:
             bbox_filepath = sdf_h5_file.replace('part_sdf', 'part_bbox').replace('.h5', '.npy')
