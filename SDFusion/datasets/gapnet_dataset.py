@@ -86,7 +86,7 @@ class GAPartNetDataset(BaseDataset):
                 sdf = torch.clamp(sdf, min=-thres, max=thres)
             ret['sdf'] = sdf
 
-        if self.phase == 'test' and self.opt.use_bbox_mesh:
+        if not self.opt.isTrain and self.phase == 'test' and self.opt.use_bbox_mesh:
             bbox_filepath = sdf_h5_file.replace('part_sdf', 'bbox_mesh').replace('.h5', '.obj')
             mesh_sdf = mesh_to_sdf(trimesh.load_mesh(bbox_filepath), self.res, trunc=self.opt.trunc_thres, padding=0.2)
             ret['bbox_mesh'] = mesh_sdf

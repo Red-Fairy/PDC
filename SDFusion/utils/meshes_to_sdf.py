@@ -103,7 +103,7 @@ if __name__ == '__main__':
         # # print(mesh_recon.centroid)
 
         sdf = sdf.reshape(-1, 1)
-        h5_filename = file_name[:-4] + '_sdf_res_64.h5'
+        h5_filename = file_name[:-4] + '.h5'
         h5f = h5py.File(os.path.join(sdf_basedir, h5_filename), 'w')
         h5f.create_dataset('pc_sdf_sample', data=sdf.cpu().numpy().astype(np.float32), compression='gzip', compression_opts=4)
         h5f.close()
