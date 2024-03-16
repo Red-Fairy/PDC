@@ -260,8 +260,7 @@ class SDFusionModelPly2Shape(BaseModel):
 
     @torch.no_grad()
     def inference(self, data, ddim_steps=None, ddim_eta=0., print_collision_loss=False,
-                  use_cut_bbox=False, cut_bbox_limit=[0.5, 0.75],
-                  use_bbox_init=False):
+                  use_cut_bbox=False, cut_bbox_limit=[0.5, 0.75]):
 
         self.switch_eval()
         self.set_input(data)
@@ -274,12 +273,18 @@ class SDFusionModelPly2Shape(BaseModel):
         B = self.opt.batch_size
         shape = self.z_shape
         c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
-        uc = uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
+        uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
         c_full = torch.cat([uc, c])
 
-        if not use_bbox_init:
+        if not hasattr(self, 'bbox_mesh'):
             latents = torch.randn((B, *shape), device=self.device)
             latents = latents * self.noise_scheduler.init_noise_sigma
+        else:
+            bbox_latent = self.vqvae(self.bbox_mesh, forward_no_quant=True, encode_only=True).repeat(B, 1, 1, 1, 1)
+            noise = torch.randn(bbox_latent.shape, device=self.device)
+            latents = self.noise_scheduler.add_noise(bbox_latent, noise, 
+                                                     torch.tensor([self.noise_scheduler.config.num_train_timesteps] * B, 
+                                                                  device=self.device, dtype=torch.int64))
 
         self.noise_scheduler.set_timesteps(ddim_steps)
 
@@ -325,7 +330,6 @@ class SDFusionModelPly2Shape(BaseModel):
                     mask = torch.any((grid < min_corners) | (grid > max_corners), dim=1).view(1, res, res, res) # outsiders
                     replace_val = 0.02
                     self.gen_df[i][(self.gen_df[i] < replace_val) & mask] = replace_val
-                    print(self.gen_df[i].min(), self.gen_df[i].max())
                     # convert to trimesh
                     # TODO: transformation between trimesh and sdf
                     # mesh_i = sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=(2./res, 2./res, 2./res))

@@ -39,8 +39,7 @@ def eval_main_worker(opt, model, test_dl, visualizer):
 
 		model.inference(test_data,
 				  ddim_eta=opt.ddim_eta, ddim_steps=opt.ddim_steps,
-				  print_collision_loss=True,
-				  use_cut_bbox=True)
+				  print_collision_loss=True)
 		
 		visualizer.display_current_results(model.get_current_visuals(), i, phase='test')
 

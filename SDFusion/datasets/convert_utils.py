@@ -61,7 +61,7 @@ def mesh_to_sdf(mesh, res=64, padding=0.2, trunc=0.2, device='cuda'):
             mesh = mesh.dump().sum()
 
         mesh.apply_translation(-mesh.bounding_box.centroid)
-        mesh.apply_scale(1 / np.max(mesh.bounding_box.extents)) # first scale to unit cube, i.e., max(extents) = 2
+        mesh.apply_scale(2 / np.max(mesh.bounding_box.extents)) # first scale to unit cube, i.e., max(extents) = 2
         # print(np.max(np.abs(mesh.bounds)), np.max(mesh.bounding_box.extents), np.max(mesh.extents))
         mesh.apply_scale(2 / (2 + padding)) # then padding 0.2
         # print(np.max(np.abs(mesh.bounds)), np.max(mesh.bounding_box.extents), np.max(mesh.extents))

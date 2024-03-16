@@ -125,7 +125,7 @@ class Visualizer():
 		object_ids = [path.split('/')[-1].split('_')[0] for path in paths]
 		part_ids = [path.split('/')[-1].split('_')[1].split('.')[0] for path in paths]
 
-		filename_format = f'{phase}_step{current_iters:05d}' + '_{}_{}-{}.{}' if phase == 'train' else '{}_{}-{}.{}'
+		filename_format = f'{phase}_step{current_iters:05d}' + '_{}_{}-{}.{}' if self.opt.isTrain else '{}_{}-{}.{}'
 
 		for i, visual_mesh in enumerate(visual_meshes):
 			instance_label = i if self.isTrain or self.opt.test_diversity else ''
