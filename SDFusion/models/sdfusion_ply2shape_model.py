@@ -280,16 +280,18 @@ class SDFusionModelPly2Shape(BaseModel):
             latents = torch.randn((B, *shape), device=self.device)
             latents = latents * self.noise_scheduler.init_noise_sigma
         else:
-            bbox_latent = self.vqvae(self.bbox_mesh, forward_no_quant=True, encode_only=True).repeat(B, 1, 1, 1, 1)
-            noise = torch.randn(bbox_latent.shape, device=self.device)
+            bbox_latent = self.vqvae(self.bbox_mesh, forward_no_quant=True, encode_only=True)
+            noise = torch.randn((B, *shape), device=self.device)
             latents = self.noise_scheduler.add_noise(bbox_latent, noise, 
-                                                     torch.tensor([self.noise_scheduler.config.num_train_timesteps] * B, 
-                                                                  device=self.device, dtype=torch.int64))
+                                                     timesteps = torch.full((B,), self.noise_scheduler.config.num_train_timesteps * 0.8 - 1, 
+                                                                            device=self.device, dtype=torch.int64))
 
         self.noise_scheduler.set_timesteps(ddim_steps)
 
         # w/ condition
         for i, t in tqdm(enumerate(self.noise_scheduler.timesteps)):
+            if i < ddim_steps * 0.2:
+                continue
             # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
             latent_model_input = torch.cat([latents] * 2)
             latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
@@ -504,8 +506,8 @@ class SDFusionModelPly2Shape(BaseModel):
     def save(self, label, global_step, save_opt=False):
 
         state_dict = {
-            # 'vqvae': self.vqvae.state_dict(),
             'df': self.df.state_dict(),
+            'cond_model': self.cond_model.state_dict(),
             'global_step': global_step,
         }
 
@@ -525,10 +527,11 @@ class SDFusionModelPly2Shape(BaseModel):
             state_dict = torch.load(ckpt, map_location=map_fn)
         else:
             state_dict = ckpt
-
-        # self.vqvae.load_state_dict(state_dict['vqvae'])
         self.df.load_state_dict(state_dict['df'])
         print(colored('[*] weight successfully load from: %s' % ckpt, 'blue'))
+
+        self.cond_model.load_state_dict(state_dict['cond_model'])
+        print(colored('[*] conditional model successfully load from: %s' % ckpt, 'blue'))
 
         # if 'opt' in state_dict:
         for i, optimizer in enumerate(self.optimizers):

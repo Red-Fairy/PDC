@@ -42,6 +42,14 @@ def create_model(opt, accelerator=None, input_instance=None):
             from models.sdfusion_ply2shape_acc_model import SDFusionModelPly2ShapeAcc
             model = SDFusionModelPly2ShapeAcc(opt, accelerator)
 
+    elif opt.model == 'sdfusion-plybbox2shape':
+        if accelerator is None:
+            from models.sdfusion_plybbox2shape_model import SDFusionModelPlyBBox2Shape
+            model = SDFusionModelPlyBBox2Shape(opt)
+        else:
+            from models.sdfusion_plybbox2shape_acc_model import SDFusionModelPlyBBox2ShapeAcc
+            model = SDFusionModelPlyBBox2ShapeAcc(opt, accelerator)
+
     elif opt.model == 'sdfusion-ply2shape-refine':
         if accelerator is None:
             raise ValueError("Refine model must be used with accelerator")

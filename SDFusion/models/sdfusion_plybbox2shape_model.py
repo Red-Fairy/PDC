@@ -1,5 +1,5 @@
 '''
-Incoporate accumulate for multi-gpu training and diffusers for training diffusion models.
+Incoporate diffusers for training diffusion models.
 Author: Rundong Luo
 '''
 import os
@@ -26,31 +26,28 @@ from models.networks.vqvae_networks.network import VQVAE
 from models.networks.diffusion_networks.network import DiffusionUNet
 from models.model_utils import load_vqvae
 from models.networks.ply_networks.pointnet2 import PointNet2
-from models.networks.ply_networks.pointnet import PointNetEncoder
 from models.loss_utils import get_collision_loss
 
 from diffusers import DDIMScheduler
 from diffusers.optimization import get_cosine_schedule_with_warmup
 
-from accelerate import Accelerator
+from planners.base_model import create_planner
 
 from utils.util import AverageMeter
 
-from planners.base_model import create_planner
-
 # rendering
 from utils.util_3d import init_mesh_renderer, render_sdf
+from datasets.convert_utils import sdf_to_mesh_trimesh, mesh_to_sdf
 
-class SDFusionModelPly2ShapeAcc(BaseModel):
+class SDFusionModelPlyBBox2Shape(BaseModel):
     def name(self):
-        return 'SDFusion-Model-PointCloud-to-Shape-Accelerate'
+        return 'SDFusion-Model-PointCloud-BBox-to-Shape'
 
-    def __init__(self, opt, accelerator: Accelerator):
+    def __init__(self, opt):
         super().__init__(opt)
         self.isTrain = opt.isTrain
         self.model_name = self.name()
-        self.device = accelerator.device
-        self.accelerator = accelerator
+        self.device = 'cuda'
         assert self.opt.ply_cond
 
         # self.optimizer_skip = False
@@ -81,41 +78,37 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
         # init U-Net conditional model
         self.cond_model = PointNet2(hidden_dim=df_conf.unet.params.context_dim).to(self.device)
-        # convert to sync-bn
-        self.cond_model = nn.SyncBatchNorm.convert_sync_batchnorm(self.cond_model)
         self.cond_model.requires_grad_(True)
-        if not opt.continue_train:
-            load_result = self.cond_model.load_state_dict(torch.load(opt.cond_ckpt)['model_state_dict'], strict=False)
-            print(load_result)
-            print(colored('[*] conditional model successfully loaded', 'blue'))
+        load_result = self.cond_model.load_state_dict(torch.load(opt.cond_ckpt)['model_state_dict'], strict=False)
+        print(load_result)
+        print(colored('[*] conditional model successfully loaded', 'blue'))
         self.uncond_prob = df_conf.model.params.uncond_prob
+
+        ######## END: Define Networks ########
 
         if self.isTrain:
             # initialize optimizers
-            self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True], lr=opt.lr)
-            self.optimizer2 = optim.AdamW([p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
-
-            lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
-            self.scheduler1 = optim.lr_scheduler.LambdaLR(self.optimizer1, lr_lambda1)
-            
-            freeze_iters = opt.freeze_iters
-            lr_lambda2 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters)) if it > freeze_iters else 0
-            self.scheduler2 = optim.lr_scheduler.LambdaLR(self.optimizer2, lr_lambda2)
-
-            self.optimizer1, self.optimizer2 = accelerator.prepare(self.optimizer1, self.optimizer2)
-            self.scheduler1, self.scheduler2 = accelerator.prepare(self.scheduler1, self.scheduler2)
-
-            self.optimizers = [self.optimizer1, self.optimizer2]
-            self.schedulers = [self.scheduler1, self.scheduler2]
-
-            # self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True] + \
-            #                 [p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
+            # self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True], lr=opt.lr)
+            # self.optimizer2 = optim.AdamW([p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
 
             # lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
             # self.scheduler1 = optim.lr_scheduler.LambdaLR(self.optimizer1, lr_lambda1)
+            
+            # freeze_iters = 10000
+            # lr_lambda2 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters)) if it > freeze_iters else 0
+            # self.scheduler2 = optim.lr_scheduler.LambdaLR(self.optimizer2, lr_lambda2)
 
-            # self.optimizers = [self.optimizer1]
-            # self.schedulers = [self.scheduler1]
+            # self.optimizers = [self.optimizer1, self.optimizer2]
+            # self.schedulers = [self.scheduler1, self.scheduler2]
+
+            self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True] + \
+                            [p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
+
+            lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
+            self.scheduler1 = optim.lr_scheduler.LambdaLR(self.optimizer1, lr_lambda1)
+
+            self.optimizers = [self.optimizer1]
+            self.schedulers = [self.scheduler1]
 
             self.print_networks(verbose=False)
 
@@ -124,13 +117,11 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
             else:
                 self.start_iter = 0
 
-        # prepare accelerate
-        self.df, self.vqvae, self.cond_model = accelerator.prepare(self.df, self.vqvae, self.cond_model)
+        else:
+            self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
 
         # noise scheduler
         self.noise_scheduler = DDIMScheduler()
-
-        ######## END: Define Networks ########
 
         # setup renderer
         if 'snet' in opt.dataset_mode:
@@ -145,27 +136,41 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         self.renderer = init_mesh_renderer(image_size=256, dist=dist, elev=elev, azim=azim, device=self.device)
 
         self.ddim_steps = self.df_conf.model.params.ddim_steps
+        if self.opt.debug == "1":
+            # NOTE: for debugging purpose
+            self.ddim_steps = 7
         cprint(f'[*] setting ddim_steps={self.ddim_steps}', 'blue')
         self.planner = None
         if not self.isTrain:
             self.planner = create_planner(opt)
-        
+
         self.loss_meter = AverageMeter()
         self.loss_meter.reset()
         self.loss_meter_epoch = AverageMeter()
         self.loss_meter_epoch.reset()
     
-    def set_input(self, input=None, max_sample=None):
+    def set_input(self, input=None):
         
         self.x = input['sdf'].to(self.device)
         self.ply = input['ply'].to(self.device)
         self.paths = input['path']
-        
+
         # transformation info for calculating collision loss
         # "ply_points + ply_translation" aligns with "part * part_extent + part_translation"
-        self.ply_translation = input['ply_translation'].to(self.device)
-        self.part_translation = input['part_translation'].to(self.device)
-        self.part_extent = input['part_extent'].to(self.device)
+        if 'ply_translation' in input:
+            self.ply_translation = input['ply_translation'].to(self.device)
+            self.part_translation = input['part_translation'].to(self.device)
+            self.part_extent = input['part_extent'].to(self.device)
+
+        if 'move_axis' in input:
+            self.move_axis = input['move_axis'].to(self.device) # (3,)
+            self.move_limit = input['move_limit'].to(self.device) # (2,) range of motion
+        else:
+            self.move_axis = None
+            self.move_limit = None
+
+        if 'bbox_mesh' in input:
+            self.bbox_mesh = input['bbox_mesh'].to(self.device)
 
     def switch_train(self):
         self.df.train()
@@ -176,12 +181,6 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         self.df.eval()
         self.cond_model.eval()
         self.vqvae.eval()
-
-    # def q_sample(self, x_start, t, noise=None):
-    #     noise = default(noise, lambda: torch.randn_like(x_start))
-
-    #     return (extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
-    #             extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise)
 
     # check: ddpm.py, line 891
     def apply_model(self, x_noisy, t, cond, return_ids=False):
@@ -197,8 +196,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         else:
             if not isinstance(cond, list):
                 cond = [cond]
-            # key = 'c_concat' if self.model.conditioning_key == 'concat' else 'c_crossattn'
-            key = 'c_concat' if self.df_conf.model.params.conditioning_key == 'concat' else 'c_crossattn'
+            key = 'c_concat' if self.df.conditioning_key == 'concat' else 'c_crossattn'
             cond = {key: cond}
 
         # eps
@@ -229,12 +227,16 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         self.switch_train()
 
         B = self.x.shape[0]
-        c = self.cond_model(self.ply).unsqueeze(1) # (B, 1, context_dim)
-        uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1) # (B, 1, context_dim), unconditional condition
-        # uc = torch.zeros_like(c, device=self.device)
-        # uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1)
-        # drop cond with self.uncond_prob
-        c = torch.where(torch.rand(B, 1, device=self.device) < self.uncond_prob, uc, c)
+
+        c_ply = self.ply_cond_model(self.ply).unsqueeze(1) # (B, 1, ply_dim)
+        uc_ply = self.ply_cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1) # (B, 1, ply_dim), unconditional condition
+        c_ply = torch.where(torch.rand(B, 1, device=self.device) < self.uncond_prob, uc_ply, c_ply)
+
+        c_bbox = self.bbox_cond_model(self.part_extent).unsqueeze(1) # (B, 1, bbox_dim)
+        uc_bbox = self.bbox_cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1) # (B, 1, bbox_dim), unconditional condition
+        c_bbox = torch.where(torch.rand(B, 1, device=self.device) < self.uncond_prob, uc_bbox, c_bbox)
+
+        c_full = torch.cat([c_ply, c_bbox], dim=-1) # (B, 1, ply_dim + bbox_dim = context_dim)
 
         # 1. encode to latent
         #    encoder, quant_conv, but do not quantize
@@ -250,7 +252,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         noise = torch.randn(z.shape, device=z.device)
         # Add noise to the clean images according to the noise magnitude at each timestep
         z_noisy = self.noise_scheduler.add_noise(z, noise, timesteps)
-        model_output = self.apply_model(z_noisy, timesteps, cond=c)
+        model_output = self.apply_model(z_noisy, timesteps, cond=c_full)
 
         if self.parameterization == "x0":
             target = z
@@ -262,54 +264,108 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         loss = self.get_loss(model_output, target).mean()
         return loss
 
-    # check: ddpm.py, log_images(). line 1317~1327
     @torch.no_grad()
-    def inference(self, data, sample=True, ddim_steps=None, ddim_eta=0., quantize_denoised=True,
-                  infer_all=False, max_sample=16):
+    def inference(self, data, ddim_steps=None, ddim_eta=0., print_collision_loss=False,
+                  use_cut_bbox=False, cut_bbox_limit=[0.5, 0.75]):
 
         self.switch_eval()
-
-        if not infer_all:
-            self.set_input(data, max_sample=max_sample)
-        else:
-            self.set_input(data)
+        self.set_input(data)
         
         if ddim_steps is None:
             ddim_steps = self.ddim_steps
+        else:
+            self.ddim_steps = ddim_steps
             
-        B = self.x.shape[0]
+        B = self.opt.batch_size
         shape = self.z_shape
-        c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
-        uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
-        # uc = torch.zeros_like(c, device=self.device)
-        # uc = self.cond_model(torch.zeros([B, 3, self.df_conf.ply.max_points]).to(self.device)).unsqueeze(1) # (B, context_dim), unconditional condition
-        c_full = torch.cat([uc, c])
+        
+        c_ply = self.ply_cond_model(self.ply).unsqueeze(1) # (B, 1, ply_dim), point cloud condition
+        uc_ply = self.ply_cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1) # (B, 1, ply_dim), unconditional condition
+        c_bbox = self.bbox_cond_model(self.part_extent).unsqueeze(1) # (B, 1, bbox_dim), bbox condition
+        uc_bbox = self.bbox_cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1) # (B, 1, bbox_dim), unconditional condition
+        
+        c_ply = torch.cat([c_ply, uc_bbox], dim=-1)
+        c_bbox = torch.cat([uc_ply, c_bbox], dim=-1)
+        uc = torch.cat([uc_ply, uc_bbox], dim=-1)
 
-        latents = torch.randn((B, *shape), device=self.device)
-        latents = latents * self.noise_scheduler.init_noise_sigma
+        c_full = torch.cat([uc, c_ply, c_bbox])
+
+        if not hasattr(self, 'bbox_mesh'):
+            latents = torch.randn((B, *shape), device=self.device)
+            latents = latents * self.noise_scheduler.init_noise_sigma
+        else:
+            bbox_latent = self.vqvae(self.bbox_mesh, forward_no_quant=True, encode_only=True)
+            noise = torch.randn((B, *shape), device=self.device)
+            latents = self.noise_scheduler.add_noise(bbox_latent, noise, 
+                                                     timesteps = torch.full((B,), self.noise_scheduler.config.num_train_timesteps * 0.8 - 1, 
+                                                                            device=self.device, dtype=torch.int64))
 
         self.noise_scheduler.set_timesteps(ddim_steps)
 
         # w/ condition
-        for t in tqdm(self.noise_scheduler.timesteps):
+        for i, t in tqdm(enumerate(self.noise_scheduler.timesteps)):
+            if i < ddim_steps * 0.2:
+                continue
             # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
-            latent_model_input = torch.cat([latents] * 2)
+            latent_model_input = torch.cat([latents] * 3)
             latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
 
             # predict the noise residual
             with torch.no_grad():
-                timesteps = torch.full((B*2,), t, device=self.device, dtype=torch.int64)
+                timesteps = torch.full((B*3,), t, device=self.device, dtype=torch.int64)
                 noise_pred = self.apply_model(latent_model_input, timesteps, c_full)
 
             # perform guidance
-            noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
-            noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
+            noise_pred_uncond, noise_pred_cond_ply, noise_pred_cond_bbox = noise_pred.chunk(3)
+            noise_pred = noise_pred_uncond + \
+                         self.guidance_scale_ply * (noise_pred_cond_ply - noise_pred_uncond) + \
+                            self.guidance_scale_bbox * (noise_pred_cond_bbox - noise_pred_uncond)
 
             # compute the previous noisy sample x_t -> x_t-1
-            latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
+            out = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta)
+            latents, pred_x0 = out.prev_sample, out.pred_original_sample
+
+            if B == 1:
+                setattr(self, f'pred_sdf_x0_{i}', self.vqvae.decode_no_quant(pred_x0).detach())
+
+          # cut the generated sdf using bbox
+            if use_cut_bbox and i > ddim_steps * cut_bbox_limit[0] and i < ddim_steps * cut_bbox_limit[1]:
+                self.gen_df = self.vqvae.decode_no_quant(latents)
+
+                # build a grid of points with resolution gen_df.shape[-3:]
+                res = self.gen_df.shape[-1]
+                grid = np.array([[x, y, z] for x in np.linspace(-1, 1, res) 
+                                    for y in np.linspace(-1, 1, res)
+                                    for z in np.linspace(-1, 1, res)]) # (res^3, 3)
+                grid = torch.from_numpy(grid).float().to(latents.device) # (res^3, 3)
+
+                for i in range(B):
+                    # for each bounding box, calculate each point's distance to the surface
+                    # if the point is outside the surface, replace the original distance in gen_df with the distance to the surface
+                    # if the point is inside the surface, keep the original distance in gen_df
+                    min_corners = self.part_translation[i] - self.part_extent[i] / 2
+                    max_corners = self.part_translation[i] + self.part_extent[i] / 2
+                    mask = torch.any((grid < min_corners) | (grid > max_corners), dim=1).view(1, res, res, res) # outsiders
+                    replace_val = 0.02
+                    self.gen_df[i][(self.gen_df[i] < replace_val) & mask] = replace_val
+                    # convert to trimesh
+                    # TODO: transformation between trimesh and sdf
+                    # mesh_i = sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=(2./res, 2./res, 2./res))
+                    # self.gen_df[i] = mesh_to_sdf(mesh_i, res=res, padding=0.2, trunc=0.2, device=self.device)
+
+                latents = self.vqvae(self.gen_df, forward_no_quant=True, encode_only=True)
 
         # decode z
-        self.gen_df = self.vqvae.module.decode_no_quant(latents)
+        self.gen_df = self.vqvae.decode_no_quant(latents)
+
+        if print_collision_loss:
+            for i in range(B):
+                gen_sdf_i = self.gen_df[i:i+1].repeat(32, 1, 1, 1, 1)
+                collision_loss = get_collision_loss(gen_sdf_i, self.ply[i:i+1], self.ply_translation[i:i+1], 
+                                                    self.part_extent[i:i+1], self.part_translation[i:i+1],
+                                                    move_limit=self.move_limit[i], move_axis=self.move_axis[i],
+                                                    use_bbox=True, linspace=True)
+                print(f'Collision Loss for Instance {i}:', collision_loss.item())
 
     def guided_inference(self, data, ddim_steps=None, ddim_eta=0., n_sample_x0=1):
         
@@ -319,6 +375,8 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
         if ddim_steps is None:
             ddim_steps = self.ddim_steps
+        else:
+            self.ddim_steps = ddim_steps
 
         B = self.x.shape[0]
         assert B == 1 # only support batch size 1 for now
@@ -333,7 +391,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         self.noise_scheduler.set_timesteps(ddim_steps)
 
         # w/ condition
-        for t in tqdm(self.noise_scheduler.timesteps):
+        for i, t in tqdm(enumerate(self.noise_scheduler.timesteps)):
             # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
             latent_model_input = torch.cat([latents] * 2)
             latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
@@ -345,66 +403,44 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
             # perform guidance
             noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
-            noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
+            noise_pred = noise_pred_cond
 
             # compute the previous noisy sample x_t -> x_t-1
             with torch.enable_grad():
                 latents_grad = latents.detach().requires_grad_(True)
-                latents, pred_x0 = self.noise_scheduler.step(noise_pred, t, latents_grad)
+                pred_x0 = self.noise_scheduler.step(noise_pred, t, latents_grad, eta=ddim_eta).pred_original_sample
+
+                setattr(self, f'pred_sdf_x0_{i}', self.vqvae.decode_no_quant(pred_x0).detach())
                 
                 # add noise to pred_x0, with std = sigma_t / sqrt(1 + sigma_t^2)
-                prev_t = t - self.noise_scheduler.config.num_train_timesteps // self.noise_scheduler.num_inference_steps
-                sigma_t = self.noise_scheduler._get_variance(t, prev_t) ** 0.5
-                noise = torch.randn([n_sample_x0, *shape], device=self.device) * (sigma_t / (1 + sigma_t ** 2) ** 0.5) # (n_sample_x0, *shape)
-                pred_x0_noisy = pred_x0.expand(n_sample_x0, -1, -1, -1, -1) + noise
+                # prev_t = t - self.noise_scheduler.config.num_train_timesteps // self.noise_scheduler.num_inference_steps
+                # sigma_t = self.noise_scheduler._get_variance(t, prev_t) ** 0.5
+                # noise = torch.randn([n_sample_x0, *shape], device=self.device) * (sigma_t / (1 + sigma_t ** 2) ** 0.5) # (n_sample_x0, *shape)
+                # pred_x0_noisy = pred_x0.expand(n_sample_x0, -1, -1, -1, -1) + noise
+                
+                pred_x0_noisy = pred_x0.expand(n_sample_x0, -1, -1, -1, -1)
+
                 pred_x0_noisy_sdf = self.vqvae.decode(pred_x0_noisy)
+
                 collision_loss = get_collision_loss(pred_x0_noisy_sdf, self.ply, self.ply_translation, self.part_extent, self.part_translation,
-                                                     move_limit=None, move_axis=None)
-                print(collision_loss)
-                grad = torch.autograd.grad(collision_loss, latents_grad)[0] # (B, *shape)
-                latents = latents + (1 - self.noise_scheduler.alphas_cumprod[t]) ** 0.5 * grad
-
-        # decode z
-        self.gen_df = self.vqvae.module.decode_no_quant(latents)
-
-    @torch.no_grad()
-    def uncond(self, ngen=1, ddim_steps=200, ddim_eta=0.):
-
-        self.switch_eval()
+                                                    move_limit=self.move_limit[0], move_axis=self.move_axis[0], loss_collision_weight=1)
+                print('Collision Loss:', collision_loss, '\n')
+                
+                if i >= ddim_steps // 2:
+                    grad = torch.autograd.grad(collision_loss, latents_grad)[0] # (B, *shape)
+                    grad = 20 * grad / (grad.norm() + 1e-8) # clip grad norm
+                    noise_pred = noise_pred + (1 - self.noise_scheduler.alphas_cumprod[t]) ** 0.5 * grad
             
-        if ddim_steps is None:
-            ddim_steps = self.ddim_steps
-            
-        # get noise, denoise, and decode with vqvae
-        B = ngen
-        shape = self.z_shape
-        c = None
+            noise_pred = noise_pred + (self.guidance_scale - 1) * (noise_pred_cond - noise_pred_uncond)
 
-        latents = torch.randn((B, *shape), device=self.device)
-        latents = latents * self.noise_scheduler.init_noise_sigma
-
-        self.noise_scheduler.set_timesteps(ddim_steps)
-        
-        for t in tqdm(self.noise_scheduler.timesteps):
-            # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
-            latent_model_input = torch.cat([latents])
-            latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
-
-            # predict the noise residual
-            with torch.no_grad():
-                timesteps = torch.full((B,), t, device=self.device, dtype=torch.int64)
-                noise_pred = self.apply_model(latent_model_input, timesteps, c)
-
-            # compute the previous noisy sample x_t -> x_t-1
             latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
 
         # decode z
-        self.gen_df = self.vqvae.module.decode_no_quant(latents)
-        return self.gen_df
+        self.gen_df = self.vqvae.decode_no_quant(latents)
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
-
+        
         ret = OrderedDict([
             ('loss', self.loss_meter_epoch.avg),
         ])
@@ -413,7 +449,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         return ret
 
     def backward(self): # not used
-        raise NotImplementedError('backward() is not used in this model')
+        raise NotImplementedError 
 
     def optimize_parameters(self, total_steps):
         # self.set_requires_grad([self.df], requires_grad=True)
@@ -422,11 +458,11 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         avg_loss = self.accelerator.gather(loss).mean()
         self.loss_meter.update(avg_loss, self.opt.batch_size)
         self.loss_meter_epoch.update(avg_loss, self.opt.batch_size)
-        self.accelerator.backward(loss)
+        loss.backward()
         
         # clip grad norm
         torch.nn.utils.clip_grad_norm_(self.df.parameters(), 1.0)
-        torch.nn.utils.clip_grad_norm_(self.cond_model.parameters(), 0.1)
+        torch.nn.utils.clip_grad_norm_(self.cond_model.parameters(), 1.0)
         
         for optimizer in self.optimizers:
             optimizer.step()
@@ -442,10 +478,8 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         ret = OrderedDict([
             ('total', self.loss_meter.avg),
         ])
+
         self.loss_meter.reset()
-        # print learning rate
-        for i, scheduler in enumerate(self.schedulers):
-            print(f'learning rate at iter {self.start_iter}: {scheduler.get_last_lr()}', flush=True)
 
         return ret
 
@@ -467,15 +501,19 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
             "img": OrderedDict(visuals),
             "meshes": meshes,
             "paths": self.paths,
-            "points": self.ply.cpu().numpy(),
+            "points": self.ply.cpu().numpy(), # (B, 3, N)
         }
 
+        if hasattr(self, f'pred_sdf_x0_{self.ddim_steps-1}'):
+            meshes_pred = [sdf_to_mesh_trimesh(getattr(self, f'pred_sdf_x0_{i}')[0][0], spacing=spc) for i in range(self.ddim_steps)]
+            visuals_dict['meshes_pred'] = meshes_pred
+        
         if hasattr(self, 'ply_translation'):
             visuals_dict['ply_translation'] = self.ply_translation.cpu().numpy()
             visuals_dict['part_translation'] = self.part_translation.cpu().numpy()
-            mesh_extents = torch.zeros([0, 3], device=self.device)
+            mesh_extents = torch.zeros(0, 3)
             for mesh in meshes:
-                mesh_extents = torch.cat([mesh_extents, torch.tensor(mesh.extents, device=self.device).unsqueeze(0)], dim=0)
+                mesh_extents = torch.cat([mesh_extents, torch.tensor(mesh.extents).unsqueeze(0)], dim=0)
             # visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / torch.max(mesh_extents, dim=1)[0]).cpu().numpy()
             visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / (4 / 2.2)).cpu().numpy()
 
@@ -485,7 +523,8 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
         state_dict = {
             'df': self.df.module.state_dict(),
-            'cond_model': self.cond_model.module.state_dict(),
+            'cond_model_ply': self.ply_cond_model.state_dict(),
+            'cond_model_bbox': self.bbox_cond_model.state_dict(),
             'global_step': global_step,
         }
 
@@ -509,32 +548,28 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         self.df.load_state_dict(state_dict['df'])
         print(colored('[*] weight successfully load from: %s' % ckpt, 'blue'))
 
-        try:
-            self.cond_model.load_state_dict(state_dict['cond_model'])
-            print(colored('[*] cond model weight successfully load from: %s' % ckpt, 'blue'))
-        except:
-            print(colored('[*] cond model weight not loaded', 'red'))
+        self.ply_cond_model.load_state_dict(state_dict['cond_model_ply'])
+        print(colored('[*] conditional model successfully restored from: %s' % ckpt, 'blue'))
 
+        self.bbox_cond_model.load_state_dict(state_dict['cond_model_bbox'])
+        print(colored('[*] conditional model successfully restored from: %s' % ckpt, 'blue'))
         # if 'opt' in state_dict:
         for i, optimizer in enumerate(self.optimizers):
             try:
                 optimizer.load_state_dict(state_dict[f'opt{i}'])
-                print(colored('[*] optimizer successfully restored from: %s' % ckpt, 'blue'))
             except:
-                print(colored('[*] optimizer not loaded', 'red'))
-        
+                pass
+        print(colored('[*] optimizer successfully restored from: %s' % ckpt, 'blue'))
         iter_passed = state_dict['global_step']
         
         if 'sch' in state_dict:
             for i, scheduler in enumerate(self.schedulers):
                 try:
                     scheduler.load_state_dict(state_dict[f'sch{i}'])
-                    print(colored('[*] scheduler successfully restored from: %s' % ckpt, 'blue'))
                 except:
-                    print(colored('[*] scheduler not loaded', 'red'))
                     for _ in range(state_dict['global_step']):
                         scheduler.step()
-            
+            print(colored('[*] scheduler successfully restored from: %s' % ckpt, 'blue'))
 
         return iter_passed
 

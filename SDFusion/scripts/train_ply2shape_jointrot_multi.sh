@@ -34,7 +34,7 @@ trunc_thres=0.2
 ### display & log stuff ###
 display_freq=250
 print_freq=25
-total_iters=250000
+total_iters=300000
 save_steps_freq=25000
 ###########################
 
@@ -74,7 +74,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
             --debug ${debug} --dataroot ${dataroot} \
             --ply_cond --cond_ckpt ${cond_ckpt} \
-            --joint_rotate --uc_scale ${uc_scale} --continue_train --load_iter 77500"
+            --joint_rotate --uc_scale ${uc_scale} --continue_train --load_iter 275000"
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 

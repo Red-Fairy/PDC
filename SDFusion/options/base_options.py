@@ -47,7 +47,9 @@ class BaseOptions():
         self.parser.add_argument('--df_cfg', type=str, default='configs/sdfusion_snet.yaml', help="diffusion model's config file")
         self.parser.add_argument('--ddim_steps', type=int, default=100, help='steps for ddim sampler')
         self.parser.add_argument('--ddim_eta', type=float, default=0.0)
-        self.parser.add_argument('--uc_scale', type=float, default=3.0, help='scale for un guidance')
+        self.parser.add_argument('--uc_scale', type=float, default=3.0, help='scale for classifier-free guidance')
+        self.parser.add_argument('--uc_ply_scale', type=float, default=3.0, help='scale for ply guidance')
+        self.parser.add_argument('--uc_bbox_scale', type=float, default=3.0, help='scale for bbox guidance')
         
         # vqvae stuff
         self.parser.add_argument('--vq_model', type=str, default='vqvae', help='for choosing the vqvae model to use.')
@@ -74,6 +76,7 @@ class BaseOptions():
         # condition
         self.parser.add_argument('--bbox_cond', action='store_true', help='if true, use bbox condition')
         self.parser.add_argument('--ply_cond', action='store_true', help='if true, use pointcloud condition')
+        self.parser.add_argument('--ply_bbox_cond', action='store_true', help='if true, use both pointcloud and bbox condition')
         self.parser.add_argument('--ply_input_rotate', action='store_true', help='if true, rotate the input pointcloud')
         self.parser.add_argument('--joint_rotate', action='store_true', help='if true, rotate the input pointcloud')
 
@@ -88,6 +91,9 @@ class BaseOptions():
         # use mobility constraint during inference/refinement
         self.parser.add_argument('--use_mobility_constraint', action='store_true', help='use mobility constraint')
         self.parser.add_argument('--mobility_sample_count', type=int, default=50, help='mobility sample count')
+
+        # resize factor for parts
+        self.parser.add_argument('--resize_factor', type=float, default=4/2.2, help='about 1.818, resize factor for parts')
 
         self.initialized = True
 

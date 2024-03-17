@@ -47,12 +47,12 @@ if __name__ == "__main__":
 	## set random seed
 	torch.backends.cudnn.benchmark = False     
 	torch.backends.cudnn.deterministic = True
-	# seed = 42
-	# random.seed(seed)
-	# np.random.seed(seed)
-	# torch.manual_seed(seed)
-	# torch.cuda.manual_seed(seed)
-	# torch.cuda.manual_seed_all(seed)
+	seed = 42
+	random.seed(seed)
+	np.random.seed(seed)
+	torch.manual_seed(seed)
+	torch.cuda.manual_seed(seed)
+	torch.cuda.manual_seed_all(seed)
 
 	# this will parse args, setup log_dirs, multi-gpus
 	opt = TestOptions().parse_and_setup()

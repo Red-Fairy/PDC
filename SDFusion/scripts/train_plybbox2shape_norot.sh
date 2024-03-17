@@ -1,3 +1,6 @@
+multi_gpu=1  # multi-gpu
+SLURM=1
+
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 DATE_WITH_TIME=`date "+%Y-%m-%dT%H-%M-%S"`
@@ -7,8 +10,8 @@ logs_dir='logs'
 ### hyper params ###
 
 ### model stuff ###
-model='sdfusion-ply2shape'
-df_cfg='configs/sdfusion-ply2shape-test.yaml'
+model='sdfusion-plybbox2shape'
+df_cfg='configs/sdfusion-plybbox2shape.yaml'
 
 vq_model="vqvae"
 vq_dset='gapnet'
@@ -23,6 +26,7 @@ max_dataset_size=1000000
 dataset_mode='gapnet'
 dataroot="/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_sdf"
 cat="slider_drawer"
+
 res=64
 trunc_thres=0.2
 #####################
@@ -30,7 +34,7 @@ trunc_thres=0.2
 ### display & log stuff ###
 display_freq=250
 print_freq=25
-total_iters=250000
+total_iters=300000
 save_steps_freq=2500
 ###########################
 
@@ -52,26 +56,35 @@ if [ $debug = 1 ]; then
     name="DEBUG-${name}"
 fi
 
-batch_size=32
+batch_size=12
 name=$1
-gpu_ids=$2
-load_iter=$3
-model_id='26503_1'
-testdir='_bbox_mesh_init'
+lr=$2
+port=$3
+gpu_ids=$4
+uc_ply_scale=$5
+uc_bbox_scale=$6
+
+name="${name}-plybbox2shape-norot-scale${uc_scale}-lr${lr}"
+
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
-            --batch_size ${batch_size} --max_dataset_size ${max_dataset_size} \
+            --lr ${lr} --batch_size ${batch_size} --max_dataset_size ${max_dataset_size} \
             --model ${model} --df_cfg ${df_cfg} \
             --vq_model ${vq_model} --vq_cfg ${vq_cfg} --vq_ckpt ${vq_ckpt} --vq_dset ${vq_dset} --vq_cat ${vq_cat} \
             --dataset_mode ${dataset_mode} --res ${res} --cat ${cat} --trunc_thres ${trunc_thres} \
-            --total_iters ${total_iters} \
+            --display_freq ${display_freq} --print_freq ${print_freq} \
+            --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
             --debug ${debug} --dataroot ${dataroot} \
-            --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} --test_diversity \
-            --ddim_eta 0 --ddim_steps 100 --uc_scale 3 \
-            --model_id ${model_id} --use_mobility_constraint --use_bbox_mesh \
-            --testdir ${testdir} --ddim_steps 50 "
+            --ply_bbox_cond --cond_ckpt ${cond_ckpt} --uc_ply_scale ${uc_ply_scale} --uc_bbox_scale ${uc_bbox_scale} "
 
-CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
+echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
+
+# set available gpus
+if [ $multi_gpu = 1 ]; then
+    accelerate launch --multi_gpu --gpu_ids $gpu_ids --main_process_port $port --mixed_precision 'no' train_accelerate.py $args
+else
+    python train.py $args
+fi
 
 
 

@@ -75,7 +75,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
             --debug ${debug} --dataroot ${dataroot} \
             --ply_cond --cond_ckpt ${cond_ckpt} --uc_scale ${uc_scale} \
-            --continue_train "
+            --continue_train --load_iter 225000 "
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 

@@ -37,9 +37,11 @@ suffix = ''
 if __name__ == '__main__':
     mesh_basedir = f'/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_meshes/{CAT}'
     sdf_basedir = f'/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_sdf/{CAT}'
+    mesh_recon_basedir = f'/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_meshes_recon/{CAT}'
     part_bbox_basedir = f'/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_bbox_aligned/{CAT}'
     os.makedirs(sdf_basedir, exist_ok=True)
     os.makedirs(part_bbox_basedir, exist_ok=True)
+    os.makedirs(mesh_recon_basedir, exist_ok=True)
 
     filenames = [f for f in os.listdir(mesh_basedir) if f.endswith('.obj')]
 
@@ -90,21 +92,18 @@ if __name__ == '__main__':
         sdf = mesh_to_sdf(mesh, args.res, padding=args.padding, trunc=args.truncation)
 
         # ''' save the mesh_recon '''
-        # vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf, level=0.02, spacing=(SPACING, SPACING, SPACING))
-        # mesh_recon = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_normals=normals)
-        # centroid = mesh_recon.bounding_box.centroid
-        # print(centroid)
-        # print(np.max(mesh_recon.bounding_box.extents))
-        # mesh_recon.apply_translation(-centroid)
-        # # (x_min, y_min, z_min), (x_max, y_max, z_max) = mesh_recon.bounds
-        # # print(x_min, y_min, z_min, x_max, y_max, z_max)
-        # recon_filename = os.path.join(sdf_basedir, f'{object_id}_{part_id}.obj')
-        # mesh_recon.export(os.path.join(sdf_basedir, recon_filename))
-        # # print(mesh_recon.centroid)
+        vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf.squeeze(0).cpu().numpy(), level=0.02, spacing=(SPACING, SPACING, SPACING))
+        mesh_recon = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_normals=normals)
+        mesh_recon.apply_translation(-mesh_recon.bounding_box.centroid)
+        mesh_recon.apply_scale(np.max(S) / np.max(mesh_recon.bounding_box.extents))
+        mesh_recon.apply_translation(T)
 
-        sdf = sdf.reshape(-1, 1)
-        h5_filename = file_name[:-4] + '.h5'
-        h5f = h5py.File(os.path.join(sdf_basedir, h5_filename), 'w')
-        h5f.create_dataset('pc_sdf_sample', data=sdf.cpu().numpy().astype(np.float32), compression='gzip', compression_opts=4)
-        h5f.close()
+        recon_filename = os.path.join(mesh_recon_basedir, f'{object_id}_{part_id}.obj')
+        mesh_recon.export(recon_filename)
+
+        # sdf = sdf.reshape(-1, 1)
+        # h5_filename = file_name[:-4] + '.h5'
+        # h5f = h5py.File(os.path.join(sdf_basedir, h5_filename), 'w')
+        # h5f.create_dataset('pc_sdf_sample', data=sdf.cpu().numpy().astype(np.float32), compression='gzip', compression_opts=4)
+        # h5f.close()
         cprint(f'process mesh: {file_name}', 'green')

@@ -42,11 +42,14 @@ class GAPartNetDataset(BaseDataset):
             self.sdf_filepaths = [f for f in self.sdf_filepaths if opt.model_id in f]
 
         self.bbox_cond = opt.bbox_cond
-        self.joint_rotate = opt.joint_rotate
 
         self.ply_cond = opt.ply_cond
+        self.joint_rotate = opt.joint_rotate
         self.ply_input_rotate = opt.ply_input_rotate
-        assert not (self.ply_input_rotate and self.joint_rotate), "ply_rot and joint_rotate cannot be both True"
+
+        self.ply_bbox_cond = opt.ply_bbox_cond
+
+        # assert not (self.ply_input_rotate and self.joint_rotate), "ply_rot and joint_rotate cannot be both True"
 
         self.df_conf = OmegaConf.load(opt.df_cfg)
 
@@ -98,7 +101,7 @@ class GAPartNetDataset(BaseDataset):
                 bbox = torch.mm(bbox, torch.tensor(rot_matrix).float())
             ret['bbox'] = bbox
 
-        if self.ply_cond:
+        if self.ply_cond or self.ply_bbox_cond:
             ply_filepath = sdf_h5_file.replace('part_sdf', 'part_ply_fps').replace('.h5', '.ply')
             # load ply file
             ply_file = open3d.io.read_point_cloud(ply_filepath).points

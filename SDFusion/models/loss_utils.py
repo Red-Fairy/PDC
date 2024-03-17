@@ -7,6 +7,7 @@ from utils.util_3d import sdf_to_mesh_trimesh
 import numpy as np
 import trimesh
 import torch.nn.functional as F
+import open3d
 
 from utils.util_3d import init_mesh_renderer, render_sdf
 
@@ -43,7 +44,7 @@ def get_points_from_bbox(part_translation, part_extent, sample_count_per_axis=25
 
 def get_collision_loss(sdf, ply, ply_translation, part_extent, part_translation, 
                        move_limit=None, move_axis=None, sdf_scale=4/2.2, 
-                       loss_collision_weight=1.0, margin=0.001, 
+                       loss_collision_weight=1.0, margin=0.015, 
                        use_bbox=False, linspace=False):
     '''
     sdf: sdf values, (B, 1, res, res, res), multiple generated sdf with the same point cloud condition
@@ -81,10 +82,22 @@ def get_collision_loss(sdf, ply, ply_translation, part_extent, part_translation,
 
     ply_transformed = ply_transformed / scale # (B, 3, N)
     ply_transformed = ply_transformed.transpose(1, 2) # (B, N, 3)
+
+    # export the point cloud for debug, save 
+    # path = os.path.join('point_cloud.ply')
+    # ply_file = open3d.geometry.PointCloud()
+    # ply_file.points = open3d.utility.Vector3dVector(ply_transformed[27].cpu().numpy())
+    # open3d.io.write_point_cloud(path, ply_file)
     
     # 3) query the sdf value at the transformed point cloud
-    # input: (1, 1, res_sdf, res_sdf, res_sdf), (B, 1, 1, N, 3) -> (B, 1, 1, 1, N)
-    sdf_ply = F.grid_sample(sdf, ply_transformed.unsqueeze(1).unsqueeze(1), align_corners=True).squeeze(1).squeeze(1).squeeze(1) # (B, N)
+    # input: (B, 1, res_sdf, res_sdf, res_sdf), (B, 1, 1, N, 3) -> (B, 1, 1, 1, N)
+    sdf_ply = F.grid_sample(sdf, ply_transformed.unsqueeze(1).unsqueeze(1), align_corners=True, padding_mode='border').squeeze(1).squeeze(1).squeeze(1) # (B, N)
+
+    # for the 27th mesh, print its sampled sdf bucket in range [-1, 1] each bucket has 0.005 width
+    # sampled_values = sdf_ply[27]
+    # rg = torch.arange(-1, 1, 0.005)
+    # for i in range(rg.shape[0] - 1):
+    #     print(f"Bucket from {rg[i]} to {rg[i+1]}: {torch.sum((sampled_values >= rg[i]) & (sampled_values < rg[i+1]))}")
 
     # 4) calculate the collision loss
     loss_collision = torch.sum(F.relu(-sdf_ply-margin), dim=1)[0] # (B, N) -> (B, 1), return as a vector
