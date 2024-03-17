@@ -34,7 +34,6 @@ from diffusers.optimization import get_cosine_schedule_with_warmup
 from accelerate import Accelerator
 
 from utils.util import AverageMeter
-from datasets.mesh_to_sdf import mesh_to_sdf
 
 from planners.base_model import create_planner
 

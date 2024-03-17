@@ -79,27 +79,16 @@ class SDFusionModelPly2Shape(BaseModel):
         # init U-Net conditional model
         self.cond_model = PointNet2(hidden_dim=df_conf.unet.params.context_dim).to(self.device)
         self.cond_model.requires_grad_(True)
+
         load_result = self.cond_model.load_state_dict(torch.load(opt.cond_ckpt)['model_state_dict'], strict=False)
         print(load_result)
         print(colored('[*] conditional model successfully loaded', 'blue'))
+        
         self.uncond_prob = df_conf.model.params.uncond_prob
 
         ######## END: Define Networks ########
 
         if self.isTrain:
-            # initialize optimizers
-            # self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True], lr=opt.lr)
-            # self.optimizer2 = optim.AdamW([p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
-
-            # lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
-            # self.scheduler1 = optim.lr_scheduler.LambdaLR(self.optimizer1, lr_lambda1)
-            
-            # freeze_iters = 10000
-            # lr_lambda2 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters)) if it > freeze_iters else 0
-            # self.scheduler2 = optim.lr_scheduler.LambdaLR(self.optimizer2, lr_lambda2)
-
-            # self.optimizers = [self.optimizer1, self.optimizer2]
-            # self.schedulers = [self.scheduler1, self.scheduler2]
 
             self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True] + \
                             [p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)

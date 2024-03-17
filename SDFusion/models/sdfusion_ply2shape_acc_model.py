@@ -84,10 +84,11 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         # convert to sync-bn
         self.cond_model = nn.SyncBatchNorm.convert_sync_batchnorm(self.cond_model)
         self.cond_model.requires_grad_(True)
-        if not opt.continue_train:
-            load_result = self.cond_model.load_state_dict(torch.load(opt.cond_ckpt)['model_state_dict'], strict=False)
-            print(load_result)
-            print(colored('[*] conditional model successfully loaded', 'blue'))
+
+        load_result = self.cond_model.load_state_dict(torch.load(opt.cond_ckpt)['model_state_dict'], strict=False)
+        print(load_result)
+        print(colored('[*] conditional model successfully loaded', 'blue'))
+        
         self.uncond_prob = df_conf.model.params.uncond_prob
 
         if self.isTrain:

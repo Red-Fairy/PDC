@@ -26,7 +26,7 @@ from models.networks.vqvae_networks.network import VQVAE
 from models.networks.diffusion_networks.network import DiffusionUNet
 from models.model_utils import load_vqvae
 from models.networks.ply_networks.pointnet2 import PointNet2
-from models.networks.bbox_networks import bbox_model
+from models.networks.bbox_networks.bbox_model import BBoxModel
 from models.loss_utils import get_collision_loss
 
 from diffusers import DDIMScheduler
@@ -80,18 +80,17 @@ class SDFusionModelPlyBBox2ShapeAcc(BaseModel):
         self.vqvae = load_vqvae(vq_conf, vq_ckpt=opt.vq_ckpt, opt=opt).to(self.device)
 
         # init U-Net conditional model
-        self.ply_cond_model = PointNet2(hidden_dim=df_conf.unet.params.context_dim / 2).to(self.device)
+        self.ply_cond_model = PointNet2(hidden_dim=df_conf.unet.params.context_dim // 2).to(self.device)
         # convert to sync-bn
         self.ply_cond_model = nn.SyncBatchNorm.convert_sync_batchnorm(self.ply_cond_model)
         self.ply_cond_model.requires_grad_(True)
 
-        self.bbox_cond_model = bbox_model(output_dim=df_conf.unet.params.context_dim / 2).to(self.device)
-        self.bbox_cond_model.requires_grad_(True)
+        load_result = self.ply_cond_model.load_state_dict(torch.load(opt.cond_ckpt)['model_state_dict'], strict=False)
+        print(load_result)
+        print(colored('[*] conditional model successfully loaded', 'blue'))
 
-        if not opt.continue_train:
-            load_result = self.ply_cond_model.load_state_dict(torch.load(opt.cond_ckpt)['model_state_dict'], strict=False)
-            print(load_result)
-            print(colored('[*] conditional model successfully loaded', 'blue'))
+        self.bbox_cond_model = BBoxModel(output_dim=df_conf.unet.params.context_dim // 2).to(self.device)
+        self.bbox_cond_model.requires_grad_(True)
 
         self.uncond_prob = df_conf.model.params.uncond_prob
 

@@ -26,6 +26,7 @@ from models.networks.vqvae_networks.network import VQVAE
 from models.networks.diffusion_networks.network import DiffusionUNet
 from models.model_utils import load_vqvae
 from models.networks.ply_networks.pointnet2 import PointNet2
+from models.networks.bbox_networks.bbox_model import BBoxModel
 from models.loss_utils import get_collision_loss
 
 from diffusers import DDIMScheduler
@@ -77,32 +78,24 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
         self.vqvae = load_vqvae(vq_conf, vq_ckpt=opt.vq_ckpt, opt=opt).to(self.device)
 
         # init U-Net conditional model
-        self.cond_model = PointNet2(hidden_dim=df_conf.unet.params.context_dim).to(self.device)
-        self.cond_model.requires_grad_(True)
-        load_result = self.cond_model.load_state_dict(torch.load(opt.cond_ckpt)['model_state_dict'], strict=False)
+        self.ply_cond_model = PointNet2(hidden_dim=df_conf.unet.params.context_dim // 2).to(self.device)
+        self.ply_cond_model.requires_grad_(True)
+        load_result = self.ply_cond_model.load_state_dict(torch.load(opt.cond_ckpt)['model_state_dict'], strict=False)
         print(load_result)
         print(colored('[*] conditional model successfully loaded', 'blue'))
+
+        self.bbox_cond_model = BBoxModel(output_dim=df_conf.unet.params.context_dim // 2).to(self.device)
+        self.bbox_cond_model.requires_grad_(True)
+
         self.uncond_prob = df_conf.model.params.uncond_prob
 
         ######## END: Define Networks ########
 
         if self.isTrain:
-            # initialize optimizers
-            # self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True], lr=opt.lr)
-            # self.optimizer2 = optim.AdamW([p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
-
-            # lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
-            # self.scheduler1 = optim.lr_scheduler.LambdaLR(self.optimizer1, lr_lambda1)
-            
-            # freeze_iters = 10000
-            # lr_lambda2 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters)) if it > freeze_iters else 0
-            # self.scheduler2 = optim.lr_scheduler.LambdaLR(self.optimizer2, lr_lambda2)
-
-            # self.optimizers = [self.optimizer1, self.optimizer2]
-            # self.schedulers = [self.scheduler1, self.scheduler2]
 
             self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True] + \
-                            [p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
+                            [p for p in self.ply_cond_model.parameters() if p.requires_grad == True] + \
+                            [p for p in self.bbox_cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
 
             lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
             self.scheduler1 = optim.lr_scheduler.LambdaLR(self.optimizer1, lr_lambda1)
@@ -174,12 +167,12 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
 
     def switch_train(self):
         self.df.train()
-        self.cond_model.train()
+        self.ply_cond_modell.train()
         self.vqvae.eval()
 
     def switch_eval(self):
         self.df.eval()
-        self.cond_model.eval()
+        self.ply_cond_modell.eval()
         self.vqvae.eval()
 
     # check: ddpm.py, line 891
@@ -381,8 +374,8 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
         B = self.x.shape[0]
         assert B == 1 # only support batch size 1 for now
         shape = self.z_shape
-        c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
-        uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
+        c = self.ply_cond_modell(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
+        uc = self.ply_cond_modell(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
         c_full = torch.cat([uc, c])
 
         latents = torch.randn((B, *shape), device=self.device) # (B, *shape)
@@ -462,7 +455,7 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
         
         # clip grad norm
         torch.nn.utils.clip_grad_norm_(self.df.parameters(), 1.0)
-        torch.nn.utils.clip_grad_norm_(self.cond_model.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(self.ply_cond_modell.parameters(), 1.0)
         
         for optimizer in self.optimizers:
             optimizer.step()
