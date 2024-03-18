@@ -272,15 +272,13 @@ class SDFusionModelPly2Shape(BaseModel):
             bbox_latent = self.vqvae(self.bbox_mesh, forward_no_quant=True, encode_only=True)
             noise = torch.randn((B, *shape), device=self.device)
             latents = self.noise_scheduler.add_noise(bbox_latent, noise, 
-                                                     timesteps = torch.full((B,), self.noise_scheduler.config.num_train_timesteps * 0.8 - 1, 
+                                                     timesteps = torch.full((B,), self.noise_scheduler.config.num_train_timesteps - 1, 
                                                                             device=self.device, dtype=torch.int64))
 
         self.noise_scheduler.set_timesteps(ddim_steps)
 
         # w/ condition
         for i, t in tqdm(enumerate(self.noise_scheduler.timesteps)):
-            if i < ddim_steps * 0.2:
-                continue
             # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
             latent_model_input = torch.cat([latents] * 2)
             latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
@@ -463,6 +461,9 @@ class SDFusionModelPly2Shape(BaseModel):
             self.img_gen_df = render_sdf(self.renderer, self.gen_df)
             spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
             meshes = [sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=spc) for i in range(self.gen_df.shape[0])]
+
+            for mesh in meshes:
+                print(np.max(mesh.extents))
 
         vis_tensor_names = [
             'img_gt',

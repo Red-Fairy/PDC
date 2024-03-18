@@ -1,13 +1,12 @@
 import torch
 import os
-from collections import OrderedDict
-from functools import partial
 
-from utils.util_3d import sdf_to_mesh_trimesh
 import numpy as np
 import trimesh
 import torch.nn.functional as F
 import open3d
+
+from torch import nn
 
 from utils.util_3d import init_mesh_renderer, render_sdf
 
@@ -174,3 +173,24 @@ def get_surface_points_from_bbox(part_translation, part_extent, sample_count_per
 
 #     return loss_collision_part * loss_collision_weight
 
+class VQLoss(nn.Module):
+    def __init__(self, codebook_weight=1.0):
+        super().__init__()
+        self.codebook_weight = codebook_weight
+
+    def forward(self, codebook_loss, inputs, reconstructions, split="train"):
+        rec_loss = torch.abs(inputs.contiguous() - reconstructions.contiguous())
+
+        nll_loss = rec_loss
+        nll_loss = torch.mean(nll_loss)
+
+        loss = nll_loss + self.codebook_weight * codebook_loss.mean()
+
+        log = {
+            "loss_total": loss.clone().detach().mean(),
+            "loss_codebook": codebook_loss.detach().mean(),
+            "loss_nll": nll_loss.detach().mean(),
+            "loss_rec": rec_loss.detach().mean(),
+        }
+
+        return loss, log

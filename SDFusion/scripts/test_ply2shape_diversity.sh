@@ -57,7 +57,7 @@ name=$1
 gpu_ids=$2
 load_iter=$3
 model_id='26503_1'
-testdir='_bbox_mesh_init'
+testdir='_'
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --batch_size ${batch_size} --max_dataset_size ${max_dataset_size} \
@@ -67,9 +67,9 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --total_iters ${total_iters} \
             --debug ${debug} --dataroot ${dataroot} \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} --test_diversity \
-            --ddim_eta 0 --ddim_steps 100 --uc_scale 3 \
-            --model_id ${model_id} --use_mobility_constraint --use_bbox_mesh \
-            --testdir ${testdir} --ddim_steps 50 "
+            --model_id ${model_id} --use_mobility_constraint \
+            --ddim_eta 0 --uc_scale 2 --ddim_steps 50 "
+            # --testdir ${testdir}  "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
 

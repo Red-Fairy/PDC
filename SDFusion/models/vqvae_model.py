@@ -17,7 +17,7 @@ import torchvision.transforms as transforms
 
 from models.base_model import BaseModel
 from models.networks.vqvae_networks.network import VQVAE
-from models.losses import VQLoss
+from models.loss_utils import VQLoss
 
 import utils.util
 from utils.util_3d import init_mesh_renderer, render_sdf
