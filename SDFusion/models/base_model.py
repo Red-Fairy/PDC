@@ -7,8 +7,12 @@ def create_model(opt, accelerator=None, input_instance=None):
     model = None
 
     if opt.model == 'vqvae':
-        from models.vqvae_model import VQVAEModel
-        model = VQVAEModel(opt)
+        if accelerator is None:
+            from models.vqvae_model import VQVAEModel
+            model = VQVAEModel(opt)
+        else:
+            from models.vqvae_acc_model import VQVAEAccModel
+            model = VQVAEAccModel(opt, accelerator)
     
     elif opt.model == 'sdfusion':
         if accelerator is None:

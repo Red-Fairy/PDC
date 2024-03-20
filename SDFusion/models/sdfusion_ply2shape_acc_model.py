@@ -228,6 +228,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
     def forward(self):
 
         self.switch_train()
+        self.start_iter += 1
 
         B = self.x.shape[0]
         c = self.cond_model(self.ply).unsqueeze(1) # (B, 1, context_dim)

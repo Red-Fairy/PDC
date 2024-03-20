@@ -110,27 +110,28 @@ class Visualizer():
 		self.log_tensorboard_metrics(metrics, current_iters, phase)
 
 	def display_current_results(self, visuals, current_iters, im_name='', phase='train'):
+
 		visual_img = visuals['img']
-		visual_meshes = visuals['meshes']
-		
-		if self.opt.visual_mode == 'mesh' and 'ply_translation' in visuals:
-			part_scale = visuals['part_scale']
-			part_translation = visuals['part_translation']
-			for i, mesh in enumerate(visual_meshes):
-				mesh.apply_scale((part_scale[i], part_scale[i], part_scale[i]))
-				mesh.apply_translation(part_translation[i])
-		
-		# get object_id and part_id
 		paths = visuals['paths']
 		object_ids = [path.split('/')[-1].split('_')[0] for path in paths]
 		part_ids = [path.split('/')[-1].split('_')[1].split('.')[0] for path in paths]
 
 		filename_format = f'{phase}_step{current_iters:05d}' + '_{}_{}-{}.{}' if self.opt.isTrain else '{}_{}-{}.{}'
+		
+		if 'meshes' in visuals:
+			visual_meshes = visuals['meshes']
 
-		for i, visual_mesh in enumerate(visual_meshes):
-			instance_label = i if self.isTrain or self.opt.test_diversity else ''
-			mesh_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], instance_label, 'obj'))
-			visual_mesh.export(mesh_path, 'obj')
+			if self.opt.visual_mode == 'mesh' and 'ply_translation' in visuals:
+				part_scale = visuals['part_scale']
+				part_translation = visuals['part_translation']
+				for i, mesh in enumerate(visual_meshes):
+					mesh.apply_scale((part_scale[i], part_scale[i], part_scale[i]))
+					mesh.apply_translation(part_translation[i])
+
+			for i, visual_mesh in enumerate(visual_meshes):
+				instance_label = i if self.isTrain or self.opt.test_diversity else ''
+				mesh_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], instance_label, 'obj'))
+				visual_mesh.export(mesh_path, 'obj')
 		
 		if 'meshes_pred' in visuals:
 			part_scale = visuals['part_scale'][0]
@@ -178,7 +179,7 @@ class Visualizer():
 			
 		# write images to disk
 		for label, image_numpy in visual_img.items():
-			suffix = f'train_step{current_iters:05d}_{label}.png' if phase == 'train' else f'{label}.png'
+			suffix = f'{phase}_step{current_iters:05d}_{label}.png'
 			img_path = os.path.join(self.img_dir, suffix)
 			util.save_image(image_numpy, img_path)
 		# log to tensorboard

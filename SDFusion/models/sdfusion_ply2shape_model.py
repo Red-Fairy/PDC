@@ -154,9 +154,6 @@ class SDFusionModelPly2Shape(BaseModel):
         if 'move_axis' in input:
             self.move_axis = input['move_axis'].to(self.device) # (3,)
             self.move_limit = input['move_limit'].to(self.device) # (2,) range of motion
-        else:
-            self.move_axis = None
-            self.move_limit = None
 
         if 'bbox_mesh' in input:
             self.bbox_mesh = input['bbox_mesh'].to(self.device)
@@ -334,7 +331,7 @@ class SDFusionModelPly2Shape(BaseModel):
                 gen_sdf_i = self.gen_df[i:i+1].repeat(32, 1, 1, 1, 1)
                 collision_loss = get_collision_loss(gen_sdf_i, self.ply[i:i+1], self.ply_translation[i:i+1], 
                                                     self.part_extent[i:i+1], self.part_translation[i:i+1],
-                                                    move_limit=self.move_limit[i], move_axis=self.move_axis[i],
+                                                    # move_limit=self.move_limit[i], move_axis=self.move_axis[i],
                                                     use_bbox=True, linspace=True)
                 print(f'Collision Loss for Instance {i}:', collision_loss.item())
 

@@ -22,7 +22,6 @@ cond_ckpt="/raid/haoran/Project/PartDiffusion/PartDiffusion/pretrained_checkpoin
 max_dataset_size=1000000
 dataset_mode='gapnet'
 dataroot="/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_sdf"
-cat="slider_drawer"
 res=64
 trunc_thres=0.2
 #####################
@@ -56,7 +55,8 @@ batch_size=32
 name=$1
 gpu_ids=$2
 load_iter=$3
-model_id='26503_1'
+model_id='7120'
+cat="hinge_door"
 testdir='_'
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
@@ -67,9 +67,9 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --total_iters ${total_iters} \
             --debug ${debug} --dataroot ${dataroot} \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} --test_diversity \
-            --model_id ${model_id} --use_mobility_constraint \
+            --model_id ${model_id} \
             --ddim_eta 0 --uc_scale 2 --ddim_steps 50 "
-            # --testdir ${testdir}  "
+            # --testdir ${testdir} --use_mobility_constraint  "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
 

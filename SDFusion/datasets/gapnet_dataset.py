@@ -23,6 +23,8 @@ import trimesh
 from datasets.convert_utils import mesh_to_sdf
 from datasets.gapnet_utils import pc_normalize
 
+import glob
+
 class GAPartNetDataset(BaseDataset):
 
     def __init__(self, opt, phase='train', cat='all', res=256, eval_samples=100):
@@ -30,13 +32,23 @@ class GAPartNetDataset(BaseDataset):
         self.opt = opt
         self.max_dataset_size = opt.max_dataset_size
         self.res = res
-        dataroot = os.path.join(opt.dataroot, cat)
 
         if self.phase == 'refine':
             assert opt.batch_size == 1
 
-        self.sdf_filepaths = [os.path.join(dataroot, f) for f in os.listdir(dataroot) if f.endswith('.h5')]
-        self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace('part_sdf', 'part_ply_fps').replace('.h5', '.ply')), self.sdf_filepaths))
+        if cat != 'all':
+            dataroot = os.path.join(opt.dataroot, cat)
+            self.sdf_filepaths = [os.path.join(dataroot, f) for f in os.listdir(dataroot) if f.endswith('.h5')]
+        else:
+            self.sdf_filepaths = []
+            for c in os.listdir(opt.dataroot):
+                cat_dir = os.path.join(opt.dataroot, c)
+                cat_files = [os.path.join(cat_dir, f) for f in os.listdir(cat_dir) if f.endswith('.h5')]
+                extend_scale = max(int(5000 / len(cat_files)), 1)
+                self.sdf_filepaths.extend(cat_files * extend_scale)
+                print('Extend scale for %s: %d, ori len %d' % (c, extend_scale, len(cat_files)))
+
+        # self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace('part_sdf', 'part_ply_fps').replace('.h5', '.ply')), self.sdf_filepaths))
 
         if not self.opt.isTrain and opt.model_id is not None:
             self.sdf_filepaths = [f for f in self.sdf_filepaths if opt.model_id in f]

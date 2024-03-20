@@ -187,10 +187,10 @@ class VQLoss(nn.Module):
         loss = nll_loss + self.codebook_weight * codebook_loss.mean()
 
         log = {
-            "loss_total": loss.clone().detach().mean(),
-            "loss_codebook": codebook_loss.detach().mean(),
-            "loss_nll": nll_loss.detach().mean(),
-            "loss_rec": rec_loss.detach().mean(),
+            "total": loss.clone().detach().mean(),
+            "codebook": codebook_loss.detach().mean(),
+            "nll": nll_loss.detach().mean(),
+            "rec": rec_loss.detach().mean(),
         }
 
         return loss, log

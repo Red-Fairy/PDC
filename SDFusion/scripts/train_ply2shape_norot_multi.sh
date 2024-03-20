@@ -25,7 +25,6 @@ cond_ckpt="/raid/haoran/Project/PartDiffusion/PartDiffusion/pretrained_checkpoin
 max_dataset_size=1000000
 dataset_mode='gapnet'
 dataroot="/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_sdf"
-cat="slider_drawer"
 
 res=64
 trunc_thres=0.2
@@ -34,7 +33,7 @@ trunc_thres=0.2
 ### display & log stuff ###
 display_freq=250
 print_freq=25
-total_iters=350000
+total_iters=200000
 save_steps_freq=25000
 ###########################
 
@@ -62,6 +61,7 @@ lr=$2
 port=$3
 gpu_ids=$4
 uc_scale=$5
+cat="hinge_door"
 
 name="${name}-ply2shape-norot-scale${uc_scale}-lr${lr}"
 
@@ -74,8 +74,8 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --display_freq ${display_freq} --print_freq ${print_freq} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
             --debug ${debug} --dataroot ${dataroot} \
-            --ply_cond --cond_ckpt ${cond_ckpt} --uc_scale ${uc_scale} \
-            --continue_train --load_iter 300000 "
+            --ply_cond --cond_ckpt ${cond_ckpt} --uc_scale ${uc_scale} "
+            # --continue_train --load_iter 300000 "
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 

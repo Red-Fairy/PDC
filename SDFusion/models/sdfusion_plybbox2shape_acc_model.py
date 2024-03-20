@@ -449,8 +449,8 @@ class SDFusionModelPlyBBox2ShapeAcc(BaseModel):
 
         state_dict = {
             'df': self.df.module.state_dict(),
-            'cond_model_ply': self.ply_cond_model.state_dict(),
-            'cond_model_bbox': self.bbox_cond_model.state_dict(),
+            'cond_model_ply': self.ply_cond_model.module.state_dict(),
+            'cond_model_bbox': self.bbox_cond_model.module.state_dict(),
             'global_step': global_step,
         }
 
