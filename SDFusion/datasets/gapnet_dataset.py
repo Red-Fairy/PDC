@@ -100,6 +100,22 @@ class GAPartNetDataset(BaseDataset):
             if thres != 0.0:
                 sdf = torch.clamp(sdf, min=-thres, max=thres)
             ret['sdf'] = sdf
+        else: # calculate 'sdf' on the fly
+            mesh_path = sdf_h5_file.replace('part_sdf', 'part_meshes').replace('.h5', '.obj')
+            mesh = trimesh.load_mesh(mesh_path)
+
+            rotate_angle_y = torch.rand(1) * 2 * np.pi
+            rot_matrix = torch.tensor([
+                [np.cos(rotate_angle_y), 0, np.sin(rotate_angle_y), 0],
+                [0, 1, 0, 0],
+                [-np.sin(rotate_angle_y), 0, np.cos(rotate_angle_y), 0],
+                [0, 0, 0, 1]
+            ])
+
+            mesh.apply_transform(rot_matrix)
+            # convert to sdf
+            sdf = mesh_to_sdf(mesh, self.res, trunc=self.opt.trunc_thres, padding=0.2) # scale the mesh to unit cube with padding 0.2 (max_extent=4/2.2)
+            ret['sdf'] = sdf
 
         if not self.opt.isTrain and self.phase == 'test' and self.opt.use_bbox_mesh:
             bbox_filepath = sdf_h5_file.replace('part_sdf', 'bbox_mesh').replace('.h5', '.obj')
@@ -109,8 +125,8 @@ class GAPartNetDataset(BaseDataset):
         if self.bbox_cond:
             bbox_filepath = sdf_h5_file.replace('part_sdf', 'part_bbox').replace('.h5', '.npy')
             bbox = torch.tensor(np.load(bbox_filepath))
-            if self.joint_rotate:
-                bbox = torch.mm(bbox, torch.tensor(rot_matrix).float())
+            # if self.joint_rotate:
+            #     bbox = torch.mm(bbox, torch.tensor(rot_matrix).float())
             ret['bbox'] = bbox
 
         if self.ply_cond or self.ply_bbox_cond:
@@ -134,7 +150,7 @@ class GAPartNetDataset(BaseDataset):
                 ret['move_axis'] = move_axis
                 ret['move_limit'] = move_limit
 
-            if self.ply_input_rotate:
+            if self.ply_input_rotate: # only rotate the point cloud condition, not used
                 raw, pitch, yaw = torch.rand(3) * 2 * np.pi
                 rot_matrix = torch.tensor([
                     [np.cos(yaw)*np.cos(pitch), np.cos(yaw)*np.sin(pitch)*np.sin(raw)-np.sin(yaw)*np.cos(raw), np.cos(yaw)*np.sin(pitch)*np.cos(raw)+np.sin(yaw)*np.sin(raw)],
@@ -144,18 +160,18 @@ class GAPartNetDataset(BaseDataset):
                 points = torch.mm(rot_matrix, points) # (3, N)
                 points_stat['centroid'] = torch.mm(rot_matrix, points_stat['centroid'].view(3, 1)).view(3)
 
-            if self.joint_rotate:
-                # rotate the sdf, must re-build from the mesh
-                mesh_path = sdf_h5_file.replace('part_sdf', 'part_meshes').replace('.h5', '.obj')
-                mesh = trimesh.load_mesh(mesh_path)
+            if self.joint_rotate: # jointly rotate the mesh and point cloud condition
 
-                rotate_angle_y = torch.rand(1) * 2 * np.pi
-                rot_matrix = torch.tensor([
-                    [np.cos(rotate_angle_y), 0, np.sin(rotate_angle_y), 0],
-                    [0, 1, 0, 0],
-                    [-np.sin(rotate_angle_y), 0, np.cos(rotate_angle_y), 0],
-                    [0, 0, 0, 1]
-                ])
+                # mesh_path = sdf_h5_file.replace('part_sdf', 'part_meshes').replace('.h5', '.obj')
+                # mesh = trimesh.load_mesh(mesh_path)
+
+                # rotate_angle_y = torch.rand(1) * 2 * np.pi
+                # rot_matrix = torch.tensor([
+                #     [np.cos(rotate_angle_y), 0, np.sin(rotate_angle_y), 0],
+                #     [0, 1, 0, 0],
+                #     [-np.sin(rotate_angle_y), 0, np.cos(rotate_angle_y), 0],
+                #     [0, 0, 0, 1]
+                # ])
 
                 # raw, pitch, yaw = torch.rand(3) * 2 * np.pi
                 # rot_matrix = torch.tensor([
@@ -169,18 +185,12 @@ class GAPartNetDataset(BaseDataset):
                 points = torch.mm(rot_matrix, points)[:-1]
                 points_stat['centroid'] = torch.mm(rot_matrix[:3, :3], points_stat['centroid'].view(3, 1)).view(3)
 
-                # rotate the mesh
-                mesh.apply_transform(rot_matrix)
                 part_translate = torch.tensor(mesh.bounding_box.centroid).float()
                 part_extent = torch.tensor(mesh.bounding_box.extents).float()
 
-                # move the mesh to the origin
-                mesh.apply_translation(-mesh.bounding_box.centroid)
-                mesh.apply_scale(1. / np.max(np.abs(mesh.bounds)))
-
                 # convert to sdf
-                sdf = mesh_to_sdf(mesh, self.res, trunc=self.opt.trunc_thres, padding=0.2)
-                ret['sdf'] = sdf
+                # sdf = mesh_to_sdf(mesh, self.res, trunc=self.opt.trunc_thres, padding=0.2)
+                # ret['sdf'] = sdf
 
         
             # padding

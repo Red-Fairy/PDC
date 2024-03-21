@@ -31,6 +31,7 @@ SPACING = 2. / args.res
 ROTATION = args.rotation
 MIRROR = args.mirror
 SCALE = args.scale
+RES = args.res
 
 print(args)
 suffix = ''
@@ -39,7 +40,7 @@ if __name__ == '__main__':
     for CAT in CATS:
         print('processing category:', CAT)
         mesh_basedir = f'/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_meshes/{CAT}'
-        sdf_basedir = f'/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_sdf_128/{CAT}'
+        sdf_basedir = f'/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_sdf_{RES}/{CAT}'
         mesh_recon_basedir = f'/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_meshes_recon/{CAT}'
         part_bbox_basedir = f'/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_bbox_aligned/{CAT}'
         os.makedirs(sdf_basedir, exist_ok=True)
