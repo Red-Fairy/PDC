@@ -59,11 +59,9 @@ class GAPartNetDataset(BaseDataset):
 
         self.ply_cond = opt.ply_cond
         self.joint_rotate = opt.joint_rotate
-        self.ply_input_rotate = opt.ply_input_rotate
+        self.ply_rotate = opt.ply_rotate
 
         self.ply_bbox_cond = opt.ply_bbox_cond
-
-        # assert not (self.ply_input_rotate and self.joint_rotate), "ply_rot and joint_rotate cannot be both True"
 
         self.df_conf = OmegaConf.load(opt.df_cfg)
 
@@ -152,7 +150,7 @@ class GAPartNetDataset(BaseDataset):
                 ret['move_axis'] = move_axis
                 ret['move_limit'] = move_limit
 
-            if self.ply_input_rotate: # only rotate the point cloud condition, not used
+            if self.ply_rotate: # only rotate the point cloud condition, not used
                 raw, pitch, yaw = torch.rand(3) * 2 * np.pi
                 rot_matrix = torch.tensor([
                     [np.cos(yaw)*np.cos(pitch), np.cos(yaw)*np.sin(pitch)*np.sin(raw)-np.sin(yaw)*np.cos(raw), np.cos(yaw)*np.sin(pitch)*np.cos(raw)+np.sin(yaw)*np.sin(raw)],

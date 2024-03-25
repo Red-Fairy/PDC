@@ -1,4 +1,5 @@
 model:
+model:
   params:
     linear_start: 0.00085
     linear_end: 0.012
