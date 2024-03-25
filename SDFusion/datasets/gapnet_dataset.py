@@ -36,19 +36,21 @@ class GAPartNetDataset(BaseDataset):
         if self.phase == 'refine':
             assert opt.batch_size == 1
 
+        self.sdf_dir = f'part_sdf_{opt.res}'
+
         if cat != 'all':
-            dataroot = os.path.join(opt.dataroot, cat)
+            dataroot = os.path.join(opt.dataroot, self.sdf_dir, cat)
             self.sdf_filepaths = [os.path.join(dataroot, f) for f in os.listdir(dataroot) if f.endswith('.h5')]
         else:
             self.sdf_filepaths = []
-            for c in os.listdir(opt.dataroot):
-                cat_dir = os.path.join(opt.dataroot, c)
+            for c in os.listdir(os.path.join(opt.dataroot, self.sdf_dir)):
+                cat_dir = os.path.join(opt.dataroot, self.sdf_dir, c)
                 cat_files = [os.path.join(cat_dir, f) for f in os.listdir(cat_dir) if f.endswith('.h5')]
                 extend_scale = max(int(5000 / len(cat_files)), 1)
                 self.sdf_filepaths.extend(cat_files * extend_scale)
                 print('Extend scale for %s: %d, ori len %d' % (c, extend_scale, len(cat_files)))
 
-        # self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace('part_sdf', 'part_ply_fps').replace('.h5', '.ply')), self.sdf_filepaths))
+        # self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace(self.sdf_dir, 'part_ply_fps').replace('.h5', '.ply')), self.sdf_filepaths))
 
         if not self.opt.isTrain and opt.model_id is not None:
             self.sdf_filepaths = [f for f in self.sdf_filepaths if opt.model_id in f]
@@ -101,7 +103,7 @@ class GAPartNetDataset(BaseDataset):
                 sdf = torch.clamp(sdf, min=-thres, max=thres)
             ret['sdf'] = sdf
         else: # calculate 'sdf' on the fly
-            mesh_path = sdf_h5_file.replace('part_sdf', 'part_meshes').replace('.h5', '.obj')
+            mesh_path = sdf_h5_file.replace(self.sdf_dir, 'part_meshes').replace('.h5', '.obj')
             mesh = trimesh.load_mesh(mesh_path)
 
             rotate_angle_y = torch.rand(1) * 2 * np.pi
@@ -118,32 +120,32 @@ class GAPartNetDataset(BaseDataset):
             ret['sdf'] = sdf
 
         if not self.opt.isTrain and self.phase == 'test' and self.opt.use_bbox_mesh:
-            bbox_filepath = sdf_h5_file.replace('part_sdf', 'bbox_mesh').replace('.h5', '.obj')
+            bbox_filepath = sdf_h5_file.replace(self.sdf_dir, 'bbox_mesh').replace('.h5', '.obj')
             mesh_sdf = mesh_to_sdf(trimesh.load_mesh(bbox_filepath), self.res, trunc=self.opt.trunc_thres, padding=0.2)
             ret['bbox_mesh'] = mesh_sdf
 
         if self.bbox_cond:
-            bbox_filepath = sdf_h5_file.replace('part_sdf', 'part_bbox').replace('.h5', '.npy')
+            bbox_filepath = sdf_h5_file.replace(self.sdf_dir, 'part_bbox').replace('.h5', '.npy')
             bbox = torch.tensor(np.load(bbox_filepath))
             # if self.joint_rotate:
             #     bbox = torch.mm(bbox, torch.tensor(rot_matrix).float())
             ret['bbox'] = bbox
 
         if self.ply_cond or self.ply_bbox_cond:
-            ply_filepath = sdf_h5_file.replace('part_sdf', 'part_ply_fps').replace('.h5', '.ply')
+            ply_filepath = sdf_h5_file.replace(self.sdf_dir, 'part_ply_fps').replace('.h5', '.ply')
             # load ply file
             ply_file = open3d.io.read_point_cloud(ply_filepath).points
             points = np.array(ply_file)
             points, points_stat = pc_normalize(points, scale_norm=False, return_stat=True)
             points = torch.from_numpy(points).transpose(0, 1).float() # (3, N)
 
-            transform_path = sdf_h5_file.replace('part_sdf', 'part_bbox_aligned').replace('.h5', '.json')
+            transform_path = sdf_h5_file.replace(self.sdf_dir, 'part_bbox_aligned').replace('.h5', '.json')
             with open(transform_path, 'r') as f:
                 transform = json.load(f)
                 part_translate, part_extent = torch.tensor(transform['centroid']).float(), torch.tensor(transform['extents']).float()
 
             if self.opt.use_mobility_constraint:
-                mobility_path = sdf_h5_file.replace('part_sdf', 'part_mobility').replace('.h5', '.json')
+                mobility_path = sdf_h5_file.replace(self.sdf_dir, 'part_mobility').replace('.h5', '.json')
                 with open(mobility_path, 'r') as f:
                     mobility = json.load(f)
                     move_axis, move_limit = torch.tensor(mobility['move_axis']).float(), torch.tensor(mobility['move_limit']).float()
@@ -162,7 +164,7 @@ class GAPartNetDataset(BaseDataset):
 
             if self.joint_rotate: # jointly rotate the mesh and point cloud condition
 
-                # mesh_path = sdf_h5_file.replace('part_sdf', 'part_meshes').replace('.h5', '.obj')
+                # mesh_path = sdf_h5_file.replace(self.sdf_dir, 'part_meshes').replace('.h5', '.obj')
                 # mesh = trimesh.load_mesh(mesh_path)
 
                 # rotate_angle_y = torch.rand(1) * 2 * np.pi

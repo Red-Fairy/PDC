@@ -30,7 +30,7 @@ vq_cfg="configs/vqvae_gapnet-128.yaml"
 ### dataset stuff ###
 max_dataset_size=10000000
 dataset_mode='gapnet'
-dataroot="/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_sdf_128"
+dataroot="/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/"
 
 ###########################
 
@@ -66,7 +66,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} --lr ${lr} --ba
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 
 if [ $multi_gpu = 1 ]; then
-    accelerate launch --multi_gpu --num_processes 6 --gpu_ids $gpu_ids --main_process_port $port --mixed_precision 'no' train_accelerate.py $args
+    accelerate launch --multi_gpu --num_processes 2 --gpu_ids $gpu_ids --main_process_port $port --mixed_precision 'no' train_accelerate.py $args
 else
     python train.py $args
 fi
