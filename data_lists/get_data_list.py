@@ -1,11 +1,12 @@
 import os
 import numpy as np
 
-root_dir = '/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_sdf_64'
+root_dir = '/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_ply'
 
 list_dir = '/raid/haoran/Project/PartDiffusion/PartDiffusion/data_lists'
 
 cats = os.listdir(root_dir)
+cats = [cat for cat in cats if os.path.isdir(os.path.join(root_dir, cat))]
 
 test_ratio = 0.1
 
