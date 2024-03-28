@@ -24,7 +24,7 @@ cond_ckpt="/raid/haoran/Project/PartDiffusion/PartDiffusion/pretrained_checkpoin
 ### dataset stuff ###
 max_dataset_size=1000000
 dataset_mode='gapnet'
-dataroot="/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_sdf"
+dataroot="/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/"
 
 res=128
 trunc_thres=0.2

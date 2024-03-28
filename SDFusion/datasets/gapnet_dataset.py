@@ -49,6 +49,12 @@ class GAPartNetDataset(BaseDataset):
                 extend_scale = max(int(5000 / len(cat_files)), 1)
                 self.sdf_filepaths.extend(cat_files * extend_scale)
                 print('Extend scale for %s: %d, ori len %d' % (c, extend_scale, len(cat_files)))
+        
+        if self.phase == 'train' or self.phase == 'test':
+            filelist_path = opt.dataroot.replace('dataset', 'data_lists/'+phase)
+            with open(os.path.join(filelist_path, cat+'.txt'), 'r') as f:
+                file_names = [line.strip() for line in f]
+            self.sdf_filepaths = [f for f in self.sdf_filepaths if f.split('/')[-1].split('.')[0] in file_names]
 
         # self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace(self.sdf_dir, 'part_ply_fps').replace('.h5', '.ply')), self.sdf_filepaths))
 
