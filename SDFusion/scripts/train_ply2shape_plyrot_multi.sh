@@ -17,7 +17,7 @@ vq_model="vqvae"
 vq_dset='gapnet'
 vq_cat="slider_drawer"
 vq_ckpt="/raid/haoran/Project/PartDiffusion/PartDiffusion/pretrained_checkpoint/vqvae-snet-all.pth"
-vq_cfg="/raid/haoran/Project/PartDiffusion/PartDiffusion/SDFusion/configs/vqvae_snet.yaml"
+vq_cfg="/raid/haoran/Project/PartDiffusion/PartDiffusion/SDFusion/configs/vqvae_gapnet-128.yaml"
 
 cond_ckpt="/raid/haoran/Project/PartDiffusion/PartDiffusion/pretrained_checkpoint/pointnet2.pth"
 
@@ -34,7 +34,7 @@ trunc_thres=0.2
 display_freq=250
 print_freq=25
 total_iters=200000
-save_steps_freq=25000
+save_steps_freq=10000
 ###########################
 
 today=$(date '+%m%d')
@@ -63,8 +63,7 @@ gpu_ids=$4
 uc_scale=$5
 cat="hinge_door"
 
-name="${name}-ply2shape-norot-scale${uc_scale}-lr${lr}"
-
+name="${name}-ply2shape-plyrot-scale${uc_scale}-lr${lr}"
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --lr ${lr} --batch_size ${batch_size} --max_dataset_size ${max_dataset_size} \
@@ -80,7 +79,8 @@ echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs
 
 # set available gpus
 if [ $multi_gpu = 1 ]; then
-    accelerate launch --multi_gpu --gpu_ids $gpu_ids --main_process_port $port --mixed_precision 'no' train_accelerate.py $args
+    accelerate launch --multi_gpu --gpu_ids $gpu_ids --num_processes 4 \
+         --main_process_port $port --mixed_precision 'no' train_accelerate.py $args
 else
     python train.py $args
 fi

@@ -1,5 +1,4 @@
 model:
-model:
   params:
     linear_start: 0.00085
     linear_end: 0.012
@@ -27,6 +26,7 @@ unet:
     channel_mult:
     - 1
     - 2
+    - 4
     - 4
     - 4
     num_head_channels: 32
