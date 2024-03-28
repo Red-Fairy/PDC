@@ -25,10 +25,10 @@ unet:
     # - 1
     channel_mult:
     - 1
+    - 1
     - 2
-    - 4
-    - 4
-    - 4
+    - 2
+    - 2
     num_head_channels: 32
     num_heads: 8
 
