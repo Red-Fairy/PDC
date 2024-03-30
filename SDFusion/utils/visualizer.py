@@ -150,14 +150,14 @@ class Visualizer():
 				if 'ply_translation' in visuals:
 					if self.opt.visual_mode == 'sdf':
 						points = visuals['points'][i]
-						points = np.matmul(points, visuals['rotation'][i][:3, :3].T) # rotate back
+						points = np.matmul(visuals['ply_rotation'][i][:3, :3].T, points)
 						points = points + visuals['ply_translation'][i][:, None]
 						points = points - visuals['part_translation'][i][:, None]
 						points = points / visuals['part_scale'][i]
 						ply_file.points = open3d.utility.Vector3dVector(points.T)
 					elif self.opt.visual_mode == 'mesh':
 						points = visuals['points'][i]
-						points = np.matmul(points, visuals['rotation'][i][:3, :3].T) # rotate back
+						points = np.matmul(visuals['ply_rotation'][i][:3, :3].T, points)
 						points = points + visuals['ply_translation'][i][:, None]
 						ply_file.points = open3d.utility.Vector3dVector(points.T)
 				

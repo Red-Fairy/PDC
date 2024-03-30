@@ -55,7 +55,7 @@ if [ $debug = 1 ]; then
     name="DEBUG-${name}"
 fi
 
-batch_size=12
+batch_size=4
 name=$1
 lr=$2
 port=$3
