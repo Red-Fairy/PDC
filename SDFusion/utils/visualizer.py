@@ -150,13 +150,16 @@ class Visualizer():
 				if 'ply_translation' in visuals:
 					if self.opt.visual_mode == 'sdf':
 						points = visuals['points'][i]
+						points = np.matmul(points, visuals['rotation'][i][:3, :3].T) # rotate back
 						points = points + visuals['ply_translation'][i][:, None]
 						points = points - visuals['part_translation'][i][:, None]
 						points = points / visuals['part_scale'][i]
 						ply_file.points = open3d.utility.Vector3dVector(points.T)
 					elif self.opt.visual_mode == 'mesh':
-						ply_file.points = open3d.utility.Vector3dVector(visuals['points'][i].T)
-						ply_file.translate(visuals['ply_translation'][i])
+						points = visuals['points'][i]
+						points = np.matmul(points, visuals['rotation'][i][:3, :3].T) # rotate back
+						points = points + visuals['ply_translation'][i][:, None]
+						ply_file.points = open3d.utility.Vector3dVector(points.T)
 				
 				instance_label = i if self.isTrain or self.opt.test_diversity else ''
 				ply_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], instance_label, 'ply'))

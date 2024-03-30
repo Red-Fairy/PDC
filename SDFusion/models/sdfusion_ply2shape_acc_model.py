@@ -165,6 +165,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         # transformation info for calculating collision loss
         # "ply_points + ply_translation" aligns with "part * part_extent + part_translation"
         self.ply_translation = input['ply_translation'].to(self.device)
+        self.ply_rotation = input['ply_rotation'].to(self.device)
         self.part_translation = input['part_translation'].to(self.device)
         self.part_extent = input['part_extent'].to(self.device)
 
@@ -474,6 +475,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
         if hasattr(self, 'ply_translation'):
             visuals_dict['ply_translation'] = self.ply_translation.cpu().numpy()
+            visuals_dict['ply_rotation'] = self.ply_rotation.cpu().numpy()
             visuals_dict['part_translation'] = self.part_translation.cpu().numpy()
             mesh_extents = torch.zeros([0, 3], device=self.device)
             for mesh in meshes:
