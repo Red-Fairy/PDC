@@ -1,3 +1,7 @@
+accelerate
+diffusers
+open3d
+h5py
 tqdm
 omegaconf
 tensorboard

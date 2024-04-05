@@ -2,11 +2,19 @@
 Physic-plausible Part Generation
 
 ## Installation
-Package required: accelerate + diffusers + SDFusion requirements
+Package required: accelerate + diffusers + other necessary packages (listed in requirements.txt) + pytorch3d + kaolin
 
-```pip install accelerate diffusers```
+Install pytorch (cuda version 12.1)
+```pip install torch==2.1.1 torchvision==0.16.1 torchaudio==2.1.1```
 
 ```pip install -r requirements.txt```
+
+Install pytorch3d
+```pip install "git+https://github.com/facebookresearch/pytorch3d.git"```
+
+Install kaolin (adjust the command based on the pytorch and cuda version)
+```pip install kaolin==0.15.0 -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.1.1_cu121.html``` 
+
 
 ## Usage
 
