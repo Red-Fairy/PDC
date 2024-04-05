@@ -1,6 +1,7 @@
 tqdm
 omegaconf
-tensorflow
+tensorboard
+termcolor
 imageio
 einops
 opencv_python

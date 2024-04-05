@@ -2,7 +2,11 @@
 Physic-plausible Part Generation
 
 ## Installation
-Package required for SDFusion + Accelerate + Diffusers + some other small packages (all can be installed by pip)
+Package required: accelerate + diffusers + SDFusion requirements
+
+```pip install accelerate diffusers```
+
+```pip install -r requirements.txt```
 
 ## Usage
 
