@@ -11,12 +11,12 @@ logs_dir='logs'
 
 ### model stuff ###
 model='sdfusion-ply2shape'
-df_cfg='configs/sdfusion-ply2shape.yaml'
+df_cfg='configs/sdfusion-ply2shape-128.yaml'
 
 vq_model="vqvae"
 vq_dset='gapnet'
 vq_cat="slider_drawer"
-vq_ckpt="/raid/haoran/Project/PartDiffusion/PartDiffusion/logs/gapnet-res128-vqvae/ckpt/vqvae_steps-latest.pth"
+vq_ckpt="/raid/haoran/Project/PartDiffusion/PartDiffusion/SDFusion/logs/gapnet-res128-vqvae-lr0.00002/ckpt/vqvae_steps-latest.pth"
 vq_cfg="/raid/haoran/Project/PartDiffusion/PartDiffusion/SDFusion/configs/vqvae_gapnet-128.yaml"
 
 cond_ckpt="/raid/haoran/Project/PartDiffusion/PartDiffusion/pretrained_checkpoint/pointnet2.pth"
@@ -34,7 +34,7 @@ trunc_thres=0.2
 display_freq=250
 print_freq=25
 total_iters=200000
-save_steps_freq=10000
+save_steps_freq=30000
 ###########################
 
 today=$(date '+%m%d')
@@ -61,7 +61,7 @@ lr=$2
 port=$3
 gpu_ids=$4
 uc_scale=$5
-cat="hinge_door"
+cat="slider_drawer"
 
 name="${name}-ply2shape-plyrot-scale${uc_scale}-lr${lr}"
 
@@ -74,13 +74,14 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
             --debug ${debug} --dataroot ${dataroot} \
             --ply_cond --ply_rotate \
-            --cond_ckpt ${cond_ckpt} --uc_scale ${uc_scale} "
+            --cond_ckpt ${cond_ckpt} --uc_scale ${uc_scale} 
+            --continue_train "
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 
 # set available gpus
 if [ $multi_gpu = 1 ]; then
-    accelerate launch --multi_gpu --gpu_ids $gpu_ids --num_processes 4 \
+    accelerate launch --multi_gpu --gpu_ids $gpu_ids --num_processes 2 \
          --main_process_port $port --mixed_precision 'no' train_accelerate.py $args
 else
     python train.py $args
