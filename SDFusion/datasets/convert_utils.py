@@ -16,9 +16,9 @@ import torchvision.utils as vutils
 import trimesh
 import skimage
 
-import pytorch3d
-import pytorch3d.io
-from pytorch3d.structures import Pointclouds, Meshes
+# import pytorch3d
+# import pytorch3d.io
+# from pytorch3d.structures import Pointclouds, Meshes
 
 from kaolin.metrics.trianglemesh import point_to_mesh_distance
 from kaolin.ops.mesh import check_sign, index_vertices_by_faces
