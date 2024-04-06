@@ -8,7 +8,7 @@ logs_dir='logs'
 
 ### model stuff ###
 model='sdfusion-ply2shape'
-df_cfg='configs/sdfusion-ply2shape-test.yaml'
+df_cfg='configs/sdfusion-ply2shape.yaml'
 
 vq_model="vqvae"
 vq_dset='gapnet'
