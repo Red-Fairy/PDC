@@ -125,8 +125,10 @@ class Visualizer():
 				part_scale = visuals['part_scale']
 				part_translation = visuals['part_translation']
 				for i, mesh in enumerate(visual_meshes):
+					print(f'mesh {i} max extent: {np.max(mesh.extents)}')
 					mesh.apply_scale((part_scale[i], part_scale[i], part_scale[i]))
 					mesh.apply_translation(part_translation[i])
+					# print mesh max extent
 
 			for i, visual_mesh in enumerate(visual_meshes):
 				instance_label = i if self.isTrain or self.opt.test_diversity else ''

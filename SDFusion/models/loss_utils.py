@@ -6,6 +6,8 @@ import trimesh
 import torch.nn.functional as F
 import open3d
 
+from datasets.convert_utils import sdf_to_mesh_trimesh
+
 from torch import nn
 
 from utils.util_3d import init_mesh_renderer, render_sdf
@@ -42,8 +44,9 @@ def get_points_from_bbox(part_translation, part_extent, sample_count_per_axis=25
     return outsiders
 
 def get_collision_loss(sdf, ply, ply_translation, part_extent, part_translation, 
-                       move_limit=None, move_axis=None, sdf_scale=4/2.2, 
-                       loss_collision_weight=1.0, margin=0.015, 
+                       move_limit=None, move_axis=None, move_samples=32, res=64,
+                       sdf_scale=None,
+                       loss_collision_weight=1.0, margin=0.005, 
                        use_bbox=False, linspace=False):
     '''
     sdf: sdf values, (B, 1, res, res, res), multiple generated sdf with the same point cloud condition
@@ -52,11 +55,20 @@ def get_collision_loss(sdf, ply, ply_translation, part_extent, part_translation,
     part_extent: extent of the part, (1, 3)
     part_translation: translation of the part, (1, 3)
     move_limit: [min, max]
+    sdf_scale: if None, calculate it on-the-fly
     use_bbox: if True, use the bounding box of the part to sample points, add to sampled points to the point cloud
     linspace: if True, use linspace to sample the distance when moving the part
     '''
 
-    B = sdf.shape[0]
+    B = 1 if move_limit is None else move_samples
+    sdf = sdf.repeat(B, 1, 1, 1, 1) # (B, 1, res, res, res)
+
+    if sdf_scale is None: # calculate the scale on-the-fly
+        spacing = (2./res, 2./res, 2./res)
+        mesh = sdf_to_mesh_trimesh(sdf[0][0], spacing=spacing)
+        sdf_scale = np.max(mesh.extents)
+        print(sdf_scale)
+    
     scale = torch.max(part_extent) / sdf_scale # scalar
 
     # -1) move the point cloud back to original place

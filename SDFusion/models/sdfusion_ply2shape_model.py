@@ -125,10 +125,8 @@ class SDFusionModelPly2Shape(BaseModel):
         self.renderer = init_mesh_renderer(image_size=256, dist=dist, elev=elev, azim=azim, device=self.device)
 
         self.ddim_steps = self.df_conf.model.params.ddim_steps
-        if self.opt.debug == "1":
-            # NOTE: for debugging purpose
-            self.ddim_steps = 7
         cprint(f'[*] setting ddim_steps={self.ddim_steps}', 'blue')
+
         self.planner = None
         if not self.isTrain:
             self.planner = create_planner(opt)
@@ -148,6 +146,7 @@ class SDFusionModelPly2Shape(BaseModel):
         # "ply_points + ply_translation" aligns with "part * part_extent + part_translation"
         if 'ply_translation' in input:
             self.ply_translation = input['ply_translation'].to(self.device)
+            self.ply_rotation = input['ply_rotation'].to(self.device)
             self.part_translation = input['part_translation'].to(self.device)
             self.part_extent = input['part_extent'].to(self.device)
 
@@ -168,7 +167,6 @@ class SDFusionModelPly2Shape(BaseModel):
         self.cond_model.eval()
         self.vqvae.eval()
 
-    # check: ddpm.py, line 891
     def apply_model(self, x_noisy, t, cond, return_ids=False):
 
         """
@@ -256,7 +254,7 @@ class SDFusionModelPly2Shape(BaseModel):
         else:
             self.ddim_steps = ddim_steps
             
-        B = self.opt.batch_size
+        B = self.x.shape[0]
         shape = self.z_shape
         c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
         uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
@@ -296,7 +294,7 @@ class SDFusionModelPly2Shape(BaseModel):
             if B == 1:
                 setattr(self, f'pred_sdf_x0_{i}', self.vqvae.decode_no_quant(pred_x0).detach())
 
-          # cut the generated sdf using bbox
+            # cut the generated sdf using bbox
             if use_cut_bbox and i > ddim_steps * cut_bbox_limit[0] and i < ddim_steps * cut_bbox_limit[1]:
                 self.gen_df = self.vqvae.decode_no_quant(latents)
 
@@ -328,10 +326,12 @@ class SDFusionModelPly2Shape(BaseModel):
 
         if print_collision_loss:
             for i in range(B):
-                gen_sdf_i = self.gen_df[i:i+1].repeat(32, 1, 1, 1, 1)
-                collision_loss = get_collision_loss(gen_sdf_i, self.ply[i:i+1], self.ply_translation[i:i+1], 
+                # gen_sdf_i = self.gen_df[i:i+1].repeat(32, 1, 1, 1, 1)
+                collision_loss = get_collision_loss(self.gen_df[i:i+1], self.ply[i:i+1], self.ply_translation[i:i+1], 
                                                     self.part_extent[i:i+1], self.part_translation[i:i+1],
-                                                    # move_limit=self.move_limit[i], move_axis=self.move_axis[i],
+                                                    move_limit=self.move_limit[i], move_axis=self.move_axis[i],
+                                                    move_samples=32, res=self.shape_res,
+                                                    sdf_scale=4/2.2,
                                                     use_bbox=True, linspace=True)
                 print(f'Collision Loss for Instance {i}:', collision_loss.item())
 
@@ -396,7 +396,7 @@ class SDFusionModelPly2Shape(BaseModel):
                 
                 if i >= ddim_steps // 2:
                     grad = torch.autograd.grad(collision_loss, latents_grad)[0] # (B, *shape)
-                    grad = 20 * grad / (grad.norm() + 1e-8) # clip grad norm
+                    grad = grad / (grad.norm() + 1e-8) # clip grad norm
                     noise_pred = noise_pred + (1 - self.noise_scheduler.alphas_cumprod[t]) ** 0.5 * grad
             
             noise_pred = noise_pred + (self.guidance_scale - 1) * (noise_pred_cond - noise_pred_uncond)
@@ -459,8 +459,8 @@ class SDFusionModelPly2Shape(BaseModel):
             spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
             meshes = [sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=spc) for i in range(self.gen_df.shape[0])]
 
-            for mesh in meshes:
-                print(np.max(mesh.extents))
+            # for mesh in meshes:
+            #     print(np.max(mesh.extents))
 
         vis_tensor_names = [
             'img_gt',
@@ -481,12 +481,14 @@ class SDFusionModelPly2Shape(BaseModel):
         
         if hasattr(self, 'ply_translation'):
             visuals_dict['ply_translation'] = self.ply_translation.cpu().numpy()
+            visuals_dict['ply_rotation'] = self.ply_rotation.cpu().numpy()
             visuals_dict['part_translation'] = self.part_translation.cpu().numpy()
-            mesh_extents = torch.zeros(0, 3)
-            for mesh in meshes:
-                mesh_extents = torch.cat([mesh_extents, torch.tensor(mesh.extents).unsqueeze(0)], dim=0)
-            # visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / torch.max(mesh_extents, dim=1)[0]).cpu().numpy()
-            visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / (4 / 2.2)).cpu().numpy()
+
+            # visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / (4 / 2.2)).cpu().numpy()
+
+            visuals_dict['part_scale'] = np.zeros([len(meshes)], dtype=np.float32)
+            for i, mesh in enumerate(meshes):
+                visuals_dict['part_scale'][i] = torch.max(self.part_extent[i]).item() / np.max(mesh.extents)
 
         return visuals_dict
 

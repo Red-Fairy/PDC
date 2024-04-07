@@ -74,13 +74,13 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         self.df.to(self.device)
         self.parameterization = "eps"
         self.guidance_scale = opt.uc_scale
-        # self.init_diffusion_params(scale=1, opt=opt)
 
         # init vqvae
         self.vqvae = load_vqvae(vq_conf, vq_ckpt=opt.vq_ckpt, opt=opt).to(self.device)
 
         # init U-Net conditional model
         self.cond_model = PointNet2(hidden_dim=df_conf.unet.params.context_dim).to(self.device)
+
         # convert to sync-bn
         self.cond_model = nn.SyncBatchNorm.convert_sync_batchnorm(self.cond_model)
         self.cond_model.requires_grad_(True)
@@ -147,6 +147,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
         self.ddim_steps = self.df_conf.model.params.ddim_steps
         cprint(f'[*] setting ddim_steps={self.ddim_steps}', 'blue')
+
         self.planner = None
         if not self.isTrain:
             self.planner = create_planner(opt)
@@ -164,10 +165,11 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         
         # transformation info for calculating collision loss
         # "ply_points + ply_translation" aligns with "part * part_extent + part_translation"
-        self.ply_translation = input['ply_translation'].to(self.device)
-        self.ply_rotation = input['ply_rotation'].to(self.device)
-        self.part_translation = input['part_translation'].to(self.device)
-        self.part_extent = input['part_extent'].to(self.device)
+        if 'ply_translation' in input:
+            self.ply_translation = input['ply_translation'].to(self.device)
+            self.ply_rotation = input['ply_rotation'].to(self.device)
+            self.part_translation = input['part_translation'].to(self.device)
+            self.part_extent = input['part_extent'].to(self.device)
 
     def switch_train(self):
         self.df.train()
@@ -179,13 +181,6 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         self.cond_model.eval()
         self.vqvae.eval()
 
-    # def q_sample(self, x_start, t, noise=None):
-    #     noise = default(noise, lambda: torch.randn_like(x_start))
-
-    #     return (extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
-    #             extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise)
-
-    # check: ddpm.py, line 891
     def apply_model(self, x_noisy, t, cond, return_ids=False):
 
         """

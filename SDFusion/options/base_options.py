@@ -45,7 +45,7 @@ class BaseOptions():
 
         # diffusion stuff
         self.parser.add_argument('--df_cfg', type=str, default='configs/sdfusion_snet.yaml', help="diffusion model's config file")
-        self.parser.add_argument('--ddim_steps', type=int, default=100, help='steps for ddim sampler')
+        self.parser.add_argument('--ddim_steps', type=int, default=10, help='steps for ddim sampler')
         self.parser.add_argument('--ddim_eta', type=float, default=0.0)
         self.parser.add_argument('--uc_scale', type=float, default=3.0, help='scale for classifier-free guidance')
         self.parser.add_argument('--uc_ply_scale', type=float, default=3.0, help='scale for ply guidance')
