@@ -66,6 +66,8 @@ class Visualizer():
 		self.name = opt.name
 		self.opt = opt
 
+		self.diversity_count = 0
+
 	def setup_io(self):
 
 		# if self.isTrain:
@@ -109,6 +111,14 @@ class Visualizer():
 		# self.log_tensorboard_metrics(metrics, epoch, phase)
 		self.log_tensorboard_metrics(metrics, current_iters, phase)
 
+	def get_instance_label(self, i):
+		if self.isTrain:
+			return i
+		elif self.opt.test_diversity:
+			return self.diversity_count
+		else:
+			return ''
+
 	def display_current_results(self, visuals, current_iters, im_name='', phase='train'):
 
 		visual_img = visuals['img']
@@ -125,15 +135,17 @@ class Visualizer():
 				part_scale = visuals['part_scale']
 				part_translation = visuals['part_translation']
 				for i, mesh in enumerate(visual_meshes):
-					print(f'mesh {i} max extent: {np.max(mesh.extents)}')
+					# print(f'mesh {i} max extent: {np.max(mesh.extents)}')
 					mesh.apply_scale((part_scale[i], part_scale[i], part_scale[i]))
 					mesh.apply_translation(part_translation[i])
-					# print mesh max extent
-
-			for i, visual_mesh in enumerate(visual_meshes):
-				instance_label = i if self.isTrain or self.opt.test_diversity else ''
-				mesh_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], instance_label, 'obj'))
-				visual_mesh.export(mesh_path, 'obj')
+					# rotate the mesh by 'ply_rotation' to make them align with the point cloud
+					if 'ply_rotation' in visuals and not self.opt.visual_normalize:
+						mesh.apply_transform(visuals['ply_rotation'][i])
+						 
+				for i, visual_mesh in enumerate(visual_meshes):
+					instance_label = self.get_instance_label(i)
+					mesh_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], instance_label, 'obj'))
+					visual_mesh.export(mesh_path, 'obj')
 		
 		if 'meshes_pred' in visuals:
 			part_scale = visuals['part_scale'][0]
@@ -152,7 +164,7 @@ class Visualizer():
 				if 'ply_translation' in visuals:
 					if self.opt.visual_mode == 'sdf':
 						points = visuals['points'][i]
-						if not self.isTrain:
+						if 'ply_rotation' in visuals and self.opt.visual_normalize:
 							points = np.matmul(visuals['ply_rotation'][i][:3, :3].T, points)
 						points = points + visuals['ply_translation'][i][:, None]
 						points = points - visuals['part_translation'][i][:, None]
@@ -160,18 +172,18 @@ class Visualizer():
 						ply_file.points = open3d.utility.Vector3dVector(points.T)
 					elif self.opt.visual_mode == 'mesh':
 						points = visuals['points'][i]
-						if not self.isTrain:
+						if 'ply_rotation' in visuals and self.opt.visual_normalize:
 							points = np.matmul(visuals['ply_rotation'][i][:3, :3].T, points)
 						points = points + visuals['ply_translation'][i][:, None]
 						ply_file.points = open3d.utility.Vector3dVector(points.T)
 				
-				instance_label = i if self.isTrain or self.opt.test_diversity else ''
+				instance_label = self.get_instance_label(i)
 				ply_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], instance_label, 'ply'))
 				open3d.io.write_point_cloud(ply_path, ply_file)
 
 		if self.opt.visual_mode == 'sdf': # save the sdf file
 			for i in range(visuals['sdf'].shape[0]):
-				instance_label = i if self.isTrain or self.opt.test_diversity else ''
+				instance_label = self.get_instance_label(i)
 				sdf_path = os.path.join(self.img_dir, filename_format.format(object_ids[0], part_ids[0], instance_label, 'sdf'))
 				# save as h5py file
 				with h5py.File(sdf_path, 'w') as f:

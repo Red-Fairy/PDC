@@ -87,6 +87,7 @@ class BaseOptions():
         self.parser.add_argument('--visual_mode', type=str, choices=['sdf', 'mesh'], default='mesh', 
                                 help='sdf or mesh, if sdf move the point cloud to the center; \
                                     if mesh, both point cloud and mesh are translated')
+        self.parser.add_argument('--visual_normalize', action='store_true', help='if true, rotate point cloud and mesh to the canonical pose')
         
         # use mobility constraint during inference/refinement
         self.parser.add_argument('--use_mobility_constraint', action='store_true', help='use mobility constraint')

@@ -43,7 +43,8 @@ def get_points_from_bbox(part_translation, part_extent, sample_count_per_axis=25
     
     return outsiders
 
-def get_collision_loss(sdf, ply, ply_translation, part_extent, part_translation, 
+def get_collision_loss(sdf, ply, ply_translation, ply_rotation,
+                       part_extent, part_translation, 
                        move_limit=None, move_axis=None, move_samples=32, res=64,
                        sdf_scale=None,
                        loss_collision_weight=1.0, margin=0.005, 
@@ -52,6 +53,7 @@ def get_collision_loss(sdf, ply, ply_translation, part_extent, part_translation,
     sdf: sdf values, (B, 1, res, res, res), multiple generated sdf with the same point cloud condition
     ply: point cloud, (1, 3, N)
     ply_translation: translation of the ply, (1, 3)
+    ply_rotation: rotation of the ply, (1, 4, 4)
     part_extent: extent of the part, (1, 3)
     part_translation: translation of the part, (1, 3)
     move_limit: [min, max]
@@ -70,6 +72,10 @@ def get_collision_loss(sdf, ply, ply_translation, part_extent, part_translation,
         print(sdf_scale)
     
     scale = torch.max(part_extent) / sdf_scale # scalar
+
+    # -2) rotate the point cloud to the canonical pose
+    # print(ply.shape, ply_rotation.shape)
+    ply = torch.matmul(ply_rotation[:, :3, :3].permute(0, 2, 1), ply) # (1, 3, N)
 
     # -1) move the point cloud back to original place
     ply = ply + ply_translation.view(1, 3, 1) # (1, 3, N)

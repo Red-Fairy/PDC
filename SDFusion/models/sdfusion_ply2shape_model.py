@@ -153,6 +153,8 @@ class SDFusionModelPly2Shape(BaseModel):
         if 'move_axis' in input:
             self.move_axis = input['move_axis'].to(self.device) # (3,)
             self.move_limit = input['move_limit'].to(self.device) # (2,) range of motion
+        else:
+            self.move_axis = self.move_limit = None
 
         if 'bbox_mesh' in input:
             self.bbox_mesh = input['bbox_mesh'].to(self.device)
@@ -291,8 +293,8 @@ class SDFusionModelPly2Shape(BaseModel):
             out = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta)
             latents, pred_x0 = out.prev_sample, out.pred_original_sample
 
-            if B == 1:
-                setattr(self, f'pred_sdf_x0_{i}', self.vqvae.decode_no_quant(pred_x0).detach())
+            # if B == 1:
+            #     setattr(self, f'pred_sdf_x0_{i}', self.vqvae.decode_no_quant(pred_x0).detach())
 
             # cut the generated sdf using bbox
             if use_cut_bbox and i > ddim_steps * cut_bbox_limit[0] and i < ddim_steps * cut_bbox_limit[1]:
@@ -326,14 +328,15 @@ class SDFusionModelPly2Shape(BaseModel):
 
         if print_collision_loss:
             for i in range(B):
-                # gen_sdf_i = self.gen_df[i:i+1].repeat(32, 1, 1, 1, 1)
-                collision_loss = get_collision_loss(self.gen_df[i:i+1], self.ply[i:i+1], self.ply_translation[i:i+1], 
+                collision_loss = get_collision_loss(self.gen_df[i:i+1], self.ply[i:i+1], 
+                                                    self.ply_translation[i:i+1], self.ply_rotation[i:i+1],
                                                     self.part_extent[i:i+1], self.part_translation[i:i+1],
                                                     move_limit=self.move_limit[i], move_axis=self.move_axis[i],
                                                     move_samples=32, res=self.shape_res,
-                                                    sdf_scale=4/2.2,
+                                                    sdf_scale=None,
                                                     use_bbox=True, linspace=True)
-                print(f'Collision Loss for Instance {i}:', collision_loss.item())
+                instance_name = self.paths[i].split('/')[-1].split('.')[0]
+                print(f'Collision Loss for part {instance_name}', collision_loss.item())
 
     def guided_inference(self, data, ddim_steps=None, ddim_eta=0., n_sample_x0=1):
         

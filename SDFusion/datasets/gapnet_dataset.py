@@ -85,6 +85,9 @@ class GAPartNetDataset(BaseDataset):
         self.sdf_filepaths = self.sdf_filepaths[:self.max_dataset_size]
         cprint('[*] %d samples loaded.' % (len(self.sdf_filepaths)), 'yellow')
 
+        if self.opt.test_diversity: # repeat the dataset for 32 times
+            self.sdf_filepaths = self.sdf_filepaths * 32
+
         self.N = len(self.sdf_filepaths)
 
         self.to_tensor = transforms.ToTensor()

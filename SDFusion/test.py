@@ -29,13 +29,13 @@ def eval_main_worker(opt, model, test_dl, visualizer):
 	for i, test_data in tqdm(enumerate(test_dl)):
 
 		# broadcast the test_data for testing diversity
-		if opt.test_diversity:
-			for k, v in test_data.items():
-				if isinstance(v, torch.Tensor):
-					n_dim = len(v.shape)
-					test_data[k] = v.repeat(opt.batch_size, *[1]*(n_dim-1))
-				elif isinstance(v, list):
-					test_data[k] = [x for x in v for _ in range(opt.batch_size)]
+		# if opt.test_diversity:
+		# 	for k, v in test_data.items():
+		# 		if isinstance(v, torch.Tensor):
+		# 			n_dim = len(v.shape)
+		# 			test_data[k] = v.repeat(opt.batch_size, *[1]*(n_dim-1))
+		# 		elif isinstance(v, list):
+		# 			test_data[k] = [x for x in v for _ in range(opt.batch_size)]
 
 		model.inference(test_data,
 				  ddim_eta=opt.ddim_eta, ddim_steps=opt.ddim_steps,
@@ -47,12 +47,12 @@ if __name__ == "__main__":
 	## set random seed
 	torch.backends.cudnn.benchmark = False     
 	torch.backends.cudnn.deterministic = True
-	seed = 42
-	random.seed(seed)
-	np.random.seed(seed)
-	torch.manual_seed(seed)
-	torch.cuda.manual_seed(seed)
-	torch.cuda.manual_seed_all(seed)
+	# seed = 42
+	# random.seed(seed)
+	# np.random.seed(seed)
+	# torch.manual_seed(seed)
+	# torch.cuda.manual_seed(seed)
+	# torch.cuda.manual_seed_all(seed)
 
 	# this will parse args, setup log_dirs, multi-gpus
 	opt = TestOptions().parse_and_setup()
@@ -62,15 +62,9 @@ if __name__ == "__main__":
 	opt.exp_time = datetime.now().strftime('%Y-%m-%dT%H-%M')
 
 	train_dl, test_dl, eval_dl = CreateDataLoader(opt)
-	train_ds, test_ds = train_dl.dataset, test_dl.dataset
+	test_ds = test_dl.dataset
 
-	dataset_size = len(train_ds)
-	if opt.dataset_mode == 'shapenet_lang':
-		cprint('[*] # training text snippets = %d' % len(train_ds), 'yellow')
-		cprint('[*] # testing text snippets = %d' % len(test_ds), 'yellow')
-	else:
-		cprint('[*] # training images = %d' % len(train_ds), 'yellow')
-		cprint('[*] # testing images = %d' % len(test_ds), 'yellow')
+	cprint('[*] # testing images = %d' % len(test_ds), 'yellow')
 
 	# main loop
 	model = create_model(opt)
@@ -83,7 +77,7 @@ if __name__ == "__main__":
 	# save model and dataset files
 	expr_dir = '%s/%s' % (opt.logs_dir, opt.name)
 	model_f = inspect.getfile(model.__class__)
-	dset_f = inspect.getfile(train_ds.__class__)
+	dset_f = inspect.getfile(test_ds.__class__)
 	cprint(f'[*] saving model and dataset files: {model_f}, {dset_f}', 'blue')
 	modelf_out = os.path.join(expr_dir, os.path.basename(model_f))
 	dsetf_out = os.path.join(expr_dir, os.path.basename(dset_f))

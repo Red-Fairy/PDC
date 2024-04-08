@@ -86,11 +86,10 @@ def extract_and_save_bbox(json_file, part_id, save_path):
 
 
 root_path = '/raid/haoran/Project/data/partnet_all_annotated_new/annotation'
-
 save_root_ply = '/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_ply'
 save_root_bbox = '/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_bbox'
 
-category = 'hinge_door'
+category = 'slider_lid'
 
 os.makedirs(os.path.join(save_root_ply, category), exist_ok=True)
 os.makedirs(os.path.join(save_root_bbox, category), exist_ok=True)

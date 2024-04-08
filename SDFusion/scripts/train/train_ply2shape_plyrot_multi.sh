@@ -34,7 +34,7 @@ trunc_thres=0.2
 display_freq=250
 print_freq=25
 total_iters=200000
-save_steps_freq=30000
+save_steps_freq=25000
 ###########################
 
 today=$(date '+%m%d')
@@ -61,7 +61,7 @@ lr=$2
 port=$3
 gpu_ids=$4
 uc_scale=$5
-cat="slider_drawer"
+cat="slider_lid"
 
 name="${name}-ply2shape-plyrot-scale${uc_scale}-lr${lr}"
 
@@ -74,8 +74,8 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
             --debug ${debug} --dataroot ${dataroot} \
             --ply_cond --ply_rotate \
-            --cond_ckpt ${cond_ckpt} --uc_scale ${uc_scale} 
-            --continue_train "
+            --cond_ckpt ${cond_ckpt} --uc_scale ${uc_scale} \
+            "
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 
