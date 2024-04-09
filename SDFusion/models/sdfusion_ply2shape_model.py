@@ -152,6 +152,7 @@ class SDFusionModelPly2Shape(BaseModel):
 
         if 'move_axis' in input:
             self.move_axis = input['move_axis'].to(self.device) # (3,)
+            self.move_origin = input['move_origin'].to(self.device) # (3,)
             self.move_limit = input['move_limit'].to(self.device) # (2,) range of motion
         else:
             self.move_axis = self.move_limit = None
@@ -332,6 +333,8 @@ class SDFusionModelPly2Shape(BaseModel):
                                                     self.ply_translation[i:i+1], self.ply_rotation[i:i+1],
                                                     self.part_extent[i:i+1], self.part_translation[i:i+1],
                                                     move_limit=self.move_limit[i], move_axis=self.move_axis[i],
+                                                    move_origin=self.move_origin[i],
+                                                    move_type=self.opt.mobility_type,
                                                     move_samples=32, res=self.shape_res,
                                                     sdf_scale=None,
                                                     use_bbox=True, linspace=True)

@@ -45,7 +45,9 @@ def get_points_from_bbox(part_translation, part_extent, sample_count_per_axis=25
 
 def get_collision_loss(sdf, ply, ply_translation, ply_rotation,
                        part_extent, part_translation, 
-                       move_limit=None, move_axis=None, move_samples=32, res=64,
+                       move_limit=None, move_axis=None, move_origin=None, 
+                       move_type=None, move_samples=32, 
+                       res=64,
                        sdf_scale=None,
                        loss_collision_weight=1.0, margin=0.005, 
                        use_bbox=False, linspace=False):
@@ -85,30 +87,46 @@ def get_collision_loss(sdf, ply, ply_translation, ply_rotation,
         outsider_points = get_points_from_bbox(part_translation, part_extent)[0].transpose(0, 1).view(1, 3, -1) # (1, 3, N)
         ply = torch.cat([ply, outsider_points], dim=-1) # (1, 3, N')
 
-    # 1) translate the point cloud to the part coordinate
-    ply_transformed = (ply - part_translation.view(1, 3, 1)).expand(B, -1, -1) # (B, 3, N)
-
-    # 2) if use mobility constraint, apply the constraint, randomly sample a distance
+    # 1) if use mobility constraint, apply the constraint, randomly sample a distance
     if move_limit is not None:
-        if not linspace:
-            dist = torch.rand([B, 1, 1], device=sdf.device) * (move_limit[1] - move_limit[0]) + move_limit[0] # (B, 1, 1)
+        if move_type == 'translation':
+            if not linspace:
+                dist = torch.rand([B, 1, 1], device=sdf.device) * (move_limit[1] - move_limit[0]) + move_limit[0] # (B, 1, 1)
+            else:
+                dist = torch.linspace(move_limit[0], move_limit[1], B, device=sdf.device).view(-1, 1, 1)
+            dist_vec = move_axis.view(1, 3, 1) * dist.repeat(1, 3, 1) # (B, 3, 1)
+            ply = ply.expand(B, -1, -1) - dist_vec # (B, 3, N) move the part, i.e., reversely move the point cloud
+        elif move_type == 'rotation':
+            if not linspace:
+                angle = torch.rand([B, 1, 1], device=sdf.device) * (move_limit[1] - move_limit[0]) + move_limit[0]
+            else:
+                angle = torch.linspace(move_limit[0], move_limit[1], B, device=sdf.device).view(-1, 1, 1)
+            angle = angle / 180 * np.pi # convert to radians
+            ply = ply - move_origin.view(1, 3, 1) # translate ply to the origin
+            K = torch.tensor([[0, -move_axis[2], move_axis[1]],
+                              [move_axis[2], 0, -move_axis[0]],
+                              [-move_axis[1], move_axis[0], 0]], device=sdf.device) # construct the rotation matrix
+            R = torch.eye(3, device=sdf.device) + torch.sin(angle) * K + (1 - torch.cos(angle)) * torch.matmul(K, K) # (B, 3, 3)
+            ply = torch.matmul(R, ply) # (B, 3, N)
+            ply = ply + move_origin.view(1, 3, 1) # translate ply back
         else:
-            dist = torch.linspace(move_limit[0], move_limit[1], B, device=sdf.device).view(-1, 1, 1)
-        dist_vec = move_axis.view(1, 3, 1) * dist.repeat(1, 3, 1) # (B, 3, 1)
-        ply_transformed = ply_transformed - dist_vec # (B, 3, N) move the part, i.e., reversely move the point cloud
+            assert False
 
-    ply_transformed = ply_transformed / scale # (B, 3, N)
-    ply_transformed = ply_transformed.transpose(1, 2) # (B, N, 3)
+    # 2) translate the point cloud to the part coordinate
+    ply = ply - part_translation.view(1, 3, 1) # (B, 3, N)
+
+    ply = ply / scale # (B, 3, N)
+    ply = ply.transpose(1, 2) # (B, N, 3)
 
     # export the point cloud for debug, save 
     # path = os.path.join('point_cloud.ply')
     # ply_file = open3d.geometry.PointCloud()
-    # ply_file.points = open3d.utility.Vector3dVector(ply_transformed[27].cpu().numpy())
+    # ply_file.points = open3d.utility.Vector3dVector(ply[27].cpu().numpy())
     # open3d.io.write_point_cloud(path, ply_file)
     
     # 3) query the sdf value at the transformed point cloud
     # input: (B, 1, res_sdf, res_sdf, res_sdf), (B, 1, 1, N, 3) -> (B, 1, 1, 1, N)
-    sdf_ply = F.grid_sample(sdf, ply_transformed.unsqueeze(1).unsqueeze(1), align_corners=True, padding_mode='border').squeeze(1).squeeze(1).squeeze(1) # (B, N)
+    sdf_ply = F.grid_sample(sdf, ply.unsqueeze(1).unsqueeze(1), align_corners=True, padding_mode='border').squeeze(1).squeeze(1).squeeze(1) # (B, N)
 
     # for the 27th mesh, print its sampled sdf bucket in range [-1, 1] each bucket has 0.005 width
     # sampled_values = sdf_ply[27]

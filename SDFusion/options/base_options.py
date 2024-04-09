@@ -92,6 +92,8 @@ class BaseOptions():
         # use mobility constraint during inference/refinement
         self.parser.add_argument('--use_mobility_constraint', action='store_true', help='use mobility constraint')
         self.parser.add_argument('--mobility_sample_count', type=int, default=50, help='mobility sample count')
+        self.parser.add_argument('--mobility_type', choices=['translation', 'rotation'], default='translation', 
+                                 help='mobility type, e.g, slider drawer is translation, hinge door is rotation')
 
         # resize factor for parts
         self.parser.add_argument('--resize_factor', type=float, default=4/2.2, help='about 1.818, resize factor for parts')

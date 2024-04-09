@@ -22,7 +22,6 @@ dataset_mode='gapnet'
 dataroot="/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset"
 
 res=128
-cat="slider_drawer"
 trunc_thres=0.2
 #####################
 
@@ -56,6 +55,8 @@ batch_size=4
 name=$1
 gpu_ids=$2
 load_iter=$3
+cat="hinge_door"
+mobility_type="rotation"
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --batch_size ${batch_size} --max_dataset_size ${max_dataset_size} \
@@ -63,8 +64,10 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --vq_model ${vq_model} --vq_cfg ${vq_cfg} --vq_ckpt ${vq_ckpt} --vq_dset ${vq_dset} --vq_cat ${vq_cat} \
             --dataset_mode ${dataset_mode} --res ${res} --cat ${cat} --trunc_thres ${trunc_thres} \
             --total_iters ${total_iters} --dataroot ${dataroot} \
-            --use_mobility_constraint --ply_rotate \
-            --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter}"
+            --use_mobility_constraint \
+            --mobility_type ${mobility_type} \
+            --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
+            --ddim_steps 25"
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
 

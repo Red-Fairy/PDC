@@ -139,9 +139,11 @@ class GAPartNetDataset(BaseDataset):
                 mobility_path = sdf_h5_file.replace(self.sdf_dir, 'part_mobility').replace('.h5', '.json')
                 with open(mobility_path, 'r') as f:
                     mobility = json.load(f)
-                    move_axis, move_limit = torch.tensor(mobility['move_axis']).float(), torch.tensor(mobility['move_limit']).float()
+                    move_axis, move_limit, move_origin = \
+                        torch.tensor(mobility['move_axis']).float(), torch.tensor(mobility['move_limit']).float(), torch.tensor(mobility['move_origin']).float()
                 ret['move_axis'] = move_axis
                 ret['move_limit'] = move_limit
+                ret['move_origin'] = move_origin
 
             if self.ply_rotate: # only rotate the point cloud condition, not used
 

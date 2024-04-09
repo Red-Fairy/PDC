@@ -115,7 +115,8 @@ class Visualizer():
 		if self.isTrain:
 			return i
 		elif self.opt.test_diversity:
-			return self.diversity_count
+			self.diversity_count += 1
+			return self.diversity_count - 1
 		else:
 			return ''
 
