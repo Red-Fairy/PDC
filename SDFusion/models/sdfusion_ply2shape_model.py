@@ -33,7 +33,7 @@ from diffusers.optimization import get_cosine_schedule_with_warmup
 
 from planners.base_model import create_planner
 
-from utils.util import AverageMeter
+from utils.util import AverageMeter, Logger
 
 # rendering
 from utils.util_3d import init_mesh_renderer, render_sdf
@@ -135,6 +135,8 @@ class SDFusionModelPly2Shape(BaseModel):
         self.loss_meter.reset()
         self.loss_meter_epoch = AverageMeter()
         self.loss_meter_epoch.reset()
+
+        self.logger = Logger(os.path.join(self.opt.img_dir, 'log.txt'))
     
     def set_input(self, input=None):
         
@@ -340,7 +342,7 @@ class SDFusionModelPly2Shape(BaseModel):
                                                     sdf_scale=None,
                                                     use_bbox=False, linspace=True)
                 instance_name = self.paths[i].split('/')[-1].split('.')[0]
-                print(f'Collision Loss for part {instance_name}', collision_loss.item())
+                self.logger.log(f'Collision Loss for part {instance_name},', collision_loss.item())
 
     def guided_inference(self, data, ddim_steps=None, ddim_eta=0., n_sample_x0=1):
         

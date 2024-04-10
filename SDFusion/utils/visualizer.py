@@ -53,16 +53,10 @@ class Visualizer():
 		self.isTrain = opt.isTrain
 		self.gif_fps = 4
 
-		if self.isTrain:
-			# self.log_dir = os.path.join(opt.checkpoints_dir, opt.name)
-			self.log_dir = os.path.join(opt.logs_dir, opt.name)
-		else:
-			self.log_dir = os.path.join(opt.results_dir, opt.name)
+		self.log_dir = os.path.join(opt.logs_dir, opt.name)
 
-		self.img_dir = os.path.join(self.log_dir, 'train_visuals') if self.isTrain else \
-							os.path.join(self.log_dir, f'test_diversity{opt.testdir}_{opt.load_iter}_scale{opt.uc_scale}_eta{opt.ddim_eta}_steps{opt.ddim_steps}') if opt.test_diversity else \
-							os.path.join(self.log_dir, f'test{opt.testdir}_{opt.load_iter}_scale{opt.uc_scale}_eta{opt.ddim_eta}_steps{opt.ddim_steps}')
-		
+		self.img_dir = opt.img_dir
+
 		self.name = opt.name
 		self.opt = opt
 

@@ -170,3 +170,17 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+class Logger(object):
+    def __init__(self, path):
+        self.logger = open(path, 'a')
+
+    def log(self, *infos):
+        stacked_info = ''
+        for info in infos:
+            stacked_info += str(info) + ' '
+        print(stacked_info)
+        self.logger.write(stacked_info + '\n')
+
+    def close(self):
+        self.logger.close()
