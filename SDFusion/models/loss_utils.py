@@ -71,7 +71,7 @@ def get_collision_loss(sdf, ply, ply_translation, ply_rotation,
         spacing = (2./res, 2./res, 2./res)
         mesh = sdf_to_mesh_trimesh(sdf[0][0], spacing=spacing)
         sdf_scale = np.max(mesh.extents)
-        print(sdf_scale)
+        # print(sdf_scale)
     
     scale = torch.max(part_extent) / sdf_scale # scalar
 
@@ -106,9 +106,13 @@ def get_collision_loss(sdf, ply, ply_translation, ply_rotation,
             K = torch.tensor([[0, -move_axis[2], move_axis[1]],
                               [move_axis[2], 0, -move_axis[0]],
                               [-move_axis[1], move_axis[0], 0]], device=sdf.device) # construct the rotation matrix
-            R = torch.eye(3, device=sdf.device) + torch.sin(angle) * K + (1 - torch.cos(angle)) * torch.matmul(K, K) # (B, 3, 3)
+            R = torch.eye(3, device=sdf.device) + torch.sin(-angle) * K + (1 - torch.cos(-angle)) * torch.matmul(K, K) # (B, 3, 3)
             ply = torch.matmul(R, ply) # (B, 3, N)
             ply = ply + move_origin.view(1, 3, 1) # translate ply back
+            # debug
+            # ply_file = open3d.geometry.PointCloud()
+            # ply_file.points = open3d.utility.Vector3dVector(ply[1].cpu().numpy().T)
+            # open3d.io.write_point_cloud('debug.ply', ply_file)
         else:
             assert False
 
@@ -126,7 +130,7 @@ def get_collision_loss(sdf, ply, ply_translation, ply_rotation,
     
     # 3) query the sdf value at the transformed point cloud
     # input: (B, 1, res_sdf, res_sdf, res_sdf), (B, 1, 1, N, 3) -> (B, 1, 1, 1, N)
-    sdf_ply = F.grid_sample(sdf, ply.unsqueeze(1).unsqueeze(1), align_corners=True, padding_mode='border').squeeze(1).squeeze(1).squeeze(1) # (B, N)
+    sdf_ply = F.grid_sample(sdf, ply.unsqueeze(1).unsqueeze(1), align_corners=True, padding_mode='zeros').squeeze(1).squeeze(1).squeeze(1) # (B, N)
 
     # for the 27th mesh, print its sampled sdf bucket in range [-1, 1] each bucket has 0.005 width
     # sampled_values = sdf_ply[27]
@@ -135,7 +139,8 @@ def get_collision_loss(sdf, ply, ply_translation, ply_rotation,
     #     print(f"Bucket from {rg[i]} to {rg[i+1]}: {torch.sum((sampled_values >= rg[i]) & (sampled_values < rg[i+1]))}")
 
     # 4) calculate the collision loss
-    loss_collision = torch.sum(F.relu(-sdf_ply-margin), dim=1)[0] # (B, N) -> (B, 1), return as a vector
+    loss_collision = torch.sum(torch.max(F.relu(-sdf_ply-margin), dim=0)[0])
+    # loss_collision = torch.sum(F.relu(-sdf_ply-margin), dim=1).mean() # (B, N) -> (B, 1), return as a vector
 
     return loss_collision * loss_collision_weight
 

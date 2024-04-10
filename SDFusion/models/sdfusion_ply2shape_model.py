@@ -155,7 +155,7 @@ class SDFusionModelPly2Shape(BaseModel):
             self.move_origin = input['move_origin'].to(self.device) # (3,)
             self.move_limit = input['move_limit'].to(self.device) # (2,) range of motion
         else:
-            self.move_axis = self.move_limit = None
+            self.move_axis = self.move_limit = self.move_origin = [None] * self.x.shape[0]
 
         if 'bbox_mesh' in input:
             self.bbox_mesh = input['bbox_mesh'].to(self.device)
@@ -332,12 +332,13 @@ class SDFusionModelPly2Shape(BaseModel):
                 collision_loss = get_collision_loss(self.gen_df[i:i+1], self.ply[i:i+1], 
                                                     self.ply_translation[i:i+1], self.ply_rotation[i:i+1],
                                                     self.part_extent[i:i+1], self.part_translation[i:i+1],
-                                                    move_limit=self.move_limit[i], move_axis=self.move_axis[i],
+                                                    move_limit=self.move_limit[i], 
+                                                    move_axis=self.move_axis[i],
                                                     move_origin=self.move_origin[i],
                                                     move_type=self.opt.mobility_type,
                                                     move_samples=32, res=self.shape_res,
                                                     sdf_scale=None,
-                                                    use_bbox=True, linspace=True)
+                                                    use_bbox=False, linspace=True)
                 instance_name = self.paths[i].split('/')[-1].split('.')[0]
                 print(f'Collision Loss for part {instance_name}', collision_loss.item())
 
@@ -386,18 +387,18 @@ class SDFusionModelPly2Shape(BaseModel):
 
                 setattr(self, f'pred_sdf_x0_{i}', self.vqvae.decode_no_quant(pred_x0).detach())
                 
-                # add noise to pred_x0, with std = sigma_t / sqrt(1 + sigma_t^2)
-                # prev_t = t - self.noise_scheduler.config.num_train_timesteps // self.noise_scheduler.num_inference_steps
-                # sigma_t = self.noise_scheduler._get_variance(t, prev_t) ** 0.5
-                # noise = torch.randn([n_sample_x0, *shape], device=self.device) * (sigma_t / (1 + sigma_t ** 2) ** 0.5) # (n_sample_x0, *shape)
-                # pred_x0_noisy = pred_x0.expand(n_sample_x0, -1, -1, -1, -1) + noise
-                
                 pred_x0_noisy = pred_x0.expand(n_sample_x0, -1, -1, -1, -1)
 
                 pred_x0_noisy_sdf = self.vqvae.decode(pred_x0_noisy)
 
-                collision_loss = get_collision_loss(pred_x0_noisy_sdf, self.ply, self.ply_translation, self.part_extent, self.part_translation,
-                                                    move_limit=self.move_limit[0], move_axis=self.move_axis[0], loss_collision_weight=1)
+                collision_loss = get_collision_loss(pred_x0_noisy_sdf, self.ply, 
+                                                    self.ply_translation, self.ply_rotation,
+                                                    self.part_extent, self.part_translation,
+                                                    move_limit=self.move_limit[0], move_axis=self.move_axis[0], 
+                                                    move_origin=self.move_origin[0], move_type=self.opt.mobility_type,
+                                                    move_samples=32, res=self.shape_res,
+                                                    sdf_scale=None,
+                                                    loss_collision_weight=1)
                 print('Collision Loss:', collision_loss, '\n')
                 
                 if i >= ddim_steps // 2:

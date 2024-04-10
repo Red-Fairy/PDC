@@ -55,6 +55,7 @@ batch_size=4
 name=$1
 gpu_ids=$2
 load_iter=$3
+model_id='46057'
 cat="hinge_door"
 mobility_type="rotation"
 
@@ -64,10 +65,9 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --vq_model ${vq_model} --vq_cfg ${vq_cfg} --vq_ckpt ${vq_ckpt} --vq_dset ${vq_dset} --vq_cat ${vq_cat} \
             --dataset_mode ${dataset_mode} --res ${res} --cat ${cat} --trunc_thres ${trunc_thres} \
             --total_iters ${total_iters} --dataroot ${dataroot} \
-            --use_mobility_constraint \
             --mobility_type ${mobility_type} \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
-            --ddim_steps 25"
+            --ddim_steps 50 --uc_scale 2"
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
 
