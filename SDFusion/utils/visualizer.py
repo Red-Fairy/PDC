@@ -198,7 +198,7 @@ class Visualizer():
 		# log to tensorboard
 		self.log_tensorboard_visuals(visuals, current_iters, phase=phase)
 
-		if self.opt.test_diversity:
+		if not self.opt.isTrain and self.opt.test_diversity:
 			self.diversity_count += 1
 
 	def log_tensorboard_visuals(self, visuals, cur_step, labels_while_list=None, phase='train'):

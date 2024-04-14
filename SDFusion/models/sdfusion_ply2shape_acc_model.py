@@ -466,7 +466,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
             "img": OrderedDict(visuals),
             "meshes": meshes,
             "paths": self.paths,
-            "points": (self.ply * self.ply_scale).cpu().numpy(),
+            "points": (self.ply * self.ply_scale.unsqueeze(1)).cpu().numpy(),
         }
 
         if hasattr(self, 'ply_translation'):
