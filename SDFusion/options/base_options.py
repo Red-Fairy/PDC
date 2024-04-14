@@ -91,12 +91,15 @@ class BaseOptions():
 		
 		# use mobility constraint during inference/refinement
 		self.parser.add_argument('--use_mobility_constraint', action='store_true', help='use mobility constraint')
-		self.parser.add_argument('--mobility_sample_count', type=int, default=50, help='mobility sample count')
+		self.parser.add_argument('--mobility_sample_count', type=int, default=32, help='mobility sample count')
 		self.parser.add_argument('--mobility_type', choices=['translation', 'rotation'], default='translation', 
 								 help='mobility type, e.g, slider drawer is translation, hinge door is rotation')
 
 		# resize factor for parts
 		self.parser.add_argument('--resize_factor', type=float, default=4/2.2, help='about 1.818, resize factor for parts')
+
+		# rotation angle of input point cloud during inference
+		self.parser.add_argument('--rotate_angle', type=float, default=None, help='rotation angle of input point cloud during inference')
 
 		self.initialized = True
 
@@ -126,9 +129,10 @@ class BaseOptions():
 		if (accelerator is None or accelerator.is_main_process) and not os.path.exists(ckpt_dir):
 			os.makedirs(ckpt_dir)
 
+		rotate_string = '' if not self.opt.ply_cond else f'_rotate{self.opt.rotate_angle}' if self.opt.rotate_angle is not None else '_rotate'
 		self.opt.img_dir = os.path.join(expr_dir, 'train_visuals') if self.isTrain else \
-							os.path.join(expr_dir, f'test_diversity{self.opt.testdir}_{self.opt.load_iter}_scale{self.opt.uc_scale}_eta{self.opt.ddim_eta}_steps{self.opt.ddim_steps}') if self.opt.test_diversity else \
-							os.path.join(expr_dir, f'test{self.opt.testdir}_{self.opt.load_iter}_scale{self.opt.uc_scale}_eta{self.opt.ddim_eta}_steps{self.opt.ddim_steps}')
+							os.path.join(expr_dir, f'test_diversity{self.opt.testdir}_{self.opt.load_iter}{rotate_string}_scale{self.opt.uc_scale}_eta{self.opt.ddim_eta}_steps{self.opt.ddim_steps}') if self.opt.test_diversity else \
+							os.path.join(expr_dir, f'test{self.opt.testdir}_{self.opt.load_iter}{rotate_string}_scale{self.opt.uc_scale}_eta{self.opt.ddim_eta}_steps{self.opt.ddim_steps}')
 		os.makedirs(self.opt.img_dir, exist_ok=True)
 
 		# print args

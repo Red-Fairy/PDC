@@ -155,7 +155,7 @@ class GAPartNetDataset(BaseDataset):
                 #     [0, 0, 0, 1]
                 # ])
 
-                rotate_angle_y = torch.rand(1) * 2 * np.pi
+                rotate_angle_y = torch.rand(1) * 2 * np.pi if self.opt.rotate_angle is None else torch.tensor([self.opt.rotate_angle * np.pi / 180], dtype=torch.float32)
                 rot_matrix = torch.tensor([
                     [np.cos(rotate_angle_y), 0, np.sin(rotate_angle_y), 0],
                     [0, 1, 0, 0],
@@ -208,3 +208,69 @@ class GAPartNetDataset(BaseDataset):
 
     def name(self):
         return 'GAPartNetSDFDataset'
+
+
+class GAPartNetDataset4ScalePrediction(BaseDataset):
+
+    def __init__(self, opt, phase='train', cat='all', extend_size=None):
+
+        self.phase = phase
+        self.ply_dir = f'part_ply_fps'
+
+        dataroot = os.path.join(opt.dataroot, self.ply_dir, cat)
+        self.filepaths = [os.path.join(dataroot, x) for x in os.listdir(dataroot) if x.endswith('.ply')]
+
+        if self.phase == 'train' or self.phase == 'test':
+            filelist_path = opt.dataroot.replace('dataset', 'data_lists/'+phase)
+            with open(os.path.join(filelist_path, cat+'.txt'), 'r') as f:
+                file_names = [line.strip() for line in f]
+            self.filepaths = [f for f in self.filepaths if f.split('/')[-1].split('.')[0] in file_names]
+
+        cprint('[*] %d samples loaded.' % (len(self.filepaths)), 'yellow')
+
+        # extend the dataset size
+        if extend_size is not None:
+            self.filepaths = (self.filepaths * (extend_size // len(self.filepaths) + 1))[:extend_size]
+
+        self.ply_rotate = opt.ply_rotate
+
+    def __getitem__(self, index):
+
+        ply_filepath = self.filepaths[index]
+
+        ret = {'path': ply_filepath}
+
+        # load ply file
+        ply_file = open3d.io.read_point_cloud(ply_filepath).points
+        points = np.array(ply_file)
+        points, points_stat = pc_normalize(points, scale_norm=False, return_stat=True)
+        points = torch.from_numpy(points).transpose(0, 1).float() # (3, N)
+
+        transform_path = ply_filepath.replace('part_ply_fps', 'part_bbox_aligned').replace('.ply', '.json')
+        with open(transform_path, 'r') as f:
+            transform = json.load(f)
+            part_translate, part_extent = torch.tensor(transform['centroid']).float(), torch.tensor(transform['extents']).float()
+
+        if self.ply_rotate: # only rotate the point cloud condition, not used
+
+            rotate_angle_y = torch.rand(1) * 2 * np.pi 
+            rot_matrix = torch.tensor([
+                [np.cos(rotate_angle_y), 0, np.sin(rotate_angle_y), 0],
+                [0, 1, 0, 0],
+                [-np.sin(rotate_angle_y), 0, np.cos(rotate_angle_y), 0],
+                [0, 0, 0, 1]
+            ])
+
+            points = torch.mm(rot_matrix, torch.cat([points, torch.ones(1, points.shape[1])], dim=0))[:-1]
+            points_stat['rotation'] = rot_matrix
+
+            ret['ply'] = points
+            ret['part_scale'] = torch.max(part_extent).view(1)
+
+        return ret
+
+    def __len__(self):
+        return len(self.filepaths)
+
+    def name(self):
+        return 'GAPartNet4ScalePrediction'

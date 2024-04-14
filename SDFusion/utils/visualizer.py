@@ -109,8 +109,7 @@ class Visualizer():
 		if self.isTrain:
 			return i
 		elif self.opt.test_diversity:
-			self.diversity_count += 1
-			return self.diversity_count - 1
+			return self.diversity_count
 		else:
 			return ''
 
@@ -198,6 +197,9 @@ class Visualizer():
 			util.save_image(image_numpy, img_path)
 		# log to tensorboard
 		self.log_tensorboard_visuals(visuals, current_iters, phase=phase)
+
+		if self.opt.test_diversity:
+			self.diversity_count += 1
 
 	def log_tensorboard_visuals(self, visuals, cur_step, labels_while_list=None, phase='train'):
 		writer = self.opt.writer

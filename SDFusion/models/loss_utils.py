@@ -6,7 +6,7 @@ import trimesh
 import torch.nn.functional as F
 import open3d
 
-from datasets.convert_utils import sdf_to_mesh_trimesh
+from datasets.convert_utils import sdf_to_mesh_trimesh, mesh_to_sdf
 
 from torch import nn
 
@@ -49,7 +49,7 @@ def get_collision_loss(sdf, ply, ply_translation, ply_rotation,
                        move_type=None, move_samples=32, 
                        res=64,
                        sdf_scale=None,
-                       loss_collision_weight=1.0, margin=0.005, 
+                       loss_collision_weight=1.0, margin=1/128, 
                        use_bbox=False, linspace=False):
     '''
     sdf: sdf values, (B, 1, res, res, res), multiple generated sdf with the same point cloud condition
@@ -120,26 +120,37 @@ def get_collision_loss(sdf, ply, ply_translation, ply_rotation,
     ply = ply - part_translation.view(1, 3, 1) # (B, 3, N)
 
     ply = ply / scale # (B, 3, N)
-    ply = ply.transpose(1, 2) # (B, N, 3)
 
-    # export the point cloud for debug, save 
-    # path = os.path.join('point_cloud.ply')
+    # due to different 3D conventions, ply need to be rotated by 90 degrees along the y-axis
+    ply_rotated = torch.bmm(torch.tensor([[0, 0, 1.], [0, 1., 0], [-1., 0, 0]], device=sdf.device, dtype=torch.float32).repeat(B, 1, 1), ply) # (B, 3, N)
+
+    ply_rotated = ply_rotated.transpose(1, 2) # (B, N, 3)
+
+    # export the point cloud and mesh for debug, save 
     # ply_file = open3d.geometry.PointCloud()
-    # ply_file.points = open3d.utility.Vector3dVector(ply[27].cpu().numpy())
-    # open3d.io.write_point_cloud(path, ply_file)
+    # ply_file.points = open3d.utility.Vector3dVector((ply[0].T).cpu().numpy())
+    # open3d.io.write_point_cloud('debug.ply', ply_file)
+    # mesh = sdf_to_mesh_trimesh(sdf[0][0], spacing=(2./res, 2./res, 2./res))
+    # sdf = mesh_to_sdf(mesh).unsqueeze(0).repeat(B,1,1,1,1)
+    # mesh.apply_translation(-mesh.bounding_box.centroid)
+    # mesh.export('debug.obj')
+    # exit()
     
     # 3) query the sdf value at the transformed point cloud
     # input: (B, 1, res_sdf, res_sdf, res_sdf), (B, 1, 1, N, 3) -> (B, 1, 1, 1, N)
-    sdf_ply = F.grid_sample(sdf, ply.unsqueeze(1).unsqueeze(1), align_corners=True, padding_mode='zeros').squeeze(1).squeeze(1).squeeze(1) # (B, N)
-
-    # for the 27th mesh, print its sampled sdf bucket in range [-1, 1] each bucket has 0.005 width
-    # sampled_values = sdf_ply[27]
-    # rg = torch.arange(-1, 1, 0.005)
-    # for i in range(rg.shape[0] - 1):
-    #     print(f"Bucket from {rg[i]} to {rg[i+1]}: {torch.sum((sampled_values >= rg[i]) & (sampled_values < rg[i+1]))}")
+    sdf_ply = F.grid_sample(sdf, ply_rotated.unsqueeze(1).unsqueeze(1), align_corners=True, padding_mode='zeros').squeeze(1).squeeze(1).squeeze(1) # (B, N)
 
     # 4) calculate the collision loss
     loss_collision = torch.sum(torch.max(F.relu(-sdf_ply-margin), dim=0)[0])
+
+    # debug, filter the points with positive sampled sdf values
+    # ply_file = open3d.geometry.PointCloud()
+    # sdf_max = torch.max(F.relu(-sdf_ply-margin), dim=0)[0]
+    # # sdf_max = F.relu(-sdf_ply-margin)
+    # ply_file.points = open3d.utility.Vector3dVector((ply[0].T)[torch.where(sdf_max > 0)].cpu().numpy())
+    # open3d.io.write_point_cloud('debug.ply', ply_file)
+    # exit()
+
     # loss_collision = torch.sum(F.relu(-sdf_ply-margin), dim=1).mean() # (B, N) -> (B, 1), return as a vector
 
     return loss_collision * loss_collision_weight
