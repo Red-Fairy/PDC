@@ -43,4 +43,6 @@ bak*/
 ## custom
 logs_home/
 logs_result/
+logs/
+logs_scale_pred/
 preprocess/tmp/

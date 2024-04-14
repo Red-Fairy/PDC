@@ -1,10 +1,12 @@
 experiment_name=$1
-gpu_ids="0"
-port=29500
-multi_gpu=0
+gpu_ids="0,7"
+port=23890
+multi_gpu=1
+
 args="--ply_rotate \
     --load_pretrain \
     --experiment_name $experiment_name \
+    --loss l1 \
     --extend_size_train 5000 \
     --extend_size_test 500"
 

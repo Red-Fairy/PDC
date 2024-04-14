@@ -22,11 +22,11 @@ from datasets.convert_utils import mesh_to_sdf
 def pc_normalize(pc, scale_norm=True, return_stat=False):
     centroid = np.mean(pc, axis=0)
     pc = pc - centroid
-    ret = {'centroid': torch.from_numpy(centroid).float(), 'rotation': torch.eye(4).float()}
+    ret = {'centroid': torch.from_numpy(centroid).float(), 'rotation': torch.eye(4).float(), 'scale': torch.tensor(1.0).float()}
     if scale_norm:
         m = np.max(np.sqrt(np.sum(pc ** 2, axis=1)))
         pc = pc / m
-        ret['scale'] = torch.from_numpy(m)
+        ret['scale'] = torch.tensor(m, dtype=torch.float32)
     if return_stat:
         return pc, ret
     else:

@@ -243,7 +243,7 @@ class GAPartNetDataset4ScalePrediction(BaseDataset):
         # load ply file
         ply_file = open3d.io.read_point_cloud(ply_filepath).points
         points = np.array(ply_file)
-        points, points_stat = pc_normalize(points, scale_norm=False, return_stat=True)
+        points, points_stat = pc_normalize(points, scale_norm=True, return_stat=True)
         points = torch.from_numpy(points).transpose(0, 1).float() # (3, N)
 
         transform_path = ply_filepath.replace('part_ply_fps', 'part_bbox_aligned').replace('.ply', '.json')
@@ -251,7 +251,7 @@ class GAPartNetDataset4ScalePrediction(BaseDataset):
             transform = json.load(f)
             part_translate, part_extent = torch.tensor(transform['centroid']).float(), torch.tensor(transform['extents']).float()
 
-        if self.ply_rotate: # only rotate the point cloud condition, not used
+        if self.ply_rotate:
 
             rotate_angle_y = torch.rand(1) * 2 * np.pi 
             rot_matrix = torch.tensor([
@@ -262,10 +262,11 @@ class GAPartNetDataset4ScalePrediction(BaseDataset):
             ])
 
             points = torch.mm(rot_matrix, torch.cat([points, torch.ones(1, points.shape[1])], dim=0))[:-1]
-            points_stat['rotation'] = rot_matrix
+            # points_stat['rotation'] = rot_matrix
 
             ret['ply'] = points
-            ret['part_scale'] = torch.max(part_extent).view(1)
+            ret['ply_scale'] = points_stat['scale'].view(1)
+            ret['part_extent'] = torch.max(part_extent).view(1)
 
         return ret
 

@@ -38,11 +38,12 @@ parser.add_argument(
     default="/raid/haoran/Project/PartDiffusion/PartDiffusion/pretrained_checkpoint/pointnet2.pth",
     help="condition model ckpt to load.",
 )
+parser.add_argument('--loss_fn', type=str, default='l2', help='loss function', choices=['l1', 'l2'])
 
 parser.add_argument("--continue_train", action="store_true", help="continue training")
 
 parser.add_argument('--save_freq', type=int, default=10, help='save frequency')
-parser.add_argument("--num_epochs", type=int, default=100)
+parser.add_argument("--num_epochs", type=int, default=40)
 
 args = parser.parse_args()
 
@@ -50,6 +51,7 @@ def main():
 
     experiment_path = os.path.join('./logs_scale_pred', args.experiment_name)
     os.makedirs(experiment_path, exist_ok=True)
+
     logger = Logger(os.path.join(experiment_path, 'log.txt'))
 
     model = PointNet4ScalePrediction()
@@ -77,7 +79,7 @@ def main():
     )
 
     optimizer = optim.AdamW(model.parameters(), lr=0.001)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20*len(train_dataloader), gamma=0.1)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10*len(train_dataloader), gamma=0.1)
 
     accelerator = Accelerator()
     device = accelerator.device
@@ -86,7 +88,7 @@ def main():
         model, optimizer, scheduler, train_dataloader, test_dataloader
     )
 
-    loss_fn = nn.functional.mse_loss
+    loss_fn = nn.functional.l1_loss if args.loss_fn == 'l1' else nn.functional.mse_loss
 
     train_loss_meter, test_loss_meter = AverageMeter(), AverageMeter()
     train_loss_meter.reset()
@@ -99,21 +101,24 @@ def main():
         for data in tqdm(train_dataloader):
             
             ply_data = data['ply'].to(device)
-            scale = data['part_scale'].to(device)
+            ply_scale = data['ply_scale'].to(device)
+            gt_extent = data['part_extent'].to(device)
 
-            estimated_scale = model(ply_data)
-            print(scale.shape, estimated_scale.shape)
-            loss = loss_fn(estimated_scale, scale)
+            estimated_extent = model(ply_data) * ply_scale
+            # print(scale.shape, estimated_scale.shape)
+            loss = loss_fn(estimated_extent, gt_extent)
 
             avg_loss = accelerator.gather(loss).mean()
             train_loss_meter.update(avg_loss, args.batch_size)
+
             accelerator.backward(loss)
 
             optimizer.step()
             optimizer.zero_grad()
             scheduler.step()
         
-        logger.log(f"Epoch {epoch}, Train Loss {train_loss_meter.avg}")
+        if accelerator.is_main_process:
+            logger.log(f"Epoch {epoch}, Train Loss {train_loss_meter.avg}")
         train_loss_meter.reset()
 
         # test
@@ -121,13 +126,16 @@ def main():
         with torch.no_grad():
             for i, data in enumerate(test_dataloader):
                 ply_data = data['ply'].to(device)
-                scale = data['part_scale'].to(device)
+                ply_scale = data['ply_scale'].to(device)
+                gt_extent = data['part_extent'].to(device)
 
-                estimated_scale = model(ply_data)
-                loss = loss_fn(estimated_scale, scale)
+                estimated_extent = model(ply_data) * ply_scale
+                loss = loss_fn(estimated_extent, gt_extent)
 
                 avg_loss = accelerator.gather(loss).mean()
                 test_loss_meter.update(avg_loss, args.batch_size)
+
+        if accelerator.is_main_process:
             logger.log(f"Epoch {epoch}, Test Loss {test_loss_meter.avg}")
         test_loss_meter.reset()
 
