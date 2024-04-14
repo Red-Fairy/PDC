@@ -198,6 +198,8 @@ class GAPartNetDataset(BaseDataset):
             ret['ply'] = points
             ret['ply_translation'] = points_stat['centroid']
             ret['ply_rotation'] = points_stat['rotation']
+            ret['ply_scale'] = points_stat['scale'].view(1)
+
             ret['part_translation'] = part_translate
             ret['part_extent'] = part_extent
 

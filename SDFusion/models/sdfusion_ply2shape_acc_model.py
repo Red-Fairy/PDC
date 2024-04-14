@@ -168,6 +168,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         if 'ply_translation' in input:
             self.ply_translation = input['ply_translation'].to(self.device)
             self.ply_rotation = input['ply_rotation'].to(self.device)
+            self.ply_scale = input['ply_scale'].to(self.device)
             self.part_translation = input['part_translation'].to(self.device)
             self.part_extent = input['part_extent'].to(self.device)
 
@@ -465,18 +466,17 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
             "img": OrderedDict(visuals),
             "meshes": meshes,
             "paths": self.paths,
-            "points": self.ply.cpu().numpy(),
+            "points": (self.ply * self.ply_scale).cpu().numpy(),
         }
 
         if hasattr(self, 'ply_translation'):
             visuals_dict['ply_translation'] = self.ply_translation.cpu().numpy()
             visuals_dict['ply_rotation'] = self.ply_rotation.cpu().numpy()
             visuals_dict['part_translation'] = self.part_translation.cpu().numpy()
-            mesh_extents = torch.zeros([0, 3], device=self.device)
-            for mesh in meshes:
-                mesh_extents = torch.cat([mesh_extents, torch.tensor(mesh.extents, device=self.device).unsqueeze(0)], dim=0)
-            # visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / torch.max(mesh_extents, dim=1)[0]).cpu().numpy()
-            visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / (4 / 2.2)).cpu().numpy()
+
+            visuals_dict['part_scale'] = np.zeros([len(meshes)], dtype=np.float32)
+            for i, mesh in enumerate(meshes):
+                visuals_dict['part_scale'][i] = torch.max(self.part_extent[i]).item() / np.max(mesh.extents)
 
         return visuals_dict
 
