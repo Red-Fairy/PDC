@@ -127,7 +127,7 @@ class GAPartNetDataset(BaseDataset):
             # load ply file
             ply_file = open3d.io.read_point_cloud(ply_filepath).points
             points = np.array(ply_file)
-            points, points_stat = pc_normalize(points, scale_norm=False, return_stat=True)
+            points, points_stat = pc_normalize(points, scale_norm=self.opt.ply_norm, return_stat=True)
             points = torch.from_numpy(points).transpose(0, 1).float() # (3, N)
 
             transform_path = sdf_h5_file.replace(self.sdf_dir, 'part_bbox_aligned').replace('.h5', '.json')

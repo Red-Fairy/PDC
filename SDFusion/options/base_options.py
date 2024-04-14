@@ -79,6 +79,7 @@ class BaseOptions():
 		self.parser.add_argument('--ply_bbox_cond', action='store_true', help='if true, use both pointcloud and bbox condition')
 		self.parser.add_argument('--ply_rotate', action='store_true', help='if true, rotate the input pointcloud')
 		self.parser.add_argument('--joint_rotate', action='store_true', help='if true, rotate the input pointcloud')
+		self.parser.add_argument('--ply_norm', action='store_true', help='if true, normalize the input pointcloud')
 
 		# continue_train or test-time load_iter
 		self.parser.add_argument('--load_iter', default='latest', type=str, help='which iter to load?')
