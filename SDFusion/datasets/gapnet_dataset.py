@@ -130,7 +130,7 @@ class GAPartNetDataset(BaseDataset):
             points, points_stat = pc_normalize(points, scale_norm=self.opt.ply_norm, return_stat=True)
             points = torch.from_numpy(points).transpose(0, 1).float() # (3, N)
 
-            transform_path = sdf_h5_file.replace(self.sdf_dir, 'part_bbox_aligned').replace('.h5', '.json')
+            transform_path = sdf_h5_file.replace(self.sdf_dir, 'part_translation_scale').replace('.h5', '.json')
             with open(transform_path, 'r') as f:
                 transform = json.load(f)
                 part_translate, part_extent = torch.tensor(transform['centroid']).float(), torch.tensor(transform['extents']).float()
