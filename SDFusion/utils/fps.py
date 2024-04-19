@@ -4,35 +4,39 @@ import open3d
 import os
 from tqdm import tqdm
 
-cat = 'slider_lid'
+categories = ['line_fixed_handle', 'hinge_handle', 'hinge_knob', 'hinge_lid', 'round_fixed_handle']
 
-root = f'/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_ply/{cat}'
-save_root = f'/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_ply_fps/{cat}'
+for cat in categories:
 
-os.makedirs(save_root, exist_ok=True)
-
-ply_files = sorted(os.listdir(root))
-
-ply_files = [os.path.join(root, ply_file) for ply_file in ply_files if ply_file.endswith('.ply')]
+    print(cat)
     
-N_point = 10000
+    root = f'/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_ply/{cat}'
+    save_root = f'/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_ply_fps/{cat}'
 
-for ply_file in tqdm(ply_files):
-    
-    object_id = ply_file.split('/')[-1].split('.')[0].split('_')[0]
-    part_id = ply_file.split('/')[-1].split('.')[0].split('_')[1]
+    os.makedirs(save_root, exist_ok=True)
 
-    # read point cloud
-    pcd = open3d.io.read_point_cloud(ply_file)
+    ply_files = sorted(os.listdir(root))
 
-    # downsample
-    fps_samples_idx = bucket_fps_kdtree_sampling(np.array(pcd.points), N_point)
-    downsampled_pcd = open3d.geometry.PointCloud()
-    downsampled_pcd.points = open3d.utility.Vector3dVector(np.array(pcd.points)[fps_samples_idx])
+    ply_files = [os.path.join(root, ply_file) for ply_file in ply_files if ply_file.endswith('.ply')]
+        
+    N_point = 10000
 
-    # save
-    save_path = os.path.join(save_root, f'{object_id}_{part_id}.ply')
-    open3d.io.write_point_cloud(save_path, downsampled_pcd)
+    for ply_file in tqdm(ply_files):
+        
+        object_id = ply_file.split('/')[-1].split('.')[0].split('_')[0]
+        part_id = ply_file.split('/')[-1].split('.')[0].split('_')[1]
+
+        # read point cloud
+        pcd = open3d.io.read_point_cloud(ply_file)
+
+        # downsample
+        fps_samples_idx = bucket_fps_kdtree_sampling(np.array(pcd.points), N_point)
+        downsampled_pcd = open3d.geometry.PointCloud()
+        downsampled_pcd.points = open3d.utility.Vector3dVector(np.array(pcd.points)[fps_samples_idx])
+
+        # save
+        save_path = os.path.join(save_root, f'{object_id}_{part_id}.ply')
+        open3d.io.write_point_cloud(save_path, downsampled_pcd)
 
 # point_dict = {}
 

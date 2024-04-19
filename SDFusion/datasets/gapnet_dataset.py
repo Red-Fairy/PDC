@@ -56,7 +56,7 @@ class GAPartNetDataset(BaseDataset):
                 file_names = [line.strip() for line in f]
             self.sdf_filepaths = [f for f in self.sdf_filepaths if f.split('/')[-1].split('.')[0] in file_names]
 
-        # self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace(self.sdf_dir, 'part_ply_fps').replace('.h5', '.ply')), self.sdf_filepaths))
+        self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace(self.sdf_dir, 'part_ply_fps').replace('.h5', '.ply')), self.sdf_filepaths))
 
         if not self.opt.isTrain and opt.model_id is not None:
             self.sdf_filepaths = [f for f in self.sdf_filepaths if opt.model_id in f]
