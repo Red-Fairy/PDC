@@ -8,7 +8,7 @@ list_dir = '/raid/haoran/Project/PartDiffusion/PartDiffusion/data_lists'
 # cats = os.listdir(root_dir)
 # cats = [cat for cat in cats if os.path.isdir(os.path.join(root_dir, cat))]
 
-cats = ['hinge_door', 'slider_drawer']
+cats = ['line_fixed_handle', 'hinge_knob']
 for cat in cats:
     os.makedirs(os.path.join(list_dir, 'train'), exist_ok=True)
     os.makedirs(os.path.join(list_dir, 'test'), exist_ok=True)
