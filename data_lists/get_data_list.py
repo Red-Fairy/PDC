@@ -17,18 +17,17 @@ test_ratio = 0.1
 
 for cat in cats:
     files = os.listdir(os.path.join(root_dir, cat))
-    files = [x for x in files if int(x.split('/')[-1].split('_')[0]) > 99999]
-    print(files)
+    files = [x for x in files if int(x.split('/')[-1].split('_')[0])]
 
     np.random.shuffle(files)
     test_files = files[:int(len(files) * test_ratio)]
     train_files = files[int(len(files) * test_ratio):]
 
-    with open(os.path.join(list_dir, 'test', cat+'.txt'), 'a') as f:
+    with open(os.path.join(list_dir, 'test', cat+'.txt'), 'w') as f:
         for file in test_files:
             f.write(file.split('.')[0] + '\n')
 
-    with open(os.path.join(list_dir, 'train', cat+'.txt'), 'a') as f:
+    with open(os.path.join(list_dir, 'train', cat+'.txt'), 'w') as f:
         for file in train_files:
             f.write(file.split('.')[0] + '\n')
 
