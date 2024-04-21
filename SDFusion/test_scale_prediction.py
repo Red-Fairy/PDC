@@ -32,6 +32,8 @@ parser.add_argument(
     default="/raid/haoran/Project/PartDiffusion/PartDiffusion/pretrained_checkpoint/pointnet2.pth",
     help="condition model ckpt to load.",
 )
+parser.add_argument('--predict_mode', type=str, default='max_extent', help='predict mode', choices=['volume', 'max_extent'])
+
 parser.add_argument('--loss_fn', type=str, default='l2', help='loss function', choices=['l1', 'l2'])
 
 args = parser.parse_args()
@@ -83,15 +85,20 @@ def main():
             
             ply_data = data['ply'].to(device)
             ply_scale = data['ply_scale'].to(device)
-            gt_extent = data['part_extent'].to(device)
+            part_extent_gt = data['part_extent'].to(device) # (B, 3)
 
-            estimated_extent = model(ply_data) * ply_scale
+            if args.predict_mode == 'volume': # predict the cube root of the volume
+                estimated_val = model(ply_data) * ply_scale
+                gt_val = torch.prod(part_extent_gt, dim=-1, keepdim=True) ** (1/3)
+            elif args.predict_mode == 'max_extent':
+                estimated_val = model(ply_data) * ply_scale
+                gt_val = torch.max(part_extent_gt, dim=-1, keepdim=True)[0]
+            
+            loss = loss_fn(estimated_val, gt_val)
 
-            loss = loss_fn(estimated_extent, gt_extent)
-
-            estimated_extent_gathered = accelerator.gather(estimated_extent)
-            gt_extent_gathered = accelerator.gather(gt_extent)
-            ratio = estimated_extent_gathered / gt_extent_gathered
+            estimated_val_gathered = accelerator.gather(estimated_val)
+            gt_val_gathered = accelerator.gather(gt_val)
+            ratio = estimated_val_gathered / gt_val_gathered
 
             # fill the bucket
             for i in range(num_bucket):
@@ -114,27 +121,42 @@ def main():
         train_loss_meter.reset()
 
         for data in tqdm(test_dataloader):
+
             ply_data = data['ply'].to(device)
             ply_scale = data['ply_scale'].to(device)
-            gt_extent = data['part_extent'].to(device)
+            part_extent_gt = data['part_extent'].to(device) # (B, 3)
             filepaths = data['path']
 
-            estimated_extent = model(ply_data) * ply_scale
-            loss = loss_fn(estimated_extent, gt_extent)
+            if args.predict_mode == 'volume': # predict the cube root of the volume
+                estimated_val = model(ply_data) * ply_scale
+                gt_val = torch.prod(part_extent_gt, dim=-1, keepdim=True) ** (1/3)
+            elif args.predict_mode == 'max_extent':
+                estimated_val = model(ply_data) * ply_scale
+                gt_val = torch.max(part_extent_gt, dim=-1, keepdim=True)[0]
+            
+            loss = loss_fn(estimated_val, gt_val)
 
-            estimated_extent_gathered = accelerator.gather(estimated_extent)
-            gt_extent_gathered = accelerator.gather(gt_extent)
+            estimated_val_gathered = accelerator.gather(estimated_val)
+            gt_val_gathered = accelerator.gather(gt_val)
             filepaths_gathered = accelerator.gather(filepaths)
+            ratio = estimated_val_gathered / gt_val_gathered
 
             # save the predicted extent
-            for i in range(len(estimated_extent_gathered)):
-                root = '/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_scale_predicted'
-                cat_root = os.path.join(root, args.part_category)
-                os.makedirs(cat_root, exist_ok=True)
-                with open(os.path.join(cat_root, filepaths_gathered[i].split('/')[-1].replace('.ply', '.json')), 'w') as f:
-                    f.write(f'{{"scale": {estimated_extent_gathered[i].item()}}}')
+            for i in range(len(estimated_val_gathered)):
+                if args.predict_mode == 'volume':
+                    root = '/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_volume_predicted'
+                    cat_root = os.path.join(root, args.part_category)
+                    os.makedirs(cat_root, exist_ok=True)
+                    with open(os.path.join(cat_root, filepaths_gathered[i].split('/')[-1].replace('.ply', '.json')), 'w') as f:
+                        f.write(f'{{"volume": {estimated_val_gathered[i].item()}}}')
+                elif args.predict_mode == 'max_extent':
+                    root = '/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_scale_predicted'
+                    cat_root = os.path.join(root, args.part_category)
+                    os.makedirs(cat_root, exist_ok=True)
+                    with open(os.path.join(cat_root, filepaths_gathered[i].split('/')[-1].replace('.ply', '.json')), 'w') as f:
+                        f.write(f'{{"scale": {estimated_val_gathered[i].item()}}}')
 
-            ratio = estimated_extent_gathered / gt_extent_gathered
+            ratio = estimated_val_gathered / gt_val_gathered
             for i in range(num_bucket):
                 if i == num_bucket - 1:
                     test_bucket[i] += (ratio >= bucket_max).sum().item()

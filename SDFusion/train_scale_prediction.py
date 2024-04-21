@@ -107,7 +107,7 @@ def main():
 
             if args.predict_mode == 'volume': # predict the cube root of the volume
                 estimated_val = model(ply_data) * ply_scale
-                gt_val = torch.prod(part_extent_gt, dim=-1) ** 1/3
+                gt_val = torch.prod(part_extent_gt, dim=-1, keepdim=True) ** (1/3)
             elif args.predict_mode == 'max_extent':
                 estimated_val = model(ply_data) * ply_scale
                 gt_val = torch.max(part_extent_gt, dim=-1, keepdim=True)[0]
@@ -137,7 +137,7 @@ def main():
 
                 if args.predict_mode == 'volume': # predict the cube root of the volume
                     estimated_val = model(ply_data) * ply_scale
-                    gt_val = torch.prod(part_extent_gt, dim=-1) ** 1/3
+                    gt_val = torch.prod(part_extent_gt, dim=-1, keepdim=True) ** (1/3)
                 elif args.predict_mode == 'max_extent':
                     estimated_val = model(ply_data) * ply_scale
                     gt_val = torch.max(part_extent_gt, dim=-1, keepdim=True)[0]

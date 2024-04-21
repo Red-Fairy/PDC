@@ -96,7 +96,7 @@ class BaseOptions():
 		self.parser.add_argument('--mobility_type', choices=['translation', 'rotation'], default='translation', 
 								 help='mobility type, e.g, slider drawer is translation, hinge door is rotation')
 		self.parser.add_argument('--use_predicted_scale', action='store_true', help='use predicted scale for mobility constraint')
-
+		self.parser.add_argument('--use_predicted_volume', action='store_true', help='use predicted volume for mobility constraint')
 		# resize factor for parts
 		self.parser.add_argument('--scale_mode', choices=['volume', 'max_extent'], default='max_extent', help='scale mode for parts')
 
@@ -136,8 +136,8 @@ class BaseOptions():
 							os.path.join(expr_dir, f'test_diversity{self.opt.testdir}_{self.opt.load_iter}{rotate_string}_scale{self.opt.uc_scale}_eta{self.opt.ddim_eta}_steps{self.opt.ddim_steps}') if self.opt.test_diversity else \
 							os.path.join(expr_dir, f'test{self.opt.testdir}_{self.opt.load_iter}{rotate_string}_scale{self.opt.uc_scale}_eta{self.opt.ddim_eta}_steps{self.opt.ddim_steps}')
 		self.opt.img_dir += '_predscale' if self.opt.use_predicted_scale else ''
-		self.opt.img_dir += '_mobility' if self.opt.use_mobility_constraint else ''
 		self.opt.img_dir += '_extent' if self.opt.scale_mode == 'max_extent' else '_volume'
+		self.opt.img_dir += '_mobility' if self.opt.use_mobility_constraint else ''
 		os.makedirs(self.opt.img_dir, exist_ok=True)
 
 		# print args

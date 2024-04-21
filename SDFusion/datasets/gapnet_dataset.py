@@ -137,6 +137,9 @@ class GAPartNetDataset(BaseDataset):
                 if self.opt.use_predicted_scale:
                     predicted_scale_path = sdf_h5_file.replace(self.sdf_dir, 'part_scale_predicted').replace('.h5', '.json')
                     part_extent = torch.tensor(json.load(open(predicted_scale_path))['scale']).float().view(1, 1).repeat(1, 3)
+                if self.opt.use_predicted_volume:
+                    predicted_volume_path = sdf_h5_file.replace(self.sdf_dir, 'part_volume_predicted').replace('.h5', '.json') # cube root of the volume
+                    part_extent = torch.tensor(json.load(open(predicted_volume_path))['volume']).float().view(1, 1).repeat(1, 3)
 
             if self.opt.use_mobility_constraint:
                 mobility_path = sdf_h5_file.replace(self.sdf_dir, 'part_mobility').replace('.h5', '.json')
