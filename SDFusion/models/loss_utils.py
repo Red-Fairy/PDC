@@ -48,7 +48,7 @@ def get_collision_loss(sdf, ply, ply_translation, ply_rotation,
                        move_limit=None, move_axis=None, move_origin=None, 
                        move_type=None, move_samples=32, 
                        res=64,
-                       sdf_scale=None,
+                       scale_mode='max_extent',
                        loss_collision_weight=1.0, margin=1/128, 
                        use_bbox=False, linspace=False):
     '''
@@ -59,7 +59,7 @@ def get_collision_loss(sdf, ply, ply_translation, ply_rotation,
     part_extent: extent of the part, (1, 3)
     part_translation: translation of the part, (1, 3)
     move_limit: [min, max]
-    sdf_scale: if None, calculate it on-the-fly
+    scale_mode: volume or max_extent
     use_bbox: if True, use the bounding box of the part to sample points, add to sampled points to the point cloud
     linspace: if True, use linspace to sample the distance when moving the part
     '''
@@ -67,13 +67,12 @@ def get_collision_loss(sdf, ply, ply_translation, ply_rotation,
     B = 1 if move_limit is None else move_samples
     sdf = sdf.repeat(B, 1, 1, 1, 1) # (B, 1, res, res, res)
 
-    if sdf_scale is None: # calculate the scale on-the-fly
-        spacing = (2./res, 2./res, 2./res)
-        mesh = sdf_to_mesh_trimesh(sdf[0][0], spacing=spacing)
-        sdf_scale = np.max(mesh.extents)
-        # print(sdf_scale)
-    
-    scale = torch.max(part_extent) / sdf_scale # scalar
+    spacing = (2./res, 2./res, 2./res)
+    mesh = sdf_to_mesh_trimesh(sdf[0][0], spacing=spacing)
+    if scale_mode == 'volume':
+        scale = ((torch.prod(part_extent.prod(dim=-1)) / np.prod(mesh.extents)) ** (1/3)).item()
+    else:
+        scale = (torch.max(part_extent) / torch.max(torch.tensor(mesh.extents))).item()
 
     # -2) rotate the point cloud to the canonical pose
     # print(ply.shape, ply_rotation.shape)

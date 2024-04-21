@@ -39,6 +39,7 @@ parser.add_argument(
     help="condition model ckpt to load.",
 )
 parser.add_argument('--loss_fn', type=str, default='l2', help='loss function', choices=['l1', 'l2'])
+parser.add_argument('--predict_mode', type=str, default='max_extent', help='predict mode', choices=['volume', 'max_extent'])
 
 parser.add_argument("--continue_train", action="store_true", help="continue training")
 
@@ -102,11 +103,16 @@ def main():
             
             ply_data = data['ply'].to(device)
             ply_scale = data['ply_scale'].to(device)
-            gt_extent = data['part_extent'].to(device)
+            part_extent_gt = data['part_extent'].to(device) # (B, 3)
 
-            estimated_extent = model(ply_data) * ply_scale
-            # print(scale.shape, estimated_scale.shape)
-            loss = loss_fn(estimated_extent, gt_extent)
+            if args.predict_mode == 'volume': # predict the cube root of the volume
+                estimated_val = model(ply_data) * ply_scale
+                gt_val = torch.prod(part_extent_gt, dim=-1) ** 1/3
+            elif args.predict_mode == 'max_extent':
+                estimated_val = model(ply_data) * ply_scale
+                gt_val = torch.max(part_extent_gt, dim=-1, keepdim=True)[0]
+            
+            loss = loss_fn(estimated_val, gt_val)
 
             avg_loss = accelerator.gather(loss).mean()
             train_loss_meter.update(avg_loss, args.batch_size)
@@ -127,10 +133,16 @@ def main():
             for i, data in enumerate(test_dataloader):
                 ply_data = data['ply'].to(device)
                 ply_scale = data['ply_scale'].to(device)
-                gt_extent = data['part_extent'].to(device)
+                part_extent_gt = data['part_extent'].to(device) # (B, 3)
 
-                estimated_extent = model(ply_data) * ply_scale
-                loss = loss_fn(estimated_extent, gt_extent)
+                if args.predict_mode == 'volume': # predict the cube root of the volume
+                    estimated_val = model(ply_data) * ply_scale
+                    gt_val = torch.prod(part_extent_gt, dim=-1) ** 1/3
+                elif args.predict_mode == 'max_extent':
+                    estimated_val = model(ply_data) * ply_scale
+                    gt_val = torch.max(part_extent_gt, dim=-1, keepdim=True)[0]
+
+                loss = loss_fn(estimated_val, gt_val)
 
                 avg_loss = accelerator.gather(loss).mean()
                 test_loss_meter.update(avg_loss, args.batch_size)

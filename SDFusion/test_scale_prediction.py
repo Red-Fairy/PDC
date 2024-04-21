@@ -117,12 +117,23 @@ def main():
             ply_data = data['ply'].to(device)
             ply_scale = data['ply_scale'].to(device)
             gt_extent = data['part_extent'].to(device)
+            filepaths = data['path']
 
             estimated_extent = model(ply_data) * ply_scale
             loss = loss_fn(estimated_extent, gt_extent)
 
             estimated_extent_gathered = accelerator.gather(estimated_extent)
             gt_extent_gathered = accelerator.gather(gt_extent)
+            filepaths_gathered = accelerator.gather(filepaths)
+
+            # save the predicted extent
+            for i in range(len(estimated_extent_gathered)):
+                root = '/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_scale_predicted'
+                cat_root = os.path.join(root, args.part_category)
+                os.makedirs(cat_root, exist_ok=True)
+                with open(os.path.join(cat_root, filepaths_gathered[i].split('/')[-1].replace('.ply', '.json')), 'w') as f:
+                    f.write(f'{{"scale": {estimated_extent_gathered[i].item()}}}')
+
             ratio = estimated_extent_gathered / gt_extent_gathered
             for i in range(num_bucket):
                 if i == num_bucket - 1:

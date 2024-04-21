@@ -476,7 +476,8 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
             visuals_dict['part_scale'] = np.zeros([len(meshes)], dtype=np.float32)
             for i, mesh in enumerate(meshes):
-                visuals_dict['part_scale'][i] = torch.max(self.part_extent[i]).item() / np.max(mesh.extents)
+                visuals_dict['part_scale'][i] = torch.max(self.part_extent[i]).item() / np.max(mesh.extents) if self.opt.scale_mode == 'max_extent' else \
+                    (torch.prod(self.part_extent[i]).item() / np.prod(mesh.extents)) ** (1/3)
 
         return visuals_dict
 

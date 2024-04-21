@@ -339,7 +339,7 @@ class SDFusionModelPly2Shape(BaseModel):
                                                     move_origin=self.move_origin[i],
                                                     move_type=self.opt.mobility_type,
                                                     move_samples=self.opt.mobility_sample_count, res=self.shape_res,
-                                                    sdf_scale=None,
+                                                    scale_mode=self.opt.scale_mode,
                                                     use_bbox=False, linspace=True)
                 instance_name = self.paths[i].split('/')[-1].split('.')[0]
                 self.logger.log(f'Collision Loss for part {instance_name},', collision_loss.item())
@@ -495,11 +495,10 @@ class SDFusionModelPly2Shape(BaseModel):
             visuals_dict['ply_rotation'] = self.ply_rotation.cpu().numpy()
             visuals_dict['part_translation'] = self.part_translation.cpu().numpy()
 
-            # visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / (4 / 2.2)).cpu().numpy()
-
             visuals_dict['part_scale'] = np.zeros([len(meshes)], dtype=np.float32)
             for i, mesh in enumerate(meshes):
-                visuals_dict['part_scale'][i] = torch.max(self.part_extent[i]).item() / np.max(mesh.extents)
+                visuals_dict['part_scale'][i] = torch.max(self.part_extent[i]).item() / np.max(mesh.extents) if self.opt.scale_mode == 'max_extent' else \
+                    (torch.prod(self.part_extent[i]).item() / np.prod(mesh.extents)) ** (1/3)
 
         return visuals_dict
 

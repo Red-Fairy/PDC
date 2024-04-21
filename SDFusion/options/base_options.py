@@ -95,9 +95,10 @@ class BaseOptions():
 		self.parser.add_argument('--mobility_sample_count', type=int, default=32, help='mobility sample count')
 		self.parser.add_argument('--mobility_type', choices=['translation', 'rotation'], default='translation', 
 								 help='mobility type, e.g, slider drawer is translation, hinge door is rotation')
+		self.parser.add_argument('--use_predicted_scale', action='store_true', help='use predicted scale for mobility constraint')
 
 		# resize factor for parts
-		self.parser.add_argument('--resize_factor', type=float, default=4/2.2, help='about 1.818, resize factor for parts')
+		self.parser.add_argument('--scale_mode', choices=['volume', 'max_extent'], default='max_extent', help='scale mode for parts')
 
 		# rotation angle of input point cloud during inference
 		self.parser.add_argument('--rotate_angle', type=float, default=None, help='rotation angle of input point cloud during inference')
@@ -134,6 +135,9 @@ class BaseOptions():
 		self.opt.img_dir = os.path.join(expr_dir, 'train_visuals') if self.isTrain else \
 							os.path.join(expr_dir, f'test_diversity{self.opt.testdir}_{self.opt.load_iter}{rotate_string}_scale{self.opt.uc_scale}_eta{self.opt.ddim_eta}_steps{self.opt.ddim_steps}') if self.opt.test_diversity else \
 							os.path.join(expr_dir, f'test{self.opt.testdir}_{self.opt.load_iter}{rotate_string}_scale{self.opt.uc_scale}_eta{self.opt.ddim_eta}_steps{self.opt.ddim_steps}')
+		self.opt.img_dir += '_predscale' if self.opt.use_predicted_scale else ''
+		self.opt.img_dir += '_mobility' if self.opt.use_mobility_constraint else ''
+		self.opt.img_dir += '_extent' if self.opt.scale_mode == 'max_extent' else '_volume'
 		os.makedirs(self.opt.img_dir, exist_ok=True)
 
 		# print args

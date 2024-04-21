@@ -56,8 +56,8 @@ name=$1
 gpu_ids=$2
 load_iter=$3
 model_id='47585_7'
-cat="hinge_door"
-mobility_type="rotation"
+cat="slider_drawer"
+mobility_type="translation"
 rotate_angle=$4
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
@@ -70,6 +70,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --use_mobility_constraint \
             --mobility_type ${mobility_type} \
             --rotate_angle ${rotate_angle} \
+            --scale_mode volume \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
             --ddim_steps 50 --uc_scale 3"
 

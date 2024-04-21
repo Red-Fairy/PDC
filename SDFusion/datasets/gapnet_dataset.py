@@ -134,6 +134,9 @@ class GAPartNetDataset(BaseDataset):
             with open(transform_path, 'r') as f:
                 transform = json.load(f)
                 part_translate, part_extent = torch.tensor(transform['centroid']).float(), torch.tensor(transform['extents']).float()
+                if self.opt.use_predicted_scale:
+                    predicted_scale_path = sdf_h5_file.replace(self.sdf_dir, 'part_scale_predicted').replace('.h5', '.json')
+                    part_extent = torch.tensor(json.load(open(predicted_scale_path))['scale']).float().view(1, 1).repeat(1, 3)
 
             if self.opt.use_mobility_constraint:
                 mobility_path = sdf_h5_file.replace(self.sdf_dir, 'part_mobility').replace('.h5', '.json')
@@ -248,10 +251,10 @@ class GAPartNetDataset4ScalePrediction(BaseDataset):
         points, points_stat = pc_normalize(points, scale_norm=True, return_stat=True)
         points = torch.from_numpy(points).transpose(0, 1).float() # (3, N)
 
-        transform_path = ply_filepath.replace('part_ply_fps', 'part_bbox_aligned').replace('.ply', '.json')
+        transform_path = ply_filepath.replace('part_ply_fps', 'part_translation_scale').replace('.ply', '.json')
         with open(transform_path, 'r') as f:
             transform = json.load(f)
-            part_translate, part_extent = torch.tensor(transform['centroid']).float(), torch.tensor(transform['extents']).float()
+            _, part_extent = torch.tensor(transform['centroid']).float(), torch.tensor(transform['extents']).float()
 
         if self.ply_rotate:
 
@@ -266,9 +269,9 @@ class GAPartNetDataset4ScalePrediction(BaseDataset):
             points = torch.mm(rot_matrix, torch.cat([points, torch.ones(1, points.shape[1])], dim=0))[:-1]
             # points_stat['rotation'] = rot_matrix
 
-            ret['ply'] = points
-            ret['ply_scale'] = points_stat['scale'].view(1)
-            ret['part_extent'] = torch.max(part_extent).view(1)
+        ret['ply'] = points
+        ret['ply_scale'] = points_stat['scale'].view(1)
+        ret['part_extent'] = part_extent
 
         return ret
 
