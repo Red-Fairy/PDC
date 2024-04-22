@@ -15,9 +15,6 @@ class TestOptions(BaseOptions):
         self.parser.add_argument('--test_diversity', action='store_true', help='test diversity')
         self.parser.add_argument('--testdir', type=str, default='', help='test directory prefix')
 
-        # test a single model
-        self.parser.add_argument('--model_id', default=None, type=str, help='model id to optimize')
-
         # use bbox mesh to initialize
         self.parser.add_argument('--use_bbox_mesh', action='store_true', help='use bbox mesh to initialize')
 

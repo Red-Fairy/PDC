@@ -344,10 +344,10 @@ class SDFusionModelPly2Shape(BaseModel):
                 instance_name = self.paths[i].split('/')[-1].split('.')[0]
                 self.logger.log(f'Collision Loss for part {instance_name},', collision_loss.item())
 
-    def guided_inference(self, data, ddim_steps=None, ddim_eta=0., n_sample_x0=1):
+    def guided_inference(self, data, ddim_steps=None, ddim_eta=0., n_sample_x0=1,
+                         print_collision_loss=False):
         
         self.switch_eval()
-
         self.set_input(data)
 
         if ddim_steps is None:
@@ -387,13 +387,11 @@ class SDFusionModelPly2Shape(BaseModel):
                 latents_grad = latents.detach().requires_grad_(True)
                 pred_x0 = self.noise_scheduler.step(noise_pred, t, latents_grad, eta=ddim_eta).pred_original_sample
 
-                setattr(self, f'pred_sdf_x0_{i}', self.vqvae.decode_no_quant(pred_x0).detach())
-                
-                pred_x0_noisy = pred_x0.expand(n_sample_x0, -1, -1, -1, -1)
+                # for visualization
+                pred_x0_sdf = self.vqvae.decode_no_quant(pred_x0)
+                setattr(self, f'pred_sdf_x0_{i}', pred_x0_sdf.detach())
 
-                pred_x0_noisy_sdf = self.vqvae.decode(pred_x0_noisy)
-
-                collision_loss = get_collision_loss(self.gen_df[i:i+1], self.ply[i:i+1], 
+                collision_loss = get_collision_loss(pred_x0_sdf, self.ply[i:i+1], 
                                                     self.ply_translation[i:i+1], self.ply_rotation[i:i+1],
                                                     self.part_extent[i:i+1], self.part_translation[i:i+1],
                                                     move_limit=self.move_limit[i], 
@@ -401,7 +399,7 @@ class SDFusionModelPly2Shape(BaseModel):
                                                     move_origin=self.move_origin[i],
                                                     move_type=self.opt.mobility_type,
                                                     move_samples=self.opt.mobility_sample_count, res=self.shape_res,
-                                                    sdf_scale=None,
+                                                    scale_mode=self.opt.scale_mode,
                                                     use_bbox=False, linspace=True)
                 print('Collision Loss:', collision_loss, '\n')
                 

@@ -360,10 +360,10 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
                                                     use_bbox=True, linspace=True)
                 print(f'Collision Loss for Instance {i}:', collision_loss.item())
 
-    def guided_inference(self, data, ddim_steps=None, ddim_eta=0., n_sample_x0=1):
+    def guided_inference(self, data, ddim_steps=None, ddim_eta=0., n_sample_x0=1,
+                         print_collision_loss=False):
         
         self.switch_eval()
-
         self.set_input(data)
 
         if ddim_steps is None:
@@ -374,8 +374,8 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
         B = self.x.shape[0]
         assert B == 1 # only support batch size 1 for now
         shape = self.z_shape
-        c = self.ply_cond_modell(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
-        uc = self.ply_cond_modell(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
+        c = self.ply_cond_model(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
+        uc = self.ply_cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
         c_full = torch.cat([uc, c])
 
         latents = torch.randn((B, *shape), device=self.device) # (B, *shape)

@@ -109,7 +109,7 @@ class Visualizer():
 		if self.isTrain:
 			return i
 		elif self.opt.test_diversity:
-			return self.diversity_count
+			return self.diversity_count + i
 		else:
 			return ''
 
@@ -171,9 +171,10 @@ class Visualizer():
 						points = points + visuals['ply_translation'][i][:, None]
 						ply_file.points = open3d.utility.Vector3dVector(points.T)
 				
-				instance_label = self.get_instance_label(i)
-				ply_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], instance_label, 'ply'))
-				open3d.io.write_point_cloud(ply_path, ply_file)
+				if self.opt.isTrain or not self.opt.test_diversity: # do not save the point cloud when testing diversity
+					instance_label = self.get_instance_label(i)
+					ply_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], instance_label, 'ply'))
+					open3d.io.write_point_cloud(ply_path, ply_file)
 
 		if self.opt.visual_mode == 'sdf': # save the sdf file
 			for i in range(visuals['sdf'].shape[0]):
@@ -199,7 +200,7 @@ class Visualizer():
 		self.log_tensorboard_visuals(visuals, current_iters, phase=phase)
 
 		if not self.opt.isTrain and self.opt.test_diversity:
-			self.diversity_count += 1
+			self.diversity_count += len(visuals['meshes'])
 
 	def log_tensorboard_visuals(self, visuals, cur_step, labels_while_list=None, phase='train'):
 		writer = self.opt.writer

@@ -103,6 +103,9 @@ class BaseOptions():
 		# rotation angle of input point cloud during inference
 		self.parser.add_argument('--rotate_angle', type=float, default=None, help='rotation angle of input point cloud during inference')
 
+		# test a single model
+		self.parser.add_argument('--model_id', default=None, type=str, help='model id to optimize')
+
 		self.initialized = True
 
 	def parse_and_setup(self, accelerator: Accelerator = None):
@@ -133,11 +136,11 @@ class BaseOptions():
 
 		rotate_string = '' if not self.opt.ply_cond else f'_rotate{self.opt.rotate_angle}' if self.opt.rotate_angle is not None else '_rotate'
 		self.opt.img_dir = os.path.join(expr_dir, 'train_visuals') if self.isTrain else \
-							os.path.join(expr_dir, f'test_diversity{self.opt.testdir}_{self.opt.load_iter}{rotate_string}_scale{self.opt.uc_scale}_eta{self.opt.ddim_eta}_steps{self.opt.ddim_steps}') if self.opt.test_diversity else \
 							os.path.join(expr_dir, f'test{self.opt.testdir}_{self.opt.load_iter}{rotate_string}_scale{self.opt.uc_scale}_eta{self.opt.ddim_eta}_steps{self.opt.ddim_steps}')
 		self.opt.img_dir += '_predscale' if self.opt.use_predicted_scale else ''
 		self.opt.img_dir += '_extent' if self.opt.scale_mode == 'max_extent' else '_volume'
 		self.opt.img_dir += '_mobility' if self.opt.use_mobility_constraint else ''
+		self.opt.img_dir += f'_{self.opt.model_id}' if self.opt.model_id is not None else ''
 		os.makedirs(self.opt.img_dir, exist_ok=True)
 
 		# print args

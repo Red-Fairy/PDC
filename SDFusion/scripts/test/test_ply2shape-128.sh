@@ -55,9 +55,9 @@ batch_size=4
 name=$1
 gpu_ids=$2
 load_iter=$3
-model_id='47585_7'
-cat="slider_drawer"
-mobility_type="translation"
+model_id='10489_2'
+cat="hinge_door"
+mobility_type="rotation"
 rotate_angle=$4
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
@@ -71,7 +71,6 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --mobility_type ${mobility_type} \
             --rotate_angle ${rotate_angle} \
             --scale_mode volume \
-            --use_predicted_volume \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
             --ddim_steps 50 --uc_scale 3"
 
