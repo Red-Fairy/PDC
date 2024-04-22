@@ -40,7 +40,7 @@ args = parser.parse_args()
 
 def main():
 
-    experiment_path = os.path.join('./logs_scale_pred', args.experiment_name)
+    experiment_path = os.path.join('./logs_scale_pred', args.part_category, args.experiment_name)
     os.makedirs(experiment_path, exist_ok=True)
 
     logger = Logger(os.path.join(experiment_path, 'test_log.txt'))
