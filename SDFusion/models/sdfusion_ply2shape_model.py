@@ -391,12 +391,12 @@ class SDFusionModelPly2Shape(BaseModel):
                 pred_x0_sdf = self.vqvae.decode_no_quant(pred_x0)
                 setattr(self, f'pred_sdf_x0_{i}', pred_x0_sdf.detach())
 
-                collision_loss = get_collision_loss(pred_x0_sdf, self.ply[i:i+1], 
-                                                    self.ply_translation[i:i+1], self.ply_rotation[i:i+1],
-                                                    self.part_extent[i:i+1], self.part_translation[i:i+1],
-                                                    move_limit=self.move_limit[i], 
-                                                    move_axis=self.move_axis[i],
-                                                    move_origin=self.move_origin[i],
+                collision_loss = get_collision_loss(pred_x0_sdf, self.ply, 
+                                                    self.ply_translation, self.ply_rotation,
+                                                    self.part_extent, self.part_translation,
+                                                    move_limit=self.move_limit[0], 
+                                                    move_axis=self.move_axis[0],
+                                                    move_origin=self.move_origin[0],
                                                     move_type=self.opt.mobility_type,
                                                     move_samples=self.opt.mobility_sample_count, res=self.shape_res,
                                                     scale_mode=self.opt.scale_mode,
