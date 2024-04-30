@@ -11,15 +11,15 @@ df_cfg='configs/sdfusion-ply2shape-128.yaml'
 vq_model="vqvae"
 vq_dset='gapnet'
 vq_cat="slider_drawer"
-vq_ckpt="/raid/haoran/Project/PartDiffusion/PartDiffusion/SDFusion/logs/gapnet-res128-vqvae-lr0.00002/ckpt/vqvae_steps-latest.pth"
-vq_cfg="/raid/haoran/Project/PartDiffusion/PartDiffusion/SDFusion/configs/vqvae_gapnet-128.yaml"
+vq_ckpt="logs/gapnet-res128-vqvae-lr0.00002/ckpt/vqvae_steps-latest.pth"
+vq_cfg="configs/vqvae_gapnet-128.yaml"
 
-cond_ckpt="/raid/haoran/Project/PartDiffusion/PartDiffusion/pretrained_checkpoint/pointnet2.pth"
+cond_ckpt="../pretrained_checkpoint/pointnet2.pth"
 
 ### dataset stuff ###
 max_dataset_size=1000000
 dataset_mode='gapnet'
-dataroot="/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset"
+dataroot="/mnt/azureml/cr/j/19c62471467141d39f5f0dc988c1ea42/exe/wd/data-rundong/PartDiffusion/dataset"
 
 res=128
 trunc_thres=0.2
@@ -55,7 +55,7 @@ batch_size=1
 name=$1
 gpu_ids=$2
 load_iter=$3
-# model_id='103361_8'
+model_id='20411_0'
 cat="slider_drawer"
 mobility_type="translation"
 # cat="hinge_door"
@@ -70,13 +70,12 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --total_iters ${total_iters} --dataroot ${dataroot} \
             --ply_rotate \
             --mobility_type ${mobility_type} \
+            --use_mobility_constraint \
             --rotate_angle ${rotate_angle} \
             --scale_mode volume \
             --guided_inference \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
-            --ddim_steps 50 --uc_scale 3"
-
-            # --model_id ${model_id} \
+            --ddim_steps 50 --uc_scale 3 "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
 
