@@ -27,7 +27,7 @@ from models.networks.diffusion_networks.network import DiffusionUNet
 from models.model_utils import load_vqvae
 from models.networks.ply_networks.pointnet2 import PointNet2
 from models.networks.ply_networks.pointnet import PointNetEncoder
-from models.loss_utils import get_collision_loss
+from models.loss_utils import get_physical_loss
 
 from diffusers import DDIMScheduler
 from diffusers.optimization import get_cosine_schedule_with_warmup
@@ -308,7 +308,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
             latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
 
         # decode z
-        self.gen_df = self.vqvae.module.decode_no_quant(latents)
+        self.gen_df = self.vqvae.module.decode_no_quant(latents).detach()
 
     def guided_inference(self, data, ddim_steps=None, ddim_eta=0., n_sample_x0=1):
         
@@ -357,14 +357,14 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
                 noise = torch.randn([n_sample_x0, *shape], device=self.device) * (sigma_t / (1 + sigma_t ** 2) ** 0.5) # (n_sample_x0, *shape)
                 pred_x0_noisy = pred_x0.expand(n_sample_x0, -1, -1, -1, -1) + noise
                 pred_x0_noisy_sdf = self.vqvae.decode(pred_x0_noisy)
-                collision_loss = get_collision_loss(pred_x0_noisy_sdf, self.ply, self.ply_translation, self.part_extent, self.part_translation,
+                collision_loss = get_physical_loss(pred_x0_noisy_sdf, self.ply, self.ply_translation, self.part_extent, self.part_translation,
                                                      move_limit=None, move_axis=None)
                 print(collision_loss)
                 grad = torch.autograd.grad(collision_loss, latents_grad)[0] # (B, *shape)
                 latents = latents + (1 - self.noise_scheduler.alphas_cumprod[t]) ** 0.5 * grad
 
         # decode z
-        self.gen_df = self.vqvae.module.decode_no_quant(latents)
+        self.gen_df = self.vqvae.module.decode_no_quant(latents).detach()
 
     @torch.no_grad()
     def uncond(self, ngen=1, ddim_steps=200, ddim_eta=0.):

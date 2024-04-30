@@ -115,7 +115,6 @@ class Visualizer():
 
 	def display_current_results(self, visuals, current_iters, im_name='', phase='train'):
 
-		visual_img = visuals['img']
 		paths = visuals['paths']
 		object_ids = [path.split('/')[-1].split('_')[0] for path in paths]
 		part_ids = [path.split('/')[-1].split('_')[1].split('.')[0] for path in paths]
@@ -192,12 +191,13 @@ class Visualizer():
 			np.save(f'{self.img_dir}/{phase}_step{current_iters:05d}_meta.npy', data_dict, allow_pickle=True)
 			
 		# write images to disk
-		for label, image_numpy in visual_img.items():
-			suffix = f'{phase}_step{current_iters:05d}_{label}.png'
-			img_path = os.path.join(self.img_dir, suffix)
-			util.save_image(image_numpy, img_path)
-		# log to tensorboard
-		self.log_tensorboard_visuals(visuals, current_iters, phase=phase)
+		if 'img' in visuals:
+			for label, image_numpy in visuals['img'].items():
+				suffix = f'{phase}_step{current_iters:05d}_{label}.png'
+				img_path = os.path.join(self.img_dir, suffix)
+				util.save_image(image_numpy, img_path)
+			# log to tensorboard
+			self.log_tensorboard_visuals(visuals, current_iters, phase=phase)
 
 		if not self.opt.isTrain and self.opt.test_diversity:
 			self.diversity_count += len(visuals['meshes'])

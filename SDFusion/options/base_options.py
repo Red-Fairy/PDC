@@ -98,6 +98,8 @@ class BaseOptions():
 		self.parser.add_argument('--use_predicted_scale', action='store_true', help='use predicted scale for mobility constraint')
 		self.parser.add_argument('--use_predicted_volume', action='store_true', help='use predicted volume for mobility constraint')
 		self.parser.add_argument('--guided_inference', action='store_true', help='use guided inference')
+		self.parser.add_argument('--test_description', type=str, default=None, help='test description')
+
 		# resize factor for parts
 		self.parser.add_argument('--scale_mode', choices=['volume', 'max_extent'], default='max_extent', help='scale mode for parts')
 
@@ -143,6 +145,7 @@ class BaseOptions():
 		self.opt.img_dir += '_mobility' if self.opt.use_mobility_constraint else ''
 		self.opt.img_dir += '_guided' if self.opt.guided_inference else ''
 		self.opt.img_dir += f'_{self.opt.model_id}' if self.opt.model_id is not None else ''
+		self.opt.img_dir += f'_{self.opt.test_description}' if self.opt.test_description is not None else ''
 		os.makedirs(self.opt.img_dir, exist_ok=True)
 
 		# print args

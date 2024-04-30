@@ -1,7 +1,3 @@
-RED='\033[0;31m'
-NC='\033[0m' # No Color
-DATE_WITH_TIME=`date "+%Y-%m-%dT%H-%M-%S"`
-
 logs_dir='logs'
 
 ### model stuff ###
@@ -32,32 +28,14 @@ total_iters=250000
 save_steps_freq=2500
 ###########################
 
-today=$(date '+%m%d')
-me=`basename "$0"`
-me=$(echo $me | cut -d'.' -f 1)
-
-note=$RELEASE_NOTE
-
-debug=0
-if [ $debug = 1 ]; then
-    printf "${RED}Debugging!${NC}\n"
-	batch_size=1
-    # batch_size=40
-	max_dataset_size=120
-    save_steps_freq=3
-	display_freq=2
-	print_freq=2
-    name="DEBUG-${name}"
-fi
-
 ### hyper params ###
 batch_size=1
 name=$1
 gpu_ids=$2
 load_iter=$3
 model_id='20411_0'
-cat="slider_drawer"
-mobility_type="translation"
+cat="hinge_door"
+mobility_type="rotation"
 # cat="hinge_door"
 # mobility_type="rotation"
 rotate_angle=$4
@@ -75,7 +53,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --scale_mode volume \
             --guided_inference \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
-            --ddim_steps 50 --uc_scale 3 "
+            --ddim_steps 50 --uc_scale 3 --test_description 25it_loss_guided_inference "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
 

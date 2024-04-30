@@ -181,6 +181,7 @@ class Logger(object):
             stacked_info += str(info) + ' '
         print(stacked_info)
         self.logger.write(stacked_info + '\n')
+        self.logger.flush()
 
     def close(self):
         self.logger.close()

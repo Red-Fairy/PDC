@@ -26,7 +26,7 @@ from models.networks.vqvae_networks.network import VQVAE
 from models.networks.diffusion_networks.network import DiffusionUNet
 from models.model_utils import load_vqvae
 from models.networks.ply_networks.pointnet2 import PointNet2
-from models.loss_utils import get_collision_loss
+from models.loss_utils import get_physical_loss
 
 from diffusers import DDIMScheduler
 from diffusers.optimization import get_cosine_schedule_with_warmup
@@ -127,9 +127,9 @@ class SDFusionModelPly2Shape(BaseModel):
         self.ddim_steps = self.df_conf.model.params.ddim_steps
         cprint(f'[*] setting ddim_steps={self.ddim_steps}', 'blue')
 
-        self.planner = None
-        if not self.isTrain:
-            self.planner = create_planner(opt)
+        # self.planner = None
+        # if not self.isTrain:
+        #     self.planner = create_planner(opt)
 
         self.loss_meter = AverageMeter()
         self.loss_meter.reset()
@@ -327,11 +327,11 @@ class SDFusionModelPly2Shape(BaseModel):
                 latents = self.vqvae(self.gen_df, forward_no_quant=True, encode_only=True)
 
         # decode z
-        self.gen_df = self.vqvae.decode_no_quant(latents)
+        self.gen_df = self.vqvae.decode_no_quant(latents).detach()
 
         if print_collision_loss:
             for i in range(B):
-                collision_loss = get_collision_loss(self.gen_df[i:i+1], self.ply[i:i+1], 
+                collision_loss = get_physical_loss(self.gen_df[i:i+1], self.ply[i:i+1], 
                                                     self.ply_translation[i:i+1], self.ply_rotation[i:i+1],
                                                     self.part_extent[i:i+1], self.part_translation[i:i+1],
                                                     move_limit=self.move_limit[i], 
@@ -391,7 +391,7 @@ class SDFusionModelPly2Shape(BaseModel):
                 pred_x0_sdf = self.vqvae.decode_no_quant(pred_x0)
                 # setattr(self, f'pred_sdf_x0_{i}', pred_x0_sdf.detach())
 
-                collision_loss = get_collision_loss(pred_x0_sdf, self.ply, 
+                collision_loss = get_physical_loss(pred_x0_sdf, self.ply, 
                                                     self.ply_translation, self.ply_rotation,
                                                     self.part_extent, self.part_translation,
                                                     move_limit=self.move_limit[0], 
@@ -401,9 +401,9 @@ class SDFusionModelPly2Shape(BaseModel):
                                                     move_samples=self.opt.mobility_sample_count, res=self.shape_res,
                                                     scale_mode=self.opt.scale_mode,
                                                     use_bbox=False, linspace=True)
-                print('Collision Loss:', collision_loss.item(), '\n')
                 
                 if i >= ddim_steps // 2:
+                # if i >= 0:
                     grad = torch.autograd.grad(collision_loss, latents_grad)[0] # (B, *shape)
                     print(grad.sum().item())
                     # grad = grad / (grad.norm() + 1e-8) # clip grad norm
@@ -415,6 +415,20 @@ class SDFusionModelPly2Shape(BaseModel):
 
         # decode z
         self.gen_df = self.vqvae.decode_no_quant(latents).detach()
+
+        with torch.no_grad():
+            collision_loss = get_physical_loss(self.gen_df, self.ply, 
+                                                self.ply_translation, self.ply_rotation,
+                                                self.part_extent, self.part_translation,
+                                                move_limit=self.move_limit[0], 
+                                                move_axis=self.move_axis[0],
+                                                move_origin=self.move_origin[0],
+                                                move_type=self.opt.mobility_type,
+                                                move_samples=self.opt.mobility_sample_count, res=self.shape_res,
+                                                scale_mode=self.opt.scale_mode,
+                                                use_bbox=False, linspace=True)
+            instance_name = self.paths[0].split('/')[-1].split('.')[0]
+            self.logger.log(f'Collision Loss for part {instance_name},', collision_loss.item())
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
@@ -461,26 +475,27 @@ class SDFusionModelPly2Shape(BaseModel):
 
         return ret
 
+    @torch.no_grad()
     def get_current_visuals(self):
 
-        with torch.no_grad():
-            self.img_gt = render_sdf(self.renderer, self.x).detach()
-            self.img_gen_df = render_sdf(self.renderer, self.gen_df).detach()
-            spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
-            meshes = [sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=spc) for i in range(self.gen_df.shape[0])]
-
-        vis_tensor_names = [
-            'img_gt',
-            'img_gen_df',
-        ]
-        vis_ims = self.tnsrs2ims(vis_tensor_names)
-        visuals = zip(vis_tensor_names, vis_ims)
+        spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
+        meshes = [sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=spc) for i in range(self.gen_df.shape[0])]
         visuals_dict = {
-            "img": OrderedDict(visuals),
             "meshes": meshes,
             "paths": self.paths,
             "points": self.ply.detach().cpu().numpy(), # (B, 3, N)
         }
+
+        if self.opt.isTrain:
+            self.img_gt = render_sdf(self.renderer, self.x).detach()
+            self.img_gen_df = render_sdf(self.renderer, self.gen_df).detach()
+            vis_tensor_names = [
+                'img_gt',
+                'img_gen_df',
+            ]
+            vis_ims = self.tnsrs2ims(vis_tensor_names)
+            visuals = zip(vis_tensor_names, vis_ims)
+            visuals_dict['img'] = OrderedDict(visuals)
 
         if hasattr(self, f'pred_sdf_x0_{self.ddim_steps-1}'):
             meshes_pred = [sdf_to_mesh_trimesh(getattr(self, f'pred_sdf_x0_{i}')[0][0], spacing=spc) for i in range(self.ddim_steps)]
@@ -498,6 +513,7 @@ class SDFusionModelPly2Shape(BaseModel):
 
         return visuals_dict
 
+    @torch.no_grad()
     def save(self, label, global_step, save_opt=False):
 
         state_dict = {
@@ -548,13 +564,13 @@ class SDFusionModelPly2Shape(BaseModel):
 
         return iter_passed
 
-    def set_planner(self, planner):
-        if not self.isTrain:
-            self.planner = planner
-            if self.planner is not None:
-                print(colored('[*] planner type: %s' % planner.__class__.__name__,
-                            'red'))
-            else:
-                print(colored('[*] planner type: None', 'red'))
-        else:
-            raise NotImplementedError('planner setter is only for inference')
+    # def set_planner(self, planner):
+    #     if not self.isTrain:
+    #         self.planner = planner
+    #         if self.planner is not None:
+    #             print(colored('[*] planner type: %s' % planner.__class__.__name__,
+    #                         'red'))
+    #         else:
+    #             print(colored('[*] planner type: None', 'red'))
+    #     else:
+    #         raise NotImplementedError('planner setter is only for inference')
