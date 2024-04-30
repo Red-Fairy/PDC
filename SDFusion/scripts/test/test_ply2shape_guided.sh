@@ -58,6 +58,8 @@ load_iter=$3
 # model_id='103361_8'
 cat="slider_drawer"
 mobility_type="translation"
+# cat="hinge_door"
+# mobility_type="rotation"
 rotate_angle=$4
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
