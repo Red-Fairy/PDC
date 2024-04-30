@@ -55,9 +55,9 @@ batch_size=1
 name=$1
 gpu_ids=$2
 load_iter=$3
-model_id='103361_8'
-cat="hinge_knob"
-mobility_type="rotation"
+# model_id='103361_8'
+cat="slider_drawer"
+mobility_type="translation"
 rotate_angle=$4
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
@@ -70,10 +70,11 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --mobility_type ${mobility_type} \
             --rotate_angle ${rotate_angle} \
             --scale_mode volume \
-            --model_id ${model_id} \
             --guided_inference \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
             --ddim_steps 50 --uc_scale 3"
+
+            # --model_id ${model_id} \
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
 
