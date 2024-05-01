@@ -331,7 +331,7 @@ class SDFusionModelPly2Shape(BaseModel):
 
         if print_collision_loss:
             for i in range(B):
-                collision_loss = get_physical_loss(self.gen_df[i:i+1], self.ply[i:i+1], 
+                collision_loss, contact_loss = get_physical_loss(self.gen_df[i:i+1], self.ply[i:i+1], 
                                                     self.ply_translation[i:i+1], self.ply_rotation[i:i+1],
                                                     self.part_extent[i:i+1], self.part_translation[i:i+1],
                                                     move_limit=self.move_limit[i], 
@@ -342,10 +342,9 @@ class SDFusionModelPly2Shape(BaseModel):
                                                     scale_mode=self.opt.scale_mode,
                                                     use_bbox=False, linspace=True)
                 instance_name = self.paths[i].split('/')[-1].split('.')[0]
-                self.logger.log(f'Collision Loss for part {instance_name},', collision_loss.item())
+                self.logger.log(f'part {instance_name}, collision loss {collision_loss.item():.4f}, contact loss {contact_loss.item():.4f}')
 
-    def guided_inference(self, data, ddim_steps=None, ddim_eta=0., n_sample_x0=1,
-                         print_collision_loss=False):
+    def guided_inference(self, data, ddim_steps=None, ddim_eta=0.):
         
         self.switch_eval()
         self.set_input(data)
@@ -391,7 +390,7 @@ class SDFusionModelPly2Shape(BaseModel):
                 pred_x0_sdf = self.vqvae.decode_no_quant(pred_x0)
                 # setattr(self, f'pred_sdf_x0_{i}', pred_x0_sdf.detach())
 
-                collision_loss = get_physical_loss(pred_x0_sdf, self.ply, 
+                collision_loss, contact_loss = get_physical_loss(pred_x0_sdf, self.ply, 
                                                     self.ply_translation, self.ply_rotation,
                                                     self.part_extent, self.part_translation,
                                                     move_limit=self.move_limit[0], 
@@ -401,10 +400,12 @@ class SDFusionModelPly2Shape(BaseModel):
                                                     move_samples=self.opt.mobility_sample_count, res=self.shape_res,
                                                     scale_mode=self.opt.scale_mode,
                                                     use_bbox=False, linspace=True)
+
+                print(f'collision {collision_loss.item():.4f}, contact {contact_loss.item():.4f}')
                 
                 if i >= ddim_steps // 2:
                 # if i >= 0:
-                    grad = torch.autograd.grad(collision_loss, latents_grad)[0] # (B, *shape)
+                    grad = torch.autograd.grad(collision_loss + contact_loss, latents_grad)[0] # (B, *shape)
                     print(grad.sum().item())
                     # grad = grad / (grad.norm() + 1e-8) # clip grad norm
                     noise_pred = noise_pred + (1 - self.noise_scheduler.alphas_cumprod[t]) ** 0.5 * grad
@@ -417,7 +418,7 @@ class SDFusionModelPly2Shape(BaseModel):
         self.gen_df = self.vqvae.decode_no_quant(latents).detach()
 
         with torch.no_grad():
-            collision_loss = get_physical_loss(self.gen_df, self.ply, 
+            collision_loss, contact_loss = get_physical_loss(self.gen_df, self.ply, 
                                                 self.ply_translation, self.ply_rotation,
                                                 self.part_extent, self.part_translation,
                                                 move_limit=self.move_limit[0], 
@@ -428,7 +429,7 @@ class SDFusionModelPly2Shape(BaseModel):
                                                 scale_mode=self.opt.scale_mode,
                                                 use_bbox=False, linspace=True)
             instance_name = self.paths[0].split('/')[-1].split('.')[0]
-            self.logger.log(f'Collision Loss for part {instance_name},', collision_loss.item())
+            self.logger.log(f'part {instance_name}, collision loss {collision_loss.item():.4f}, contact loss {contact_loss.item():.4f}')
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):

@@ -310,62 +310,6 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         # decode z
         self.gen_df = self.vqvae.module.decode_no_quant(latents).detach()
 
-    def guided_inference(self, data, ddim_steps=None, ddim_eta=0., n_sample_x0=1):
-        
-        self.switch_eval()
-
-        self.set_input(data)
-
-        if ddim_steps is None:
-            ddim_steps = self.ddim_steps
-
-        B = self.x.shape[0]
-        assert B == 1 # only support batch size 1 for now
-        shape = self.z_shape
-        c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
-        uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
-        c_full = torch.cat([uc, c])
-
-        latents = torch.randn((B, *shape), device=self.device) # (B, *shape)
-        latents = latents * self.noise_scheduler.init_noise_sigma
-
-        self.noise_scheduler.set_timesteps(ddim_steps)
-
-        # w/ condition
-        for t in tqdm(self.noise_scheduler.timesteps):
-            # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
-            latent_model_input = torch.cat([latents] * 2)
-            latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
-
-            # predict the noise residual
-            with torch.no_grad():
-                timesteps = torch.full((B*2,), t, device=self.device, dtype=torch.int64)
-                noise_pred = self.apply_model(latent_model_input, timesteps, c_full)
-
-            # perform guidance
-            noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
-            noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
-
-            # compute the previous noisy sample x_t -> x_t-1
-            with torch.enable_grad():
-                latents_grad = latents.detach().requires_grad_(True)
-                latents, pred_x0 = self.noise_scheduler.step(noise_pred, t, latents_grad)
-                
-                # add noise to pred_x0, with std = sigma_t / sqrt(1 + sigma_t^2)
-                prev_t = t - self.noise_scheduler.config.num_train_timesteps // self.noise_scheduler.num_inference_steps
-                sigma_t = self.noise_scheduler._get_variance(t, prev_t) ** 0.5
-                noise = torch.randn([n_sample_x0, *shape], device=self.device) * (sigma_t / (1 + sigma_t ** 2) ** 0.5) # (n_sample_x0, *shape)
-                pred_x0_noisy = pred_x0.expand(n_sample_x0, -1, -1, -1, -1) + noise
-                pred_x0_noisy_sdf = self.vqvae.decode(pred_x0_noisy)
-                collision_loss = get_physical_loss(pred_x0_noisy_sdf, self.ply, self.ply_translation, self.part_extent, self.part_translation,
-                                                     move_limit=None, move_axis=None)
-                print(collision_loss)
-                grad = torch.autograd.grad(collision_loss, latents_grad)[0] # (B, *shape)
-                latents = latents + (1 - self.noise_scheduler.alphas_cumprod[t]) ** 0.5 * grad
-
-        # decode z
-        self.gen_df = self.vqvae.module.decode_no_quant(latents).detach()
-
     @torch.no_grad()
     def uncond(self, ngen=1, ddim_steps=200, ddim_eta=0.):
 

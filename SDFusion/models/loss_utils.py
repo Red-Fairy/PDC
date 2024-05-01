@@ -49,10 +49,10 @@ def get_physical_loss(sdf, ply, ply_translation, ply_rotation,
                        move_type=None, move_samples=32, 
                        res=64,
                        scale_mode='max_extent',
-                       margin=1/128, 
+                       margin=1/128,
                        use_bbox=False, linspace=False,
                        loss_collision_weight=1.0,
-                       loss_contact_weight=1.0):
+                       loss_contact_weight=100.0):
     '''
     sdf: sdf values, (B, 1, res, res, res), multiple generated sdf with the same point cloud condition
     ply: point cloud, (1, 3, N)
@@ -145,7 +145,7 @@ def get_physical_loss(sdf, ply, ply_translation, ply_rotation,
     loss_collision = torch.sum(torch.max(F.relu(-sdf_ply-margin), dim=0)[0])
 
     # 4+) calculate the contact loss, punish if all points are outside the part
-    loss_contact = torch.sum(torch.min(F.relu(sdf_ply-margin), dim=1)[0])
+    loss_contact = torch.sum(torch.min(F.relu(sdf_ply), dim=1)[0])
 
     # debug, filter the points with positive sampled sdf values
     # ply_file = open3d.geometry.PointCloud()

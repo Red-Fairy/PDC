@@ -28,7 +28,7 @@ def eval_main_worker(opt, model, test_dl, visualizer):
 
 	for i, test_data in tqdm(enumerate(test_dl)):
 
-		print(test_data['path'])
+		# print(test_data['path'])
 
 		if opt.guided_inference:
 			model.guided_inference(test_data, ddim_eta=opt.ddim_eta, ddim_steps=opt.ddim_steps)

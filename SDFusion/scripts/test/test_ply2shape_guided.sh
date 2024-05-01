@@ -34,7 +34,7 @@ name=$1
 gpu_ids=$2
 load_iter=$3
 model_id='20411_0'
-cat="hinge_door"
+cat="slider_drawer"
 mobility_type="rotation"
 # cat="hinge_door"
 # mobility_type="rotation"
@@ -53,7 +53,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --scale_mode volume \
             --guided_inference \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
-            --ddim_steps 50 --uc_scale 3 --test_description 25it_loss_guided_inference "
+            --ddim_steps 50 --uc_scale 3 --test_description 25it_collsion_contact-add-margin_guided_inference "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
 
