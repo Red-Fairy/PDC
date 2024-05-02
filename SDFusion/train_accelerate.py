@@ -25,7 +25,7 @@ from utils.visualizer import Visualizer
 
 torch.autograd.set_detect_anomaly(True)
 
-def train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, accelerator: Accelerator):
+def train_main_worker(opt, model, train_dl, test_dl, accelerator: Accelerator):
 
     if accelerator.is_main_process:
         # setup visualizer for the main process
@@ -92,7 +92,7 @@ def train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, accelerat
 
             # eval every 3000 steps
             if iter_ip1 % opt.save_steps_freq == 0:
-                metrics = model.eval_metrics(test_dl_for_eval, global_step=iter_ip1)
+                metrics = model.eval_metrics(test_dl, global_step=iter_ip1)
                 # visualizer.print_current_metrics(epoch, metrics, phase='test')
                 visualizer.print_current_metrics(iter_ip1, metrics, phase='test')
                 # print(metrics)
@@ -136,7 +136,7 @@ if __name__ == "__main__":
     from datetime import datetime
     opt.exp_time = datetime.now().strftime('%Y-%m-%dT%H-%M')
 
-    train_dl, test_dl, test_dl_for_eval = CreateDataLoader(opt)
+    train_dl, test_dl = CreateDataLoader(opt)
     train_ds, test_ds = train_dl.dataset, test_dl.dataset
 
     dataset_size = len(train_ds)
@@ -172,4 +172,4 @@ if __name__ == "__main__":
             cfg_out = os.path.join(expr_dir, os.path.basename(df_cfg))
             os.system(f'cp {df_cfg} {cfg_out}')
 
-    train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, accelerator)
+    train_main_worker(opt, model, train_dl, test_dl, accelerator)

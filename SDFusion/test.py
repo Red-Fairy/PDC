@@ -56,8 +56,8 @@ if __name__ == "__main__":
 	from datetime import datetime
 	opt.exp_time = datetime.now().strftime('%Y-%m-%dT%H-%M')
 
-	train_dl, test_dl, eval_dl = CreateDataLoader(opt)
-	test_ds = eval_dl.dataset
+	train_dl, test_dl = CreateDataLoader(opt)
+	test_ds = test_dl.dataset
 
 	cprint('[*] # testing images = %d' % len(test_ds), 'yellow')
 

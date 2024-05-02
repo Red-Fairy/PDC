@@ -101,6 +101,7 @@ class BaseOptions():
 		self.parser.add_argument('--test_description', type=str, default=None, help='test description')
 		self.parser.add_argument('--loss_collision_weight', type=float, default=1.0, help='collision loss weight')
 		self.parser.add_argument('--loss_contact_weight', type=float, default=10000.0, help='contact loss weight')
+		self.parser.add_argument('--haoran', action='store_true', help='haoran dataset')
 
 		# resize factor for parts
 		self.parser.add_argument('--scale_mode', choices=['volume', 'max_extent'], default='max_extent', help='scale mode for parts')

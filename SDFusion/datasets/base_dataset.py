@@ -74,14 +74,15 @@ def CreateDataset(opt):
     
     elif opt.dataset_mode == 'gapnet':
         from datasets.gapnet_dataset import GAPartNetDataset
-        train_dataset = GAPartNetDataset(opt, 'train', cat=opt.cat, res=opt.res)
-        test_dataset = GAPartNetDataset(opt, 'test', cat=opt.cat, res=opt.res)
-        eval_dataset = GAPartNetDataset(opt, 'eval', cat=opt.cat, res=opt.res)
+        train_dataset = GAPartNetDataset(opt, 'train', cat=opt.cat, res=opt.res, haoran='haoran')
+        test_dataset = GAPartNetDataset(opt, 'test', cat=opt.cat, res=opt.res, haoran='haoran')
+        # eval_dataset = GAPartNetDataset(opt, 'eval', cat=opt.cat, res=opt.res)
     else:
         raise ValueError("Dataset [%s] not recognized." % opt.dataset_mode)
 
     cprint("[*] Dataset has been created: %s" % (train_dataset.name()), 'blue')
-    if opt.dataset_mode == 'gapnet':
-        return train_dataset, test_dataset, eval_dataset
-    else:
-        return train_dataset, test_dataset, None
+    return train_dataset, test_dataset
+    # if opt.dataset_mode == 'gapnet':
+    #     return train_dataset, test_dataset, eval_dataset
+    # else:
+    #     return train_dataset, test_dataset, None

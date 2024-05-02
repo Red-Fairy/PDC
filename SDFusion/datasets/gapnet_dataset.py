@@ -27,11 +27,12 @@ import glob
 
 class GAPartNetDataset(BaseDataset):
 
-    def __init__(self, opt, phase='train', cat='all', res=256, eval_samples=100):
+    def __init__(self, opt, phase='train', cat='all', res=256, eval_samples=100, haoran=False):
         self.phase = phase
         self.opt = opt
         self.max_dataset_size = opt.max_dataset_size
         self.res = res
+        self.haoran = haoran
 
         if self.phase == 'refine':
             assert opt.batch_size == 1
@@ -71,17 +72,6 @@ class GAPartNetDataset(BaseDataset):
 
         self.df_conf = OmegaConf.load(opt.df_cfg)
 
-        # if self.phase == 'eval':
-        #     # generate some random bbox for evaluation
-        #     vertices = torch.Tensor([[1,1,-1],[1,1,1],[-1,1,1],[-1,1,-1],[1,-1,-1],[1,-1,1],[-1,-1,1],[-1,-1,-1]])
-        #     self.bbox_list = []
-        #     for _ in range(eval_samples):
-        #         bbox = torch.rand(3) * 0.3 + 0.2
-        #         bbox_full = vertices * bbox.view(1, 3).expand(8, 3)
-        #         self.bbox_list.append(bbox_full)
-        #     self.N = eval_samples
-        #     return
-
         self.sdf_filepaths = self.sdf_filepaths[:self.max_dataset_size]
         cprint('[*] %d samples loaded.' % (len(self.sdf_filepaths)), 'yellow')
 
@@ -118,19 +108,21 @@ class GAPartNetDataset(BaseDataset):
         if self.bbox_cond:
             bbox_filepath = sdf_h5_file.replace(self.sdf_dir, 'part_bbox').replace('.h5', '.npy')
             bbox = torch.tensor(np.load(bbox_filepath))
-            # if self.joint_rotate:
-            #     bbox = torch.mm(bbox, torch.tensor(rot_matrix).float())
             ret['bbox'] = bbox
 
         if self.ply_cond or self.ply_bbox_cond:
             ply_filepath = sdf_h5_file.replace(self.sdf_dir, 'part_ply_fps').replace('.h5', '.ply')
-            # load ply file
             ply_file = open3d.io.read_point_cloud(ply_filepath).points
+
             points = np.array(ply_file)
             points, points_stat = pc_normalize(points, scale_norm=self.opt.ply_norm, return_stat=True)
             points = torch.from_numpy(points).transpose(0, 1).float() # (3, N)
 
-            transform_path = sdf_h5_file.replace(self.sdf_dir, 'part_translation_scale').replace('.h5', '.json')
+            if self.haoran:
+                override_root = '/mnt/azureml/cr/j/19c62471467141d39f5f0dc988c1ea42/exe/wd/PartDiffusion/ignore_files/instance_0'
+                transform_path = os.path.join(override_root, os.path.basename(ply_filepath).replace('.ply', '.json'))
+            else:
+                transform_path = sdf_h5_file.replace(self.sdf_dir, 'part_translation_scale').replace('.h5', '.json')
             with open(transform_path, 'r') as f:
                 transform = json.load(f)
                 part_translate, part_extent = torch.tensor(transform['centroid']).float(), torch.tensor(transform['extents']).float()
@@ -151,17 +143,14 @@ class GAPartNetDataset(BaseDataset):
                 ret['move_limit'] = move_limit
                 ret['move_origin'] = move_origin
 
-            if self.ply_rotate: # only rotate the point cloud condition, not used
-
-                # raw, pitch, yaw = torch.rand(3) * 2 * np.pi
-                # rot_matrix = torch.tensor([
-                #     [np.cos(yaw)*np.cos(pitch), np.cos(yaw)*np.sin(pitch)*np.sin(raw)-np.sin(yaw)*np.cos(raw), np.cos(yaw)*np.sin(pitch)*np.cos(raw)+np.sin(yaw)*np.sin(raw), 0],
-                #     [np.sin(yaw)*np.cos(pitch), np.sin(yaw)*np.sin(pitch)*np.sin(raw)+np.cos(yaw)*np.cos(raw), np.sin(yaw)*np.sin(pitch)*np.cos(raw)-np.cos(yaw)*np.sin(raw), 0],
-                #     [-np.sin(pitch), np.cos(pitch)*np.sin(raw), np.cos(pitch)*np.cos(raw), 0],
-                #     [0, 0, 0, 1]
-                # ])
-
-                rotate_angle_y = torch.rand(1) * 2 * np.pi if self.opt.rotate_angle is None else torch.tensor([self.opt.rotate_angle * np.pi / 180], dtype=torch.float32)
+            if self.ply_rotate: # only rotate the point cloud condition
+                
+                if self.haoran:
+                    rotate_angle_y = torch.tensor([transform['rotate_angle'] * np.pi / 180], dtype=torch.float32)
+                elif self.opt.rotate_angle is None:
+                    rotate_angle_y = torch.rand(1) * 2 * np.pi 
+                else:
+                    rotate_angle_y = torch.tensor([self.opt.rotate_angle * np.pi / 180], dtype=torch.float32)
                 rot_matrix = torch.tensor([
                     [np.cos(rotate_angle_y), 0, np.sin(rotate_angle_y), 0],
                     [0, 1, 0, 0],
