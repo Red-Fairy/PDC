@@ -22,8 +22,18 @@ import open3d
 import trimesh
 from datasets.convert_utils import mesh_to_sdf
 from datasets.gapnet_utils import pc_normalize
+import random
 
 import glob
+
+def build_rot_matrix(rotate_angle_y):
+    rot_matrix = torch.tensor([
+        [np.cos(rotate_angle_y), 0, np.sin(rotate_angle_y), 0],
+        [0, 1, 0, 0],
+        [-np.sin(rotate_angle_y), 0, np.cos(rotate_angle_y), 0],
+        [0, 0, 0, 1]
+    ], dtype=torch.float32)
+    return rot_matrix
 
 class GAPartNetDataset(BaseDataset):
 
@@ -148,20 +158,21 @@ class GAPartNetDataset(BaseDataset):
             if self.ply_rotate: # only rotate the point cloud condition
                 
                 if self.haoran:
-                    rotate_angle_y = torch.tensor([transform['rotate_angle'] * np.pi / 180], dtype=torch.float32)
+                    rotate_angle_y = transform['rotate_angle'] * np.pi / 180
                 elif self.opt.rotate_angle is None:
-                    rotate_angle_y = torch.rand(1) * 2 * np.pi 
+                    rotate_angle_y = random.random() * 2 * np.pi
                 else:
-                    rotate_angle_y = torch.tensor([self.opt.rotate_angle * np.pi / 180], dtype=torch.float32)
-                rot_matrix = torch.tensor([
-                    [np.cos(rotate_angle_y), 0, np.sin(rotate_angle_y), 0],
-                    [0, 1, 0, 0],
-                    [-np.sin(rotate_angle_y), 0, np.cos(rotate_angle_y), 0],
-                    [0, 0, 0, 1]
-                ])
+                    rotate_angle_y = self.opt.rotate_angle * np.pi / 180
+
+                rot_matrix = build_rot_matrix(rotate_angle_y)
 
                 points = torch.mm(rot_matrix, torch.cat([points, torch.ones(1, points.shape[1])], dim=0))[:-1]
+
+                if self.haoran: # use the predicted rotation matrix
+                    rot_matrix = build_rot_matrix(transform['rotate_angle_pred'] * np.pi / 180)
+
                 points_stat['rotation'] = rot_matrix
+
                 # points_stat['centroid'] = torch.mm(rot_matrix, points_stat['centroid'].view(3, 1)).view(3)
 
             if self.joint_rotate: # jointly rotate the mesh and point cloud condition, calculate mesh on the fly

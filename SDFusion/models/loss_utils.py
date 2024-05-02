@@ -49,7 +49,7 @@ def get_physical_loss(sdf, ply, ply_translation, ply_rotation,
                        move_type=None, move_samples=32, 
                        res=64,
                        scale_mode='max_extent',
-                       margin=1/128,
+                       margin=1/256,
                        use_bbox=False, linspace=False,
                        loss_collision_weight=1.0,
                        loss_contact_weight=10000.0):

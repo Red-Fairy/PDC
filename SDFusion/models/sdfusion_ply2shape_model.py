@@ -410,7 +410,7 @@ class SDFusionModelPly2Shape(BaseModel):
                 if i >= ddim_steps // 2:
                 # if i >= 0:
                     grad = torch.autograd.grad(collision_loss + contact_loss, latents_grad)[0] # (B, *shape)
-                    print(grad.sum().item())
+                    # print(grad.sum().item())
                     # grad = grad / (grad.norm() + 1e-8) # clip grad norm
                     noise_pred = noise_pred + (1 - self.noise_scheduler.alphas_cumprod[t]) ** 0.5 * grad
 
