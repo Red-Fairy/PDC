@@ -136,6 +136,12 @@ class SDFusionModelPly2Shape(BaseModel):
         self.loss_meter_epoch = AverageMeter()
         self.loss_meter_epoch.reset()
 
+        if not self.opt.isTrain:
+            self.collsion_loss_meter = AverageMeter()
+            self.collsion_loss_meter.reset()
+            self.contact_loss_meter = AverageMeter()
+            self.contact_loss_meter.reset()
+
         self.logger = Logger(os.path.join(self.opt.img_dir, 'log.txt'))
     
     def set_input(self, input=None):
@@ -345,6 +351,8 @@ class SDFusionModelPly2Shape(BaseModel):
                                                     use_bbox=False, linspace=True)
                 instance_name = self.paths[i].split('/')[-1].split('.')[0]
                 self.logger.log(f'part {instance_name}, collision loss {collision_loss.item():.4f}, contact loss {contact_loss.item():.4f}')
+                self.collsion_loss_meter.update(collision_loss.item())
+                self.contact_loss_meter.update(contact_loss.item())
 
     def guided_inference(self, data, ddim_steps=None, ddim_eta=0.):
         
@@ -411,7 +419,7 @@ class SDFusionModelPly2Shape(BaseModel):
                 # if i >= 0:
                     grad = torch.autograd.grad(collision_loss + contact_loss, latents_grad)[0] # (B, *shape)
                     # print(grad.sum().item())
-                    # grad = grad / (grad.norm() + 1e-8) # clip grad norm
+                    grad = grad / (grad.norm() + 1e-8) # clip grad norm
                     noise_pred = noise_pred + (1 - self.noise_scheduler.alphas_cumprod[t]) ** 0.5 * grad
 
             with torch.no_grad():
@@ -436,6 +444,8 @@ class SDFusionModelPly2Shape(BaseModel):
                                                 use_bbox=False, linspace=True)
             instance_name = self.paths[0].split('/')[-1].split('.')[0]
             self.logger.log(f'part {instance_name}, collision loss {collision_loss.item():.4f}, contact loss {contact_loss.item():.4f}')
+            self.collsion_loss_meter.update(collision_loss.item())
+            self.contact_loss_meter.update(contact_loss.item())
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):

@@ -38,6 +38,8 @@ def eval_main_worker(opt, model, test_dl, visualizer):
 		
 		visualizer.display_current_results(model.get_current_visuals(), i, phase='test')
 
+	model.logger.log(f'Collision loss: {model.collision_loss_meter.avg:.4f}, contact loss: {model.contact_loss_meter.avg:.4f}')
+
 if __name__ == "__main__":
 	## set random seed
 	torch.backends.cudnn.benchmark = False     
