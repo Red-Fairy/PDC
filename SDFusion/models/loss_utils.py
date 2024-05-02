@@ -52,7 +52,7 @@ def get_physical_loss(sdf, ply, ply_translation, ply_rotation,
                        margin=1/128,
                        use_bbox=False, linspace=False,
                        loss_collision_weight=1.0,
-                       loss_contact_weight=100.0):
+                       loss_contact_weight=10000.0):
     '''
     sdf: sdf values, (B, 1, res, res, res), multiple generated sdf with the same point cloud condition
     ply: point cloud, (1, 3, N)

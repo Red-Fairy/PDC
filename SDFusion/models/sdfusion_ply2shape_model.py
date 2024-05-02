@@ -340,6 +340,8 @@ class SDFusionModelPly2Shape(BaseModel):
                                                     move_type=self.opt.mobility_type,
                                                     move_samples=self.opt.mobility_sample_count, res=self.shape_res,
                                                     scale_mode=self.opt.scale_mode,
+                                                    loss_collision_weight=self.opt.loss_collision_weight,
+                                                    loss_contact_weight=self.opt.loss_contact_weight,
                                                     use_bbox=False, linspace=True)
                 instance_name = self.paths[i].split('/')[-1].split('.')[0]
                 self.logger.log(f'part {instance_name}, collision loss {collision_loss.item():.4f}, contact loss {contact_loss.item():.4f}')
@@ -399,6 +401,8 @@ class SDFusionModelPly2Shape(BaseModel):
                                                     move_type=self.opt.mobility_type,
                                                     move_samples=self.opt.mobility_sample_count, res=self.shape_res,
                                                     scale_mode=self.opt.scale_mode,
+                                                    loss_collision_weight=self.opt.loss_collision_weight,
+                                                    loss_contact_weight=self.opt.loss_contact_weight,
                                                     use_bbox=False, linspace=True)
 
                 print(f'collision {collision_loss.item():.4f}, contact {contact_loss.item():.4f}')
@@ -427,6 +431,8 @@ class SDFusionModelPly2Shape(BaseModel):
                                                 move_type=self.opt.mobility_type,
                                                 move_samples=self.opt.mobility_sample_count, res=self.shape_res,
                                                 scale_mode=self.opt.scale_mode,
+                                                loss_collision_weight=self.opt.loss_collision_weight,
+                                                loss_contact_weight=self.opt.loss_contact_weight,
                                                 use_bbox=False, linspace=True)
             instance_name = self.paths[0].split('/')[-1].split('.')[0]
             self.logger.log(f'part {instance_name}, collision loss {collision_loss.item():.4f}, contact loss {contact_loss.item():.4f}')
