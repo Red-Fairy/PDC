@@ -168,10 +168,10 @@ class GAPartNetDataset(BaseDataset):
 
                 points = torch.mm(rot_matrix, torch.cat([points, torch.ones(1, points.shape[1])], dim=0))[:-1]
 
-                if self.haoran: # use the predicted rotation matrix
-                    rot_matrix = build_rot_matrix(transform['rotate_angle_pred'] * np.pi / 180)
-
                 points_stat['rotation'] = rot_matrix
+
+                if self.haoran: # use the predicted rotation matrix
+                    ret['ply_rotation_pred'] = build_rot_matrix(transform['rotate_angle_pred'] * np.pi / 180)
 
                 # points_stat['centroid'] = torch.mm(rot_matrix, points_stat['centroid'].view(3, 1)).view(3)
 

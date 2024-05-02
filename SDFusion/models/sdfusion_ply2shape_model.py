@@ -137,8 +137,8 @@ class SDFusionModelPly2Shape(BaseModel):
         self.loss_meter_epoch.reset()
 
         if not self.opt.isTrain:
-            self.collsion_loss_meter = AverageMeter()
-            self.collsion_loss_meter.reset()
+            self.collision_loss_meter = AverageMeter()
+            self.collision_loss_meter.reset()
             self.contact_loss_meter = AverageMeter()
             self.contact_loss_meter.reset()
 
@@ -167,6 +167,9 @@ class SDFusionModelPly2Shape(BaseModel):
 
         if 'bbox_mesh' in input:
             self.bbox_mesh = input['bbox_mesh'].to(self.device)
+
+        if self.opt.haoran:
+            self.ply_rotation_pred = input['ply_rotation_pred'].to(self.device)
 
     def switch_train(self):
         self.df.train()
@@ -346,12 +349,13 @@ class SDFusionModelPly2Shape(BaseModel):
                                                     move_type=self.opt.mobility_type,
                                                     move_samples=self.opt.mobility_sample_count, res=self.shape_res,
                                                     scale_mode=self.opt.scale_mode,
+                                                    margin=self.opt.loss_margin,
                                                     loss_collision_weight=self.opt.loss_collision_weight,
                                                     loss_contact_weight=self.opt.loss_contact_weight,
                                                     use_bbox=False, linspace=True)
                 instance_name = self.paths[i].split('/')[-1].split('.')[0]
                 self.logger.log(f'part {instance_name}, collision loss {collision_loss.item():.4f}, contact loss {contact_loss.item():.4f}')
-                self.collsion_loss_meter.update(collision_loss.item())
+                self.collision_loss_meter.update(collision_loss.item())
                 self.contact_loss_meter.update(contact_loss.item())
 
     def guided_inference(self, data, ddim_steps=None, ddim_eta=0.):
@@ -401,7 +405,7 @@ class SDFusionModelPly2Shape(BaseModel):
                 # setattr(self, f'pred_sdf_x0_{i}', pred_x0_sdf.detach())
 
                 collision_loss, contact_loss = get_physical_loss(pred_x0_sdf, self.ply, 
-                                                    self.ply_translation, self.ply_rotation,
+                                                    self.ply_translation, self.ply_rotation_pred,
                                                     self.part_extent, self.part_translation,
                                                     move_limit=self.move_limit[0], 
                                                     move_axis=self.move_axis[0],
@@ -409,6 +413,7 @@ class SDFusionModelPly2Shape(BaseModel):
                                                     move_type=self.opt.mobility_type,
                                                     move_samples=self.opt.mobility_sample_count, res=self.shape_res,
                                                     scale_mode=self.opt.scale_mode,
+                                                    margin=self.opt.loss_margin,
                                                     loss_collision_weight=self.opt.loss_collision_weight,
                                                     loss_contact_weight=self.opt.loss_contact_weight,
                                                     use_bbox=False, linspace=True)
@@ -439,12 +444,13 @@ class SDFusionModelPly2Shape(BaseModel):
                                                 move_type=self.opt.mobility_type,
                                                 move_samples=self.opt.mobility_sample_count, res=self.shape_res,
                                                 scale_mode=self.opt.scale_mode,
+                                                margin=self.opt.loss_margin,
                                                 loss_collision_weight=self.opt.loss_collision_weight,
                                                 loss_contact_weight=self.opt.loss_contact_weight,
                                                 use_bbox=False, linspace=True)
             instance_name = self.paths[0].split('/')[-1].split('.')[0]
             self.logger.log(f'part {instance_name}, collision loss {collision_loss.item():.4f}, contact loss {contact_loss.item():.4f}')
-            self.collsion_loss_meter.update(collision_loss.item())
+            self.collision_loss_meter.update(collision_loss.item())
             self.contact_loss_meter.update(contact_loss.item())
 
     @torch.no_grad()

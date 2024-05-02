@@ -38,6 +38,9 @@ cat="slider_drawer"
 mobility_type="rotation"
 rotate_angle=$4
 
+# --loss_margin 0.00390625 1/256
+
+
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --batch_size ${batch_size} --max_dataset_size ${max_dataset_size} \
             --model ${model} --df_cfg ${df_cfg} \
@@ -51,7 +54,8 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --haoran \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
             --ddim_steps 50 --uc_scale 3 \
-            --test_description 25it_collsion_contact-add-margin_guided_inference \
+            --loss_margin 0.0078125 \
+            --test_description margin128 \
             --use_mobility_constraint "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
