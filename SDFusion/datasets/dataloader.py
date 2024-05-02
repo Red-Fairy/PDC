@@ -9,7 +9,8 @@ def get_data_generator(loader):
             yield data
 
 def CreateDataLoader(opt):
-    train_dataset, test_dataset, eval_dataset = CreateDataset(opt)
+    # train_dataset, test_dataset, eval_dataset = CreateDataset(opt)
+    train_dataset, test_dataset = CreateDataset(opt)
 
     train_dl = torch.utils.data.DataLoader(
             train_dataset,
@@ -25,11 +26,12 @@ def CreateDataLoader(opt):
             drop_last=False,
             )
 
-    test_dl_for_eval = torch.utils.data.DataLoader(
-            eval_dataset if eval_dataset is not None else test_dataset,
-            batch_size=1,
-            sampler=data_sampler(test_dataset, shuffle=False),
-            drop_last=False,
-        )
+    # test_dl_for_eval = torch.utils.data.DataLoader(
+    #         eval_dataset if eval_dataset is not None else test_dataset,
+    #         batch_size=1,
+    #         sampler=data_sampler(test_dataset, shuffle=False),
+    #         drop_last=False,
+    #     )
 
-    return train_dl, test_dl, test_dl_for_eval
+    return train_dl, test_dl
+    # return train_dl, test_dl, test_dl_for_eval

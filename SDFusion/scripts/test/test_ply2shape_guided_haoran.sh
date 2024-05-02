@@ -52,8 +52,9 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --rotate_angle ${rotate_angle} \
             --scale_mode volume \
             --guided_inference \
+            --haoran \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
-            --ddim_steps 50 --uc_scale 3 --test_description 25it_collsion_contact-add-margin_guided_inference "
+            --ddim_steps 50 --uc_scale 3 --test_description 25it_collsion_contact-add-margin_guided_inference-haoran"
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
 

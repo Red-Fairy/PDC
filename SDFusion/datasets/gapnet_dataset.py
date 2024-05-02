@@ -33,6 +33,7 @@ class GAPartNetDataset(BaseDataset):
         self.max_dataset_size = opt.max_dataset_size
         self.res = res
         self.haoran = haoran
+        self.haoran_override = '/mnt/azureml/cr/j/19c62471467141d39f5f0dc988c1ea42/exe/wd/PartDiffusion/ignore_files/instance_0'
 
         if self.phase == 'refine':
             assert opt.batch_size == 1
@@ -58,6 +59,8 @@ class GAPartNetDataset(BaseDataset):
             self.sdf_filepaths = [f for f in self.sdf_filepaths if f.split('/')[-1].split('.')[0] in file_names]
 
         self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace(self.sdf_dir, 'part_ply_fps').replace('.h5', '.ply')), self.sdf_filepaths))
+        if self.haoran:
+            self.sdf_filepaths = list(filter(lambda f: os.path.exists(os.path.join(self.haoran_override, os.path.basename(f).replace('.h5', '.json'))), self.sdf_filepaths))
 
         if not self.opt.isTrain and opt.model_id is not None:
             self.sdf_filepaths = [f for f in self.sdf_filepaths if opt.model_id in f]
@@ -119,8 +122,7 @@ class GAPartNetDataset(BaseDataset):
             points = torch.from_numpy(points).transpose(0, 1).float() # (3, N)
 
             if self.haoran:
-                override_root = '/mnt/azureml/cr/j/19c62471467141d39f5f0dc988c1ea42/exe/wd/PartDiffusion/ignore_files/instance_0'
-                transform_path = os.path.join(override_root, os.path.basename(ply_filepath).replace('.ply', '.json'))
+                transform_path = os.path.join(self.haoran_override, os.path.basename(ply_filepath).replace('.ply', '.json'))
             else:
                 transform_path = sdf_h5_file.replace(self.sdf_dir, 'part_translation_scale').replace('.h5', '.json')
             with open(transform_path, 'r') as f:
