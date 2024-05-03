@@ -37,12 +37,15 @@ def build_rot_matrix(rotate_angle_y):
 
 class GAPartNetDataset(BaseDataset):
 
-    def __init__(self, opt, phase='train', cat='all', res=256, eval_samples=100, haoran=False):
+    def __init__(self, opt, phase='train', cat='all', res=256, eval_samples=100, haoran=False, haoran_rotation=False):
         self.phase = phase
         self.opt = opt
         self.max_dataset_size = opt.max_dataset_size
         self.res = res
         self.haoran = haoran
+        self.haoran_rotation = haoran_rotation
+        if self.haoran:
+            assert cat == 'slider_drawer' or cat == 'hinge_door'
         self.haoran_override = '/mnt/azureml/cr/j/19c62471467141d39f5f0dc988c1ea42/exe/wd/PartDiffusion/ignore_files/instance_0'
 
         if self.phase == 'refine':
@@ -69,7 +72,7 @@ class GAPartNetDataset(BaseDataset):
             self.sdf_filepaths = [f for f in self.sdf_filepaths if f.split('/')[-1].split('.')[0] in file_names]
 
         self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace(self.sdf_dir, 'part_ply_fps').replace('.h5', '.ply')), self.sdf_filepaths))
-        if self.haoran:
+        if self.haoran or self.haoran_rotation:
             self.sdf_filepaths = list(filter(lambda f: os.path.exists(os.path.join(self.haoran_override, os.path.basename(f).replace('.h5', '.json'))), self.sdf_filepaths))
 
         if not self.opt.isTrain and opt.model_id is not None:
@@ -131,7 +134,7 @@ class GAPartNetDataset(BaseDataset):
             points, points_stat = pc_normalize(points, scale_norm=self.opt.ply_norm, return_stat=True)
             points = torch.from_numpy(points).transpose(0, 1).float() # (3, N)
 
-            if self.haoran:
+            if self.haoran or self.haoran_rotation:
                 transform_path = os.path.join(self.haoran_override, os.path.basename(ply_filepath).replace('.ply', '.json'))
             else:
                 transform_path = sdf_h5_file.replace(self.sdf_dir, 'part_translation_scale').replace('.h5', '.json')
@@ -146,18 +149,28 @@ class GAPartNetDataset(BaseDataset):
                     part_extent = torch.tensor(json.load(open(predicted_volume_path))['volume']).float().view(1, 1).repeat(1, 3)
 
             if self.opt.use_mobility_constraint:
-                mobility_path = sdf_h5_file.replace(self.sdf_dir, 'part_mobility').replace('.h5', '.json')
-                with open(mobility_path, 'r') as f:
-                    mobility = json.load(f)
-                    move_axis, move_limit, move_origin = \
-                        torch.tensor(mobility['move_axis']).float(), torch.tensor(mobility['move_limit']).float(), torch.tensor(mobility['move_origin']).float()
+                if self.haoran:
+                    if self.opt.cat == 'slider_drawer':
+                        move_axis = torch.tensor([0, 0, 1], dtype=torch.float32)
+                        move_limit = torch.tensor([0, 0.25], dtype=torch.float32)
+                        move_origin = part_translate + part_extent * 0.5
+                    elif self.opt.cat == 'hinge_door':
+                        move_axis = torch.tensor([1, 0, 0], dtype=torch.float32)
+                        move_limit = torch.tensor([0, 90], dtype=torch.float32)
+                        move_origin = part_translate + part_extent * 0.5
+                else:
+                    mobility_path = sdf_h5_file.replace(self.sdf_dir, 'part_mobility').replace('.h5', '.json')
+                    with open(mobility_path, 'r') as f:
+                        mobility = json.load(f)
+                        move_axis, move_limit, move_origin = \
+                            torch.tensor(mobility['move_axis']).float(), torch.tensor(mobility['move_limit']).float(), torch.tensor(mobility['move_origin']).float()
                 ret['move_axis'] = move_axis
                 ret['move_limit'] = move_limit
                 ret['move_origin'] = move_origin
 
             if self.ply_rotate: # only rotate the point cloud condition
                 
-                if self.haoran:
+                if self.haoran or self.haoran_rotation:
                     rotate_angle_y = transform['rotate_angle'] * np.pi / 180
                 elif self.opt.rotate_angle is None:
                     rotate_angle_y = random.random() * 2 * np.pi
@@ -172,6 +185,8 @@ class GAPartNetDataset(BaseDataset):
 
                 if self.haoran: # use the predicted rotation matrix
                     ret['ply_rotation_pred'] = build_rot_matrix(transform['rotate_angle_pred'] * np.pi / 180)
+                if self.haoran_rotation:
+                    ret['ply_rotation_pred'] = rot_matrix
 
                 # points_stat['centroid'] = torch.mm(rot_matrix, points_stat['centroid'].view(3, 1)).view(3)
 
@@ -208,8 +223,8 @@ class GAPartNetDataset(BaseDataset):
             ret['ply_rotation'] = points_stat['rotation']
             ret['ply_scale'] = points_stat['scale'].view(1)
 
-            ret['part_translation'] = part_translate
-            ret['part_extent'] = part_extent
+            ret['part_translation'] = part_translate 
+            ret['part_extent'] = part_extent - 1. / self.res
 
         return ret
 

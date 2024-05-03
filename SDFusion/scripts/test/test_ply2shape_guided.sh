@@ -40,6 +40,9 @@ mobility_type="rotation"
 # mobility_type="rotation"
 rotate_angle=$4
 
+# --loss_margin 0.00390625 1/256
+# --loss_margin 0.0078125 1/128
+
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --batch_size ${batch_size} --max_dataset_size ${max_dataset_size} \
             --model ${model} --df_cfg ${df_cfg} \
@@ -52,8 +55,10 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --rotate_angle ${rotate_angle} \
             --scale_mode volume \
             --guided_inference \
+            --haoran_rotation \
+            --loss_margin 0 \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
-            --ddim_steps 50 --uc_scale 3 --test_description 25it_collsion_contact-add-margin_guided_inference "
+            --ddim_steps 50 --uc_scale 3 --test_description guided_margin0_extent128 "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
 

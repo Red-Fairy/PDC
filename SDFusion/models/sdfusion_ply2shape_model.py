@@ -168,7 +168,7 @@ class SDFusionModelPly2Shape(BaseModel):
         if 'bbox_mesh' in input:
             self.bbox_mesh = input['bbox_mesh'].to(self.device)
 
-        if self.opt.haoran:
+        if 'ply_rotation_pred' in input:
             self.ply_rotation_pred = input['ply_rotation_pred'].to(self.device)
 
     def switch_train(self):
@@ -424,7 +424,7 @@ class SDFusionModelPly2Shape(BaseModel):
                 # if i >= 0:
                     grad = torch.autograd.grad(collision_loss + contact_loss, latents_grad)[0] # (B, *shape)
                     # print(grad.sum().item())
-                    grad = grad / (grad.norm() + 1e-8) # clip grad norm
+                    # grad = grad / (grad.norm() + 1e-8) # clip grad norm
                     noise_pred = noise_pred + (1 - self.noise_scheduler.alphas_cumprod[t]) ** 0.5 * grad
 
             with torch.no_grad():

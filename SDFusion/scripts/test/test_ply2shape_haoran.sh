@@ -51,11 +51,11 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --mobility_type ${mobility_type} \
             --rotate_angle ${rotate_angle} \
             --scale_mode volume \
-            --haoran \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
             --ddim_steps 50 --uc_scale 3 \
-            --loss_margin 0.0078125 \
-            --test_description margin128 \
+            --loss_margin 0 \
+            --haoran \
+            --test_description margin0-extent128-haoran \
             --use_mobility_constraint "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
