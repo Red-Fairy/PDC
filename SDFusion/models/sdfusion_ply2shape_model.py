@@ -260,7 +260,7 @@ class SDFusionModelPly2Shape(BaseModel):
         return loss
 
     @torch.no_grad()
-    def inference(self, data, ddim_steps=None, ddim_eta=0., print_collision_loss=False,
+    def inference(self, data, ddim_steps=None, ddim_eta=0.,
                   use_cut_bbox=False, cut_bbox_limit=[0.5, 0.75]):
 
         self.switch_eval()
@@ -296,9 +296,8 @@ class SDFusionModelPly2Shape(BaseModel):
             latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
 
             # predict the noise residual
-            with torch.no_grad():
-                timesteps = torch.full((B*2,), t, device=self.device, dtype=torch.int64)
-                noise_pred = self.apply_model(latent_model_input, timesteps, c_full)
+            timesteps = torch.full((B*2,), t, device=self.device, dtype=torch.int64)
+            noise_pred = self.apply_model(latent_model_input, timesteps, c_full)
 
             # perform guidance
             noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
@@ -341,25 +340,54 @@ class SDFusionModelPly2Shape(BaseModel):
         # decode z
         self.gen_df = self.vqvae.decode_no_quant(latents).detach()
 
-        if print_collision_loss:
-            for i in range(B):
-                collision_loss, contact_loss = get_physical_loss(self.gen_df[i:i+1], self.ply[i:i+1], 
-                                                    self.ply_translation[i:i+1], self.ply_rotation[i:i+1],
-                                                    self.part_extent[i:i+1], self.part_translation[i:i+1],
-                                                    move_limit=self.move_limit[i], 
-                                                    move_axis=self.move_axis[i],
-                                                    move_origin=self.move_origin[i],
-                                                    move_type=self.opt.mobility_type,
-                                                    move_samples=self.opt.mobility_sample_count, res=self.shape_res,
-                                                    scale_mode=self.opt.scale_mode,
-                                                    margin=self.opt.loss_margin,
-                                                    loss_collision_weight=self.opt.loss_collision_weight,
-                                                    loss_contact_weight=self.opt.loss_contact_weight,
-                                                    use_bbox=False, linspace=True)
-                instance_name = self.paths[i].split('/')[-1].split('.')[0]
+        for i in range(B):
+            collision_loss, contact_loss = get_physical_loss(self.gen_df[i:i+1], self.ply[i:i+1], 
+                                                self.ply_translation[i:i+1], self.ply_rotation[i:i+1],
+                                                self.part_extent[i:i+1], self.part_translation[i:i+1],
+                                                move_limit=self.move_limit[i], 
+                                                move_axis=self.move_axis[i],
+                                                move_origin=self.move_origin[i],
+                                                move_type=self.opt.mobility_type,
+                                                move_samples=self.opt.mobility_sample_count, res=self.shape_res,
+                                                scale_mode=self.opt.scale_mode,
+                                                margin=self.opt.loss_margin,
+                                                loss_collision_weight=self.opt.loss_collision_weight,
+                                                loss_contact_weight=self.opt.loss_contact_weight,
+                                                use_bbox=False, linspace=True)
+            instance_name = self.paths[0].split('/')[-1].split('.')[0]
+            if not self.opt.test_diversity:
                 self.logger.log(f'part {instance_name}, collision loss {collision_loss.item():.4f}, contact loss {contact_loss.item():.4f}')
                 self.collision_loss_meter.update(collision_loss.item())
                 self.contact_loss_meter.update(contact_loss.item())
+            else:
+                if not hasattr(self, 'ply_rotation_pred'):
+                    collision_loss_pred, contact_loss_pred = get_physical_loss(self.gen_df[i:i+1], self.ply[i:i+1], 
+                                                        self.ply_translation[i:i+1], self.ply_rotation_pred[i:i+1],
+                                                        self.part_extent[i:i+1], self.part_translation[i:i+1],
+                                                        move_limit=self.move_limit[i], 
+                                                        move_axis=self.move_axis[i],
+                                                        move_origin=self.move_origin[i],
+                                                        move_type=self.opt.mobility_type,
+                                                        move_samples=self.opt.mobility_sample_count, res=self.shape_res,
+                                                        scale_mode=self.opt.scale_mode,
+                                                        margin=self.opt.loss_margin,
+                                                        loss_collision_weight=self.opt.loss_collision_weight,
+                                                        loss_contact_weight=self.opt.loss_contact_weight,
+                                                        use_bbox=False, linspace=True)
+                else:
+                    collision_loss_pred, contact_loss_pred = collision_loss, contact_loss
+                self.loss_tracker.append((collision_loss.item(), contact_loss.item()))
+                self.loss_tracker_pred.append((collision_loss_pred.item(), contact_loss_pred.item()))
+                self.logger.log(f'part {instance_name} instance {self.diversity_index}, collision loss {collision_loss_pred:.4f}, contact loss {contact_loss_pred:.4f}')
+                self.diversity_index += 1
+                if self.diversity_index % self.opt.diversity_count == 0:
+                    # find the best prediction
+                    best_idx = np.argmin([loss[0] + loss[1] for loss in self.loss_tracker_pred])
+                    best_loss = self.loss_tracker[best_idx]
+                    self.logger.log(f'part {instance_name} best, collision loss {best_loss[0]:.4f}, contact loss {best_loss[1]:.4f}')
+                    self.diversity_index = 0
+                    self.loss_tracker, self.loss_tracker_pred = [], []
+
 
     def guided_inference(self, data, ddim_steps=None, ddim_eta=0.):
         
@@ -456,31 +484,33 @@ class SDFusionModelPly2Shape(BaseModel):
                 self.collision_loss_meter.update(collision_loss.item())
                 self.contact_loss_meter.update(contact_loss.item())
             else:
-                collision_loss_pred, contact_loss_pred = get_physical_loss(self.gen_df, self.ply, 
-                                                    self.ply_translation, self.ply_rotation_pred,
-                                                    self.part_extent, self.part_translation,
-                                                    move_limit=self.move_limit[0], 
-                                                    move_axis=self.move_axis[0],
-                                                    move_origin=self.move_origin[0],
-                                                    move_type=self.opt.mobility_type,
-                                                    move_samples=self.opt.mobility_sample_count, res=self.shape_res,
-                                                    scale_mode=self.opt.scale_mode,
-                                                    margin=self.opt.loss_margin,
-                                                    loss_collision_weight=self.opt.loss_collision_weight,
-                                                    loss_contact_weight=self.opt.loss_contact_weight,
-                                                    use_bbox=False, linspace=True)
+                if not hasattr(self, 'ply_rotation_pred'):
+                    collision_loss_pred, contact_loss_pred = get_physical_loss(self.gen_df, self.ply, 
+                                                        self.ply_translation, self.ply_rotation_pred,
+                                                        self.part_extent, self.part_translation,
+                                                        move_limit=self.move_limit[0], 
+                                                        move_axis=self.move_axis[0],
+                                                        move_origin=self.move_origin[0],
+                                                        move_type=self.opt.mobility_type,
+                                                        move_samples=self.opt.mobility_sample_count, res=self.shape_res,
+                                                        scale_mode=self.opt.scale_mode,
+                                                        margin=self.opt.loss_margin,
+                                                        loss_collision_weight=self.opt.loss_collision_weight,
+                                                        loss_contact_weight=self.opt.loss_contact_weight,
+                                                        use_bbox=False, linspace=True)
+                else:
+                    collision_loss_pred, contact_loss_pred = collision_loss, contact_loss
                 self.loss_tracker.append((collision_loss.item(), contact_loss.item()))
                 self.loss_tracker_pred.append((collision_loss_pred.item(), contact_loss_pred.item()))
-                self.logger.log(f'part {instance_name} instance {self.diversity_index}, \
-                                collision loss {collision_loss_pred:.4f}, contact loss {contact_loss_pred:.4f}')
+                self.logger.log(f'part {instance_name} instance {self.diversity_index}, collision loss {collision_loss_pred:.4f}, contact loss {contact_loss_pred:.4f}')
                 self.diversity_index += 1
                 if self.diversity_index % self.opt.diversity_count == 0:
                     # find the best prediction
                     best_idx = np.argmin([loss[0] + loss[1] for loss in self.loss_tracker_pred])
                     best_loss = self.loss_tracker[best_idx]
-                    self.logger.log(f'part {instance_name} best, \
-                                    collision loss {best_loss[0]:.4f}, contact loss {best_loss[1]:.4f}')
+                    self.logger.log(f'part {instance_name} best, collision loss {best_loss[0]:.4f}, contact loss {best_loss[1]:.4f}')
                     self.diversity_index = 0
+                    self.loss_tracker, self.loss_tracker_pred = [], []
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):

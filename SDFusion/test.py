@@ -33,8 +33,7 @@ def eval_main_worker(opt, model, test_dl, visualizer):
 		if opt.guided_inference:
 			model.guided_inference(test_data, ddim_eta=opt.ddim_eta, ddim_steps=opt.ddim_steps)
 		else:
-			model.inference(test_data,
-					ddim_eta=opt.ddim_eta, ddim_steps=opt.ddim_steps, print_collision_loss=True)
+			model.inference(test_data, ddim_eta=opt.ddim_eta, ddim_steps=opt.ddim_steps)
 		
 		visualizer.display_current_results(model.get_current_visuals(), i, phase='test')
 

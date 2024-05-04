@@ -149,6 +149,7 @@ class BaseOptions():
 		self.opt.img_dir += '_extent' if self.opt.scale_mode == 'max_extent' else '_volume'
 		self.opt.img_dir += '_mobility' if self.opt.use_mobility_constraint else ''
 		self.opt.img_dir += '_guided' if self.opt.guided_inference else ''
+		self.opt.img_dir += '_diversity' if self.opt.test_diversity else ''
 		# self.opt.img_dir += f'_{self.opt.model_id}' if self.opt.model_id is not None else ''
 		self.opt.img_dir += f'_{self.opt.test_description}' if self.opt.test_description is not None else ''
 		os.makedirs(self.opt.img_dir, exist_ok=True)
