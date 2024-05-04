@@ -40,6 +40,8 @@ mobility_type="rotation"
 # mobility_type="rotation"
 rotate_angle=$4
 
+# slider-ply2shape-plyrot-scale3-lr0.00001
+
 # --loss_margin 0.00390625 1/256
 # --loss_margin 0.0078125 1/128
 
@@ -56,9 +58,10 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --scale_mode volume \
             --guided_inference \
             --haoran \
-            --loss_margin 0 \
+            --loss_margin 0.00390625 \
+            --test_diversity \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
-            --ddim_steps 50 --uc_scale 3 --test_description guided_margin0_extent128_haoran "
+            --ddim_steps 50 --uc_scale 3 --test_description margin128_diversity_haoran "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
 

@@ -13,6 +13,7 @@ class TestOptions(BaseOptions):
 
         # for diversity test
         self.parser.add_argument('--test_diversity', action='store_true', help='test diversity')
+        self.parser.add_argument('--diversity_count', type=int, default=8)
         self.parser.add_argument('--testdir', type=str, default='', help='test directory prefix')
 
         # use bbox mesh to initialize

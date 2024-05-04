@@ -91,8 +91,8 @@ class GAPartNetDataset(BaseDataset):
         self.sdf_filepaths = self.sdf_filepaths[:self.max_dataset_size]
         cprint('[*] %d samples loaded.' % (len(self.sdf_filepaths)), 'yellow')
 
-        if not self.opt.isTrain and self.opt.test_diversity: # repeat the dataset for 32 times
-            self.sdf_filepaths = self.sdf_filepaths * 32
+        if not self.opt.isTrain and self.opt.test_diversity: # repeat the dataset for 8 times
+            self.sdf_filepaths = self.sdf_filepaths * self.opt.diversity_count
 
         self.N = len(self.sdf_filepaths)
 
@@ -224,7 +224,7 @@ class GAPartNetDataset(BaseDataset):
             ret['ply_scale'] = points_stat['scale'].view(1)
 
             ret['part_translation'] = part_translate 
-            ret['part_extent'] = part_extent - 1. / self.res
+            ret['part_extent'] = part_extent
 
         return ret
 

@@ -141,6 +141,9 @@ class SDFusionModelPly2Shape(BaseModel):
             self.collision_loss_meter.reset()
             self.contact_loss_meter = AverageMeter()
             self.contact_loss_meter.reset()
+            self.diversity_index = 0 
+            self.loss_tracker = []
+            self.loss_tracker_pred = []
 
         self.logger = Logger(os.path.join(self.opt.img_dir, 'log.txt'))
     
@@ -392,43 +395,42 @@ class SDFusionModelPly2Shape(BaseModel):
                 timesteps = torch.full((B*2,), t, device=self.device, dtype=torch.int64)
                 noise_pred = self.apply_model(latent_model_input, timesteps, c_full)
 
-            # perform guidance
-            noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
-            noise_pred = noise_pred_cond
+                # perform guidance
+                noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
+                noise_pred = noise_pred_cond
 
             # compute the previous noisy sample x_t -> x_t-1
-            with torch.enable_grad():
-                latents_grad = latents.detach().requires_grad_(True)
-                pred_x0 = self.noise_scheduler.step(noise_pred, t, latents_grad, eta=ddim_eta).pred_original_sample
+            if i > ddim_steps // 2:
+                with torch.enable_grad():
+                    latents_grad = latents.detach().requires_grad_(True)
+                    pred_x0 = self.noise_scheduler.step(noise_pred, t, latents_grad, eta=ddim_eta).pred_original_sample
 
-                pred_x0_sdf = self.vqvae.decode_no_quant(pred_x0)
-                # setattr(self, f'pred_sdf_x0_{i}', pred_x0_sdf.detach())
+                    pred_x0_sdf = self.vqvae.decode_no_quant(pred_x0)
+                    # setattr(self, f'pred_sdf_x0_{i}', pred_x0_sdf.detach())
 
-                collision_loss, contact_loss = get_physical_loss(pred_x0_sdf, self.ply, 
-                                                    self.ply_translation, self.ply_rotation_pred,
-                                                    self.part_extent, self.part_translation,
-                                                    move_limit=self.move_limit[0], 
-                                                    move_axis=self.move_axis[0],
-                                                    move_origin=self.move_origin[0],
-                                                    move_type=self.opt.mobility_type,
-                                                    move_samples=self.opt.mobility_sample_count, res=self.shape_res,
-                                                    scale_mode=self.opt.scale_mode,
-                                                    margin=self.opt.loss_margin,
-                                                    loss_collision_weight=self.opt.loss_collision_weight,
-                                                    loss_contact_weight=self.opt.loss_contact_weight,
-                                                    use_bbox=False, linspace=True)
+                    collision_loss, contact_loss = get_physical_loss(pred_x0_sdf, self.ply, 
+                                                        self.ply_translation, self.ply_rotation_pred,
+                                                        self.part_extent, self.part_translation,
+                                                        move_limit=self.move_limit[0], 
+                                                        move_axis=self.move_axis[0],
+                                                        move_origin=self.move_origin[0],
+                                                        move_type=self.opt.mobility_type,
+                                                        move_samples=self.opt.mobility_sample_count, res=self.shape_res,
+                                                        scale_mode=self.opt.scale_mode,
+                                                        margin=self.opt.loss_margin,
+                                                        loss_collision_weight=self.opt.loss_collision_weight,
+                                                        loss_contact_weight=self.opt.loss_contact_weight,
+                                                        use_bbox=False, linspace=True)
 
-                print(f'collision {collision_loss.item():.4f}, contact {contact_loss.item():.4f}')
-                
-                if i >= ddim_steps // 2:
-                # if i >= 0:
+                    print(f'collision {collision_loss.item():.4f}, contact {contact_loss.item():.4f}')
+                    
                     grad = torch.autograd.grad(collision_loss + contact_loss, latents_grad)[0] # (B, *shape)
                     # print(grad.sum().item())
                     # grad = grad / (grad.norm() + 1e-8) # clip grad norm
                     noise_pred = noise_pred + (1 - self.noise_scheduler.alphas_cumprod[t]) ** 0.5 * grad
 
             with torch.no_grad():
-                noise_pred = noise_pred + (self.guidance_scale - 1) * (noise_pred_cond - noise_pred_uncond)
+                noise_pred = noise_pred + self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
                 latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
 
         # decode z
@@ -448,10 +450,33 @@ class SDFusionModelPly2Shape(BaseModel):
                                                 loss_collision_weight=self.opt.loss_collision_weight,
                                                 loss_contact_weight=self.opt.loss_contact_weight,
                                                 use_bbox=False, linspace=True)
-            instance_name = self.paths[0].split('/')[-1].split('.')[0]
-            self.logger.log(f'part {instance_name}, collision loss {collision_loss.item():.4f}, contact loss {contact_loss.item():.4f}')
-            self.collision_loss_meter.update(collision_loss.item())
-            self.contact_loss_meter.update(contact_loss.item())
+            if not self.opt.test_diversity:
+                instance_name = self.paths[0].split('/')[-1].split('.')[0]
+                self.logger.log(f'part {instance_name}, collision loss {collision_loss.item():.4f}, contact loss {contact_loss.item():.4f}')
+                self.collision_loss_meter.update(collision_loss.item())
+                self.contact_loss_meter.update(contact_loss.item())
+            else:
+                collision_loss_pred, contact_loss_pred = get_physical_loss(self.gen_df, self.ply, 
+                                                    self.ply_translation, self.ply_rotation_pred,
+                                                    self.part_extent, self.part_translation,
+                                                    move_limit=self.move_limit[0], 
+                                                    move_axis=self.move_axis[0],
+                                                    move_origin=self.move_origin[0],
+                                                    move_type=self.opt.mobility_type,
+                                                    move_samples=self.opt.mobility_sample_count, res=self.shape_res,
+                                                    scale_mode=self.opt.scale_mode,
+                                                    margin=self.opt.loss_margin,
+                                                    loss_collision_weight=self.opt.loss_collision_weight,
+                                                    loss_contact_weight=self.opt.loss_contact_weight,
+                                                    use_bbox=False, linspace=True)
+                self.loss_tracker.append((collision_loss.item(), contact_loss.item()))
+                self.loss_tracker_pred.append((collision_loss_pred.item(), contact_loss_pred.item()))
+                self.diversity_index += 1
+                if self.diversity_index % self.opt.diversity_count == 0:
+                    # find the best prediction
+                    best_idx = np.argmin([loss[0] + loss[1] for loss in self.loss_tracker_pred])
+                    best_loss = self.loss_tracker[best_idx]
+                    self.logger.log(f'best part, collision loss {best_loss[0]:.4f}, contact loss {best_loss[1]:.4f}')
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
