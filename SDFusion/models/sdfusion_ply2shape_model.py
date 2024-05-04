@@ -172,6 +172,8 @@ class SDFusionModelPly2Shape(BaseModel):
             self.bbox_mesh = input['bbox_mesh'].to(self.device)
 
         if 'ply_rotation_pred' in input:
+            self.part_translation_pred = input['part_translation_pred'].to(self.device)
+            self.part_extent_pred = input['part_extent_pred'].to(self.device)
             self.ply_rotation_pred = input['ply_rotation_pred'].to(self.device)
 
     def switch_train(self):
@@ -343,7 +345,8 @@ class SDFusionModelPly2Shape(BaseModel):
         for i in range(B):
             collision_loss, contact_loss = get_physical_loss(self.gen_df[i:i+1], self.ply[i:i+1], 
                                                 self.ply_translation[i:i+1], self.ply_rotation[i:i+1],
-                                                self.part_extent[i:i+1], self.part_translation[i:i+1],
+                                                self.part_extent_pred[i:i+1] if self.opt.haoran else self.part_extent[i:i+1],
+                                                self.part_translation[i:i+1],
                                                 move_limit=self.move_limit[i], 
                                                 move_axis=self.move_axis[i],
                                                 move_origin=self.move_origin[i],
@@ -360,10 +363,10 @@ class SDFusionModelPly2Shape(BaseModel):
                 self.collision_loss_meter.update(collision_loss.item())
                 self.contact_loss_meter.update(contact_loss.item())
             else:
-                if hasattr(self, 'ply_rotation_pred'):
+                if self.opt.haoran:
                     collision_loss_pred, contact_loss_pred = get_physical_loss(self.gen_df[i:i+1], self.ply[i:i+1], 
                                                         self.ply_translation[i:i+1], self.ply_rotation_pred[i:i+1],
-                                                        self.part_extent[i:i+1], self.part_translation[i:i+1],
+                                                        self.part_extent_pred[i:i+1], self.part_translation_pred[i:i+1],
                                                         move_limit=self.move_limit[i], 
                                                         move_axis=self.move_axis[i],
                                                         move_origin=self.move_origin[i],
@@ -468,7 +471,8 @@ class SDFusionModelPly2Shape(BaseModel):
         with torch.no_grad():
             collision_loss, contact_loss = get_physical_loss(self.gen_df, self.ply, 
                                                 self.ply_translation, self.ply_rotation,
-                                                self.part_extent, self.part_translation,
+                                                self.part_extent_pred if self.opt.haoran else self.part_extent,
+                                                self.part_translation,
                                                 move_limit=self.move_limit[0], 
                                                 move_axis=self.move_axis[0],
                                                 move_origin=self.move_origin[0],
@@ -485,10 +489,10 @@ class SDFusionModelPly2Shape(BaseModel):
                 self.collision_loss_meter.update(collision_loss.item())
                 self.contact_loss_meter.update(contact_loss.item())
             else:
-                if hasattr(self, 'ply_rotation_pred'):
+                if self.opt.haoran:
                     collision_loss_pred, contact_loss_pred = get_physical_loss(self.gen_df, self.ply, 
                                                         self.ply_translation, self.ply_rotation_pred,
-                                                        self.part_extent, self.part_translation,
+                                                        self.part_extent_pred, self.part_translation_pred,
                                                         move_limit=self.move_limit[0], 
                                                         move_axis=self.move_axis[0],
                                                         move_origin=self.move_origin[0],
@@ -506,7 +510,6 @@ class SDFusionModelPly2Shape(BaseModel):
                 self.logger.log(f'part {instance_name} instance {self.diversity_index}, collision loss {collision_loss_pred:.4f}, contact loss {contact_loss_pred:.4f}')
                 self.diversity_index += 1
                 if self.diversity_index % self.opt.diversity_count == 0:
-                    # find the best prediction
                     best_idx = np.argmin([loss[0] + loss[1] for loss in self.loss_tracker_pred])
                     best_loss = self.loss_tracker[best_idx]
                     self.logger.log(f'part {instance_name} best {best_idx}, collision loss {best_loss[0]:.4f}, contact loss {best_loss[1]:.4f}')
@@ -593,8 +596,12 @@ class SDFusionModelPly2Shape(BaseModel):
 
             visuals_dict['part_scale'] = np.zeros([len(meshes)], dtype=np.float32)
             for i, mesh in enumerate(meshes):
-                visuals_dict['part_scale'][i] = torch.max(self.part_extent[i]).item() / np.max(mesh.extents) if self.opt.scale_mode == 'max_extent' else \
-                    (torch.prod(self.part_extent[i]).item() / np.prod(mesh.extents)) ** (1/3)
+                if self.opt.haoran:
+                    visuals_dict['part_scale'][i] = torch.max(self.part_extent_pred[i]).item() / np.max(mesh.extents) if self.opt.scale_mode == 'max_extent' else \
+                        (torch.prod(self.part_extent_pred[i]).item() / np.prod(mesh.extents)) ** (1/3)
+                else:
+                    visuals_dict['part_scale'][i] = torch.max(self.part_extent[i]).item() / np.max(mesh.extents) if self.opt.scale_mode == 'max_extent' else \
+                        (torch.prod(self.part_extent[i]).item() / np.prod(mesh.extents)) ** (1/3)
 
         return visuals_dict
 

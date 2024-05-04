@@ -132,10 +132,7 @@ class GAPartNetDataset(BaseDataset):
             points, points_stat = pc_normalize(points, scale_norm=self.opt.ply_norm, return_stat=True)
             points = torch.from_numpy(points).transpose(0, 1).float() # (3, N)
 
-            if self.haoran or self.haoran_rotation:
-                transform_path = os.path.join(self.haoran_override, os.path.basename(ply_filepath).replace('.ply', '.json'))
-            else:
-                transform_path = sdf_h5_file.replace(self.sdf_dir, 'part_translation_scale').replace('.h5', '.json')
+            transform_path = sdf_h5_file.replace(self.sdf_dir, 'part_translation_scale').replace('.h5', '.json')
             with open(transform_path, 'r') as f:
                 transform = json.load(f)
                 part_translate, part_extent = torch.tensor(transform['centroid']).float(), torch.tensor(transform['extents']).float()
@@ -146,6 +143,14 @@ class GAPartNetDataset(BaseDataset):
                     predicted_volume_path = sdf_h5_file.replace(self.sdf_dir, 'part_volume_predicted').replace('.h5', '.json') # cube root of the volume
                     part_extent = torch.tensor(json.load(open(predicted_volume_path))['volume']).float().view(1, 1).repeat(1, 3)
 
+            if self.haoran or self.haoran_rotation:
+                transform_path = os.path.join(self.haoran_override, os.path.basename(ply_filepath).replace('.ply', '.json'))
+                with open(transform_path, 'r') as f:
+                    transform = json.load(f)
+                    part_translate_pred, part_extent_pred = torch.tensor(transform['centroid']).float(), torch.tensor(transform['extents']).float()
+                    ret['part_translation_pred'] = part_translate_pred
+                    ret['part_extent_pred'] = part_extent_pred
+                
             if self.opt.use_mobility_constraint:
                 if self.haoran:
                     if self.opt.cat == 'slider_drawer':
@@ -183,8 +188,6 @@ class GAPartNetDataset(BaseDataset):
 
                 if self.haoran: # use the predicted rotation matrix
                     ret['ply_rotation_pred'] = build_rot_matrix(transform['rotate_angle_pred'] * np.pi / 180)
-                if self.haoran_rotation:
-                    ret['ply_rotation_pred'] = rot_matrix
 
                 # points_stat['centroid'] = torch.mm(rot_matrix, points_stat['centroid'].view(3, 1)).view(3)
 
