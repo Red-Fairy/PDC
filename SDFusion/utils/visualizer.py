@@ -170,10 +170,10 @@ class Visualizer():
 						points = points + visuals['ply_translation'][i][:, None]
 						ply_file.points = open3d.utility.Vector3dVector(points.T)
 				
-				if self.opt.isTrain or not self.opt.test_diversity: # do not save the point cloud when testing diversity
-					instance_label = self.get_instance_label(i)
-					ply_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], instance_label, 'ply'))
-					open3d.io.write_point_cloud(ply_path, ply_file)
+				# if not self.opt.test_diversity or (self.diversity_count == 0 and i == 0):
+				instance_label = self.get_instance_label(i)
+				ply_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], instance_label, 'ply'))
+				open3d.io.write_point_cloud(ply_path, ply_file)
 
 		if self.opt.visual_mode == 'sdf': # save the sdf file
 			for i in range(visuals['sdf'].shape[0]):

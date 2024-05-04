@@ -214,7 +214,7 @@ class GAPartNetDataset(BaseDataset):
                 part_extent = torch.tensor(mesh.bounding_box.extents).float()
         
             # padding
-            N = points.shape[1]
+            # N = points.shape[1]
             # points = torch.cat([points, torch.zeros(3, self.df_conf.ply.max_points - N)], dim=1)
             ret['ply'] = points
             ret['ply_translation'] = points_stat['centroid']

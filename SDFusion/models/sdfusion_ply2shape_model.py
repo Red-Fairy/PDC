@@ -360,7 +360,7 @@ class SDFusionModelPly2Shape(BaseModel):
                 self.collision_loss_meter.update(collision_loss.item())
                 self.contact_loss_meter.update(contact_loss.item())
             else:
-                if not hasattr(self, 'ply_rotation_pred'):
+                if hasattr(self, 'ply_rotation_pred'):
                     collision_loss_pred, contact_loss_pred = get_physical_loss(self.gen_df[i:i+1], self.ply[i:i+1], 
                                                         self.ply_translation[i:i+1], self.ply_rotation_pred[i:i+1],
                                                         self.part_extent[i:i+1], self.part_translation[i:i+1],
@@ -384,10 +384,11 @@ class SDFusionModelPly2Shape(BaseModel):
                     # find the best prediction
                     best_idx = np.argmin([loss[0] + loss[1] for loss in self.loss_tracker_pred])
                     best_loss = self.loss_tracker[best_idx]
-                    self.logger.log(f'part {instance_name} best, collision loss {best_loss[0]:.4f}, contact loss {best_loss[1]:.4f}')
+                    self.logger.log(f'part {instance_name} best {best_idx}, collision loss {best_loss[0]:.4f}, contact loss {best_loss[1]:.4f}')
                     self.diversity_index = 0
                     self.loss_tracker, self.loss_tracker_pred = [], []
-
+                    self.collision_loss_meter.update(best_loss[0])
+                    self.contact_loss_meter.update(best_loss[1])
 
     def guided_inference(self, data, ddim_steps=None, ddim_eta=0.):
         
@@ -484,7 +485,7 @@ class SDFusionModelPly2Shape(BaseModel):
                 self.collision_loss_meter.update(collision_loss.item())
                 self.contact_loss_meter.update(contact_loss.item())
             else:
-                if not hasattr(self, 'ply_rotation_pred'):
+                if hasattr(self, 'ply_rotation_pred'):
                     collision_loss_pred, contact_loss_pred = get_physical_loss(self.gen_df, self.ply, 
                                                         self.ply_translation, self.ply_rotation_pred,
                                                         self.part_extent, self.part_translation,
@@ -508,9 +509,11 @@ class SDFusionModelPly2Shape(BaseModel):
                     # find the best prediction
                     best_idx = np.argmin([loss[0] + loss[1] for loss in self.loss_tracker_pred])
                     best_loss = self.loss_tracker[best_idx]
-                    self.logger.log(f'part {instance_name} best, collision loss {best_loss[0]:.4f}, contact loss {best_loss[1]:.4f}')
+                    self.logger.log(f'part {instance_name} best {best_idx}, collision loss {best_loss[0]:.4f}, contact loss {best_loss[1]:.4f}')
                     self.diversity_index = 0
                     self.loss_tracker, self.loss_tracker_pred = [], []
+                    self.collision_loss_meter.update(best_loss[0])
+                    self.contact_loss_meter.update(best_loss[1])
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
