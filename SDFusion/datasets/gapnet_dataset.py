@@ -89,16 +89,14 @@ class GAPartNetDataset(BaseDataset):
         self.df_conf = OmegaConf.load(opt.df_cfg)
 
         self.sdf_filepaths = self.sdf_filepaths[:self.max_dataset_size]
+        self.sdf_filepaths = sorted(self.sdf_filepaths)
         cprint('[*] %d samples loaded.' % (len(self.sdf_filepaths)), 'yellow')
 
-        if not self.opt.isTrain and self.opt.test_diversity: # repeat the dataset for 8 times
-            self.sdf_filepaths = self.sdf_filepaths * self.opt.diversity_count
-
-        self.N = len(self.sdf_filepaths)
+        if not self.opt.isTrain and self.opt.test_diversity: # repeat the dataset for diversity testing
+            self.sdf_filepaths = [x for x in self.sdf_filepaths for _ in range(self.opt.diversity_count)]
 
         self.to_tensor = transforms.ToTensor()
         self.normalize = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-
 
     def __getitem__(self, index):
 
@@ -229,7 +227,7 @@ class GAPartNetDataset(BaseDataset):
         return ret
 
     def __len__(self):
-        return self.N
+        return len(self.sdf_filepaths)
 
     def name(self):
         return 'GAPartNetSDFDataset'

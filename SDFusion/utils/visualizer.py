@@ -201,6 +201,8 @@ class Visualizer():
 
 		if not self.opt.isTrain and self.opt.test_diversity:
 			self.diversity_count += len(visuals['meshes'])
+			if self.diversity_count >= self.opt.diversity_count:
+				self.diversity_count = 0
 
 	def log_tensorboard_visuals(self, visuals, cur_step, labels_while_list=None, phase='train'):
 		writer = self.opt.writer

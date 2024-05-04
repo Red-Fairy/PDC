@@ -422,7 +422,7 @@ class SDFusionModelPly2Shape(BaseModel):
                                                         loss_contact_weight=self.opt.loss_contact_weight,
                                                         use_bbox=False, linspace=True)
 
-                    print(f'collision {collision_loss.item():.4f}, contact {contact_loss.item():.4f}')
+                    # print(f'collision {collision_loss.item():.4f}, contact {contact_loss.item():.4f}')
                     
                     grad = torch.autograd.grad(collision_loss + contact_loss, latents_grad)[0] # (B, *shape)
                     # print(grad.sum().item())
@@ -450,8 +450,8 @@ class SDFusionModelPly2Shape(BaseModel):
                                                 loss_collision_weight=self.opt.loss_collision_weight,
                                                 loss_contact_weight=self.opt.loss_contact_weight,
                                                 use_bbox=False, linspace=True)
+            instance_name = self.paths[0].split('/')[-1].split('.')[0]
             if not self.opt.test_diversity:
-                instance_name = self.paths[0].split('/')[-1].split('.')[0]
                 self.logger.log(f'part {instance_name}, collision loss {collision_loss.item():.4f}, contact loss {contact_loss.item():.4f}')
                 self.collision_loss_meter.update(collision_loss.item())
                 self.contact_loss_meter.update(contact_loss.item())
@@ -471,12 +471,16 @@ class SDFusionModelPly2Shape(BaseModel):
                                                     use_bbox=False, linspace=True)
                 self.loss_tracker.append((collision_loss.item(), contact_loss.item()))
                 self.loss_tracker_pred.append((collision_loss_pred.item(), contact_loss_pred.item()))
+                self.logger.log(f'part {instance_name} instance {self.diversity_index}, \
+                                collision loss {collision_loss_pred:.4f}, contact loss {contact_loss_pred:.4f}')
                 self.diversity_index += 1
                 if self.diversity_index % self.opt.diversity_count == 0:
                     # find the best prediction
                     best_idx = np.argmin([loss[0] + loss[1] for loss in self.loss_tracker_pred])
                     best_loss = self.loss_tracker[best_idx]
-                    self.logger.log(f'best part, collision loss {best_loss[0]:.4f}, contact loss {best_loss[1]:.4f}')
+                    self.logger.log(f'part {instance_name} best, \
+                                    collision loss {best_loss[0]:.4f}, contact loss {best_loss[1]:.4f}')
+                    self.diversity_index = 0
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
