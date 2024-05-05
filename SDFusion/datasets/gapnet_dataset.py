@@ -90,6 +90,8 @@ class GAPartNetDataset(BaseDataset):
 
         self.sdf_filepaths = self.sdf_filepaths[:self.max_dataset_size]
         self.sdf_filepaths = sorted(self.sdf_filepaths)
+        if self.opt.start_idx is not None and self.opt.end_idx is not None:
+            self.sdf_filepaths = self.sdf_filepaths[self.opt.start_idx:self.opt.end_idx]
         cprint('[*] %d samples loaded.' % (len(self.sdf_filepaths)), 'yellow')
 
         if not self.opt.isTrain and self.opt.test_diversity: # repeat the dataset for diversity testing

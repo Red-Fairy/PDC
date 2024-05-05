@@ -3,7 +3,6 @@ from tqdm import tqdm
 
 root = '/mnt/azureml/cr/j/19c62471467141d39f5f0dc988c1ea42/exe/wd/PartDiffusion/SDFusion/logs/slider-ply2shape-plyrot-scale3-lr0.00001/test_250000_rotate0.0_scale3.0_eta0.0_steps50_volume_mobility_diversity_margin128-haoran'
 
-
 with open(os.path.join(root, 'log.txt'), 'r') as f:
     lines = f.readlines()
 

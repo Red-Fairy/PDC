@@ -33,6 +33,8 @@ class BaseOptions():
 		
 		self.parser.add_argument('--ratio', type=float, default=1., help='ratio of the dataset to use. for debugging and overfitting')
 		self.parser.add_argument('--max_dataset_size', default=2147483648, type=int, help='chooses the maximum dataset size.')
+		self.parser.add_argument('--start_idx', default=None, type=int)
+		self.parser.add_argument('--end_idx', default=None, type=int)
 		self.parser.add_argument('--nThreads', default=9, type=int, help='# threads for loading data')        
 		self.parser.add_argument('--serial_batches', action='store_true', help='if true, takes images in order to make batches, otherwise takes them randomly')
 
