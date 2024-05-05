@@ -24,14 +24,14 @@ trunc_thres=0.2
 #####################
 
 ### display & log stuff ###
-display_freq=250
+display_freq=5
 print_freq=25
-total_iters=75000
+total_iters=100000
 save_steps_freq=5000
 ###########################
 
 multi_gpu=1
-batch_size=4
+batch_size=3
 name=$1
 cat=$2
 lr=$3

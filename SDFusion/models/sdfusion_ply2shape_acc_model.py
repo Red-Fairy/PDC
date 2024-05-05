@@ -342,8 +342,7 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
             latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
 
         # decode z
-        self.gen_df = self.vqvae.module.decode_no_quant(latents)
-        return self.gen_df
+        self.gen_df = self.vqvae.module.decode_no_quant(latents).detach()
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
@@ -394,25 +393,25 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
     def get_current_visuals(self):
 
-        with torch.no_grad():
-            self.img_gt = render_sdf(self.renderer, self.x)
-            self.img_gen_df = render_sdf(self.renderer, self.gen_df)
-            spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
-            meshes = [sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=spc) for i in range(self.gen_df.shape[0])]
-
-        vis_tensor_names = [
-            'img_gt',
-            'img_gen_df',
-        ]
-        vis_ims = self.tnsrs2ims(vis_tensor_names)
-        visuals = zip(vis_tensor_names, vis_ims)
+        spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
+        meshes = [sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=spc) for i in range(self.gen_df.shape[0])]
         visuals_dict = {
-            "img": OrderedDict(visuals),
             "meshes": meshes,
             "paths": self.paths,
-            "points": (self.ply * self.ply_scale.unsqueeze(1)).cpu().numpy(),
+            "points": self.ply.detach().cpu().numpy(), # (B, 3, N)
         }
 
+        if self.opt.isTrain:
+            self.img_gt = render_sdf(self.renderer, self.x).detach()
+            self.img_gen_df = render_sdf(self.renderer, self.gen_df).detach()
+            vis_tensor_names = [
+                'img_gt',
+                'img_gen_df',
+            ]
+            vis_ims = self.tnsrs2ims(vis_tensor_names)
+            visuals = zip(vis_tensor_names, vis_ims)
+            visuals_dict['img'] = OrderedDict(visuals)
+        
         if hasattr(self, 'ply_translation'):
             visuals_dict['ply_translation'] = self.ply_translation.cpu().numpy()
             visuals_dict['ply_rotation'] = self.ply_rotation.cpu().numpy()

@@ -311,7 +311,7 @@ class SDFusionModelPlyBBox2ShapeAcc(BaseModel):
             latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
 
         # decode z
-        self.gen_df = self.vqvae.module.decode_no_quant(latents)
+        self.gen_df = self.vqvae.module.decode_no_quant(latents).detach()
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
@@ -362,33 +362,41 @@ class SDFusionModelPlyBBox2ShapeAcc(BaseModel):
 
     def get_current_visuals(self):
 
-        with torch.no_grad():
-            self.img_gt = render_sdf(self.renderer, self.x)
-            self.img_gen_df = render_sdf(self.renderer, self.gen_df)
-            spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
-            meshes = [sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=spc) for i in range(self.gen_df.shape[0])]
-
-        vis_tensor_names = [
-            'img_gt',
-            'img_gen_df',
-        ]
-        vis_ims = self.tnsrs2ims(vis_tensor_names)
-        visuals = zip(vis_tensor_names, vis_ims)
+        spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
+        meshes = [sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=spc) for i in range(self.gen_df.shape[0])]
         visuals_dict = {
-            "img": OrderedDict(visuals),
             "meshes": meshes,
             "paths": self.paths,
-            "points": self.ply.cpu().numpy(),
+            "points": self.ply.detach().cpu().numpy(), # (B, 3, N)
         }
 
+        if self.opt.isTrain:
+            self.img_gt = render_sdf(self.renderer, self.x).detach()
+            self.img_gen_df = render_sdf(self.renderer, self.gen_df).detach()
+            vis_tensor_names = [
+                'img_gt',
+                'img_gen_df',
+            ]
+            vis_ims = self.tnsrs2ims(vis_tensor_names)
+            visuals = zip(vis_tensor_names, vis_ims)
+            visuals_dict['img'] = OrderedDict(visuals)
+
+        if hasattr(self, f'pred_sdf_x0_{self.ddim_steps-1}'):
+            meshes_pred = [sdf_to_mesh_trimesh(getattr(self, f'pred_sdf_x0_{i}')[0][0], spacing=spc) for i in range(self.ddim_steps)]
+            visuals_dict['meshes_pred'] = meshes_pred
+        
         if hasattr(self, 'ply_translation'):
             visuals_dict['ply_translation'] = self.ply_translation.cpu().numpy()
+            visuals_dict['ply_rotation'] = self.ply_rotation.cpu().numpy()
             visuals_dict['part_translation'] = self.part_translation.cpu().numpy()
-            mesh_extents = torch.zeros([0, 3], device=self.device)
-            for mesh in meshes:
-                mesh_extents = torch.cat([mesh_extents, torch.tensor(mesh.extents, device=self.device).unsqueeze(0)], dim=0)
-            # visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / torch.max(mesh_extents, dim=1)[0]).cpu().numpy()
-            visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / (4 / 2.2)).cpu().numpy()
+
+            visuals_dict['part_scale'] = np.zeros([len(meshes)], dtype=np.float32)
+            for i, mesh in enumerate(meshes):
+                visuals_dict['part_scale'][i] = torch.max(self.part_extent[i]).item() / np.max(mesh.extents) if self.opt.scale_mode == 'max_extent' else \
+                    (torch.prod(self.part_extent[i]).item() / np.prod(mesh.extents)) ** (1/3)
+
+        # remove self.gen_df to save memory
+        del self.gen_df
 
         return visuals_dict
 
