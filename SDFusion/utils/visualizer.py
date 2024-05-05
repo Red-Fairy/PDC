@@ -56,6 +56,10 @@ class Visualizer():
 		self.log_dir = os.path.join(opt.logs_dir, opt.name)
 
 		self.img_dir = opt.img_dir
+		
+		os.makedirs(os.path.join(self.img_dir, 'meshes'), exist_ok=True)
+		os.makedirs(os.path.join(self.img_dir, 'meshes_canonical'), exist_ok=True)
+		os.makedirs(os.path.join(self.img_dir, 'pcd'), exist_ok=True)
 
 		self.name = opt.name
 		self.opt = opt
@@ -131,14 +135,19 @@ class Visualizer():
 					# print(f'mesh {i} max extent: {np.max(mesh.extents)}')
 					mesh.apply_scale((part_scale[i], part_scale[i], part_scale[i]))
 					mesh.apply_translation(part_translation[i])
-					# rotate the mesh by 'ply_rotation' to make them align with the point cloud
-					if 'ply_rotation' in visuals and not self.opt.visual_normalize:
-						mesh.apply_transform(visuals['ply_rotation'][i])
-						 
-				for i, visual_mesh in enumerate(visual_meshes):
 					instance_label = self.get_instance_label(i)
-					mesh_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], instance_label, 'obj'))
-					visual_mesh.export(mesh_path, 'obj')
+					# save the mesh under canonical pose
+					mesh_path = os.path.join(self.img_dir, 'meshes_canonical', filename_format.format(object_ids[i], part_ids[i], instance_label, 'obj'))
+					mesh.export(mesh_path, 'obj')
+					# rotate the mesh by 'ply_rotation' to make them align with the point cloud
+					mesh.apply_transform(visuals['ply_rotation'][i])
+					mesh_path = os.path.join(self.img_dir, 'meshes', filename_format.format(object_ids[i], part_ids[i], instance_label, 'obj'))
+					mesh.export(mesh_path, 'obj')
+						 
+				# for i, visual_mesh in enumerate(visual_meshes):
+				# 	instance_label = self.get_instance_label(i)
+				# 	mesh_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], instance_label, 'obj'))
+				# 	visual_mesh.export(mesh_path, 'obj')
 		
 		if 'meshes_pred' in visuals:
 			part_scale = visuals['part_scale'][0]
@@ -157,22 +166,22 @@ class Visualizer():
 				if 'ply_translation' in visuals:
 					if self.opt.visual_mode == 'sdf':
 						points = visuals['points'][i]
-						if 'ply_rotation' in visuals and self.opt.visual_normalize:
-							points = np.matmul(visuals['ply_rotation'][i][:3, :3].T, points)
+						# if 'ply_rotation' in visuals and self.opt.visual_normalize:
+						# 	points = np.matmul(visuals['ply_rotation'][i][:3, :3].T, points)
 						points = points + visuals['ply_translation'][i][:, None]
 						points = points - visuals['part_translation'][i][:, None]
 						points = points / visuals['part_scale'][i]
 						ply_file.points = open3d.utility.Vector3dVector(points.T)
 					elif self.opt.visual_mode == 'mesh':
 						points = visuals['points'][i]
-						if 'ply_rotation' in visuals and self.opt.visual_normalize:
-							points = np.matmul(visuals['ply_rotation'][i][:3, :3].T, points)
+						# if 'ply_rotation' in visuals and self.opt.visual_normalize:
+						# 	points = np.matmul(visuals['ply_rotation'][i][:3, :3].T, points)
 						points = points + visuals['ply_translation'][i][:, None]
 						ply_file.points = open3d.utility.Vector3dVector(points.T)
 				
 				# if not self.opt.test_diversity or (self.diversity_count == 0 and i == 0):
 				instance_label = self.get_instance_label(i)
-				ply_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], instance_label, 'ply'))
+				ply_path = os.path.join(self.img_dir, 'pcd', filename_format.format(object_ids[i], part_ids[i], instance_label, 'ply'))
 				open3d.io.write_point_cloud(ply_path, ply_file)
 
 		if self.opt.visual_mode == 'sdf': # save the sdf file
