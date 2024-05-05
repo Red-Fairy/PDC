@@ -37,7 +37,8 @@ cat=$2
 lr=$3
 port=$4
 gpu_ids=$5
-uc_scale=$6
+uc_ply_scale=$6
+uc_bbox_scale=$7
 
 name="${name}-plybbox2shape-norot-scale${uc_scale}-lr${lr}"
 
