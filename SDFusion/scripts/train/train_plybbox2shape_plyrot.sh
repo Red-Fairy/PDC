@@ -1,10 +1,3 @@
-multi_gpu=1  # multi-gpu
-SLURM=1
-
-RED='\033[0;31m'
-NC='\033[0m' # No Color
-DATE_WITH_TIME=`date "+%Y-%m-%dT%H-%M-%S"`
-
 logs_dir='logs'
 
 ### hyper params ###
@@ -16,46 +9,29 @@ df_cfg='configs/sdfusion-plybbox2shape.yaml'
 vq_model="vqvae"
 vq_dset='gapnet'
 vq_cat="slider_drawer"
-vq_ckpt="/raid/haoran/Project/PartDiffusion/PartDiffusion/pretrained_checkpoint/vqvae-snet-all.pth"
-vq_cfg="/raid/haoran/Project/PartDiffusion/PartDiffusion/SDFusion/configs/vqvae_snet.yaml"
+vq_ckpt="logs/gapnet-res128-vqvae-lr0.00002/ckpt/vqvae_steps-latest.pth"
+vq_cfg="configs/vqvae_gapnet-128.yaml"
 
-cond_ckpt="/raid/haoran/Project/PartDiffusion/PartDiffusion/pretrained_checkpoint/pointnet2.pth"
+cond_ckpt="../pretrained_checkpoint/pointnet2.pth"
 
 ### dataset stuff ###
 max_dataset_size=1000000
 dataset_mode='gapnet'
-dataroot="/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/part_sdf"
+dataroot="../../data-rundong/PartDiffusion/dataset/"
 cat="slider_drawer"
 
-res=64
+res=128
 trunc_thres=0.2
 #####################
 
 ### display & log stuff ###
 display_freq=250
 print_freq=25
-total_iters=300000
-save_steps_freq=2500
+total_iters=75000
+save_steps_freq=5000
 ###########################
 
-today=$(date '+%m%d')
-me=`basename "$0"`
-me=$(echo $me | cut -d'.' -f 1)
-
-note=$RELEASE_NOTE
-
-debug=0
-if [ $debug = 1 ]; then
-    printf "${RED}Debugging!${NC}\n"
-	batch_size=1
-    # batch_size=40
-	max_dataset_size=120
-    save_steps_freq=3
-	display_freq=2
-	print_freq=2
-    name="DEBUG-${name}"
-fi
-
+multi_gpu=1
 batch_size=4
 name=$1
 lr=$2
@@ -74,7 +50,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --dataset_mode ${dataset_mode} --res ${res} --cat ${cat} --trunc_thres ${trunc_thres} \
             --display_freq ${display_freq} --print_freq ${print_freq} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
-            --debug ${debug} --dataroot ${dataroot} \
+            --dataroot ${dataroot} \
             --ply_rotate --ply_bbox_cond \
             --cond_ckpt ${cond_ckpt} --uc_ply_scale ${uc_ply_scale} --uc_bbox_scale ${uc_bbox_scale} "
 

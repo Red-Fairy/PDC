@@ -116,6 +116,9 @@ class BaseOptions():
 		# test a single model
 		self.parser.add_argument('--model_id', default=None, type=str, help='model id to optimize')
 
+		# test diversity
+		self.parser.add_argument('--test_diversity', action='store_true', help='test diversity')
+
 		self.initialized = True
 
 	def parse_and_setup(self, accelerator: Accelerator = None):

@@ -40,6 +40,4 @@ unet:
     context_dim: 256 # dimension of pointcloud feature
     use_checkpoint: true
     legacy: False
-
-ply:
-  max_points: 5500
+    

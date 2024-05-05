@@ -12,7 +12,6 @@ class TestOptions(BaseOptions):
         self.parser.add_argument('--planner', type=str, default='GeometryDropPlanner', help='inference planner')
 
         # for diversity test
-        self.parser.add_argument('--test_diversity', action='store_true', help='test diversity')
         self.parser.add_argument('--diversity_count', type=int, default=8)
         self.parser.add_argument('--testdir', type=str, default='', help='test directory prefix')
 
