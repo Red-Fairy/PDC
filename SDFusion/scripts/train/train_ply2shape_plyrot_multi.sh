@@ -18,7 +18,6 @@ cond_ckpt="../pretrained_checkpoint/pointnet2.pth"
 max_dataset_size=1000000
 dataset_mode='gapnet'
 dataroot="../../data-rundong/PartDiffusion/dataset/"
-cat="slider_drawer"
 
 res=128
 trunc_thres=0.2
@@ -34,10 +33,11 @@ save_steps_freq=25000
 multi_gpu=1  # multi-gpu
 batch_size=4
 name=$1
-lr=$2
-port=$3
-gpu_ids=$4
-uc_scale=$5
+cat=$2
+lr=$3
+port=$4
+gpu_ids=$5
+uc_scale=$6
 
 name="${name}-ply2shape-plyrot-scale${uc_scale}-lr${lr}"
 
