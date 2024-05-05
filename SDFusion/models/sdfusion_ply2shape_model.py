@@ -357,7 +357,7 @@ class SDFusionModelPly2Shape(BaseModel):
                                                 loss_collision_weight=self.opt.loss_collision_weight,
                                                 loss_contact_weight=self.opt.loss_contact_weight,
                                                 use_bbox=False, linspace=True)
-            instance_name = self.paths[0].split('/')[-1].split('.')[0]
+            instance_name = self.paths[i].split('/')[-1].split('.')[0]
             if not self.opt.test_diversity:
                 self.logger.log(f'part {instance_name}, collision loss {collision_loss.item():.4f}, contact loss {contact_loss.item():.4f}')
                 self.collision_loss_meter.update(collision_loss.item())
@@ -403,8 +403,7 @@ class SDFusionModelPly2Shape(BaseModel):
         else:
             self.ddim_steps = ddim_steps
 
-        B = self.x.shape[0]
-        assert B == 1 # only support batch size 1 for now
+        B = self.x.shape[0] # B == 1, only support batch size 1 for now
         shape = self.z_shape
         c = self.cond_model(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
         uc = self.cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)

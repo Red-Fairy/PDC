@@ -44,10 +44,9 @@ class BBoxModel(nn.Module):
 
 	def forward(self, x: torch.Tensor=None, uncond=False):
 		# x: B*3
-		
 		if not uncond:
-			# 1) first normalize the input, such that the largest value for each instance is 1
-			x = x / torch.max(x, dim=1, keepdim=True)[0]
+			# 1) first normalize the input, such that the sum of the three coordinates is 1
+			x = x / torch.sum(x, dim=-1, keepdim=True)
 			x = self.pe(x) # B*(6*(max_deg-min_deg)+3)
 			x = self.encoder(x)
 			return x

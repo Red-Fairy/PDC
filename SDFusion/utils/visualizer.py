@@ -111,9 +111,9 @@ class Visualizer():
 
 	def get_instance_label(self, i):
 		if self.isTrain:
-			return i
+			return '_' + str(i)
 		elif self.opt.test_diversity:
-			return self.diversity_count + i
+			return '_' + str(self.diversity_count + i)
 		else:
 			return ''
 
@@ -123,7 +123,7 @@ class Visualizer():
 		object_ids = [path.split('/')[-1].split('_')[0] for path in paths]
 		part_ids = [path.split('/')[-1].split('_')[1].split('.')[0] for path in paths]
 
-		filename_format = f'{phase}_step{current_iters:05d}' + '_{}_{}-{}.{}' if self.opt.isTrain else '{}_{}-{}.{}'
+		filename_format = f'{phase}_step{current_iters:05d}' + '_{}_{}{}.{}' if self.opt.isTrain else '{}_{}-{}.{}'
 		
 		if 'meshes' in visuals:
 			visual_meshes = visuals['meshes']

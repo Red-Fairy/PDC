@@ -134,6 +134,9 @@ class BaseOptions():
 		else:
 			self.opt.phase = 'test'
 
+		if self.opt.guided_inference:
+			assert self.opt.batch_size == 1, 'guided inference only supports batch size 1'
+
 		# make experiment dir
 		expr_dir = os.path.join(self.opt.logs_dir, self.opt.name)
 		if (accelerator is None or accelerator.is_main_process) and not os.path.exists(expr_dir):

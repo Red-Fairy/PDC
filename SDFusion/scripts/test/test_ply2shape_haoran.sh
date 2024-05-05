@@ -55,7 +55,6 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --ddim_steps 50 --uc_scale 3 \
             --loss_margin 0.00390625 \
             --haoran \
-            --test_diversity \
             --test_description margin256-haoran \
             --use_mobility_constraint "
 
