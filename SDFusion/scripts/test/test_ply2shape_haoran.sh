@@ -40,7 +40,6 @@ rotate_angle=$4
 
 # --loss_margin 0.00390625 1/256
 
-
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --batch_size ${batch_size} --max_dataset_size ${max_dataset_size} \
             --model ${model} --df_cfg ${df_cfg} \
@@ -59,4 +58,4 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --use_mobility_constraint "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
-
+1

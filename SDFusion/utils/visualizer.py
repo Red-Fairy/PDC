@@ -123,7 +123,7 @@ class Visualizer():
 		object_ids = [path.split('/')[-1].split('_')[0] for path in paths]
 		part_ids = [path.split('/')[-1].split('_')[1].split('.')[0] for path in paths]
 
-		filename_format = f'{phase}_step{current_iters:05d}' + '_{}_{}{}.{}' if self.opt.isTrain else '{}_{}-{}.{}'
+		filename_format = f'{phase}_step{current_iters:05d}' + '_{}_{}{}.{}' if self.opt.isTrain else '{}_{}{}.{}'
 		
 		if 'meshes' in visuals:
 			visual_meshes = visuals['meshes']

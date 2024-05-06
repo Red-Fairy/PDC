@@ -8,8 +8,8 @@ import torch
 
 data_count_per_instance = 5
 
-root = '../haoran'
-dst_root = '../ignore_files/slider_drawer'
+root = '../haoran/slider_drawer_legacy'
+dst_root = '../ignore_files/slider_drawer_legacy'
 files = os.listdir(root)
 files = [file for file in files if 'pred_bbox' in file]
 
