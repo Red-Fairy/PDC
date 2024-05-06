@@ -8,8 +8,8 @@ import torch
 
 data_count_per_instance = 5
 
-root = '/mnt/azureml/cr/j/19c62471467141d39f5f0dc988c1ea42/exe/wd/PartDiffusion/haoran'
-dst_root = '/mnt/azureml/cr/j/19c62471467141d39f5f0dc988c1ea42/exe/wd/PartDiffusion/ignore_files/slider_drawer'
+root = '../haoran'
+dst_root = '../ignore_files/slider_drawer'
 files = os.listdir(root)
 files = [file for file in files if 'pred_bbox' in file]
 
