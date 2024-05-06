@@ -6,16 +6,17 @@ import json
 from tqdm import tqdm
 import torch
 
-data_count_per_instance = 3
+data_count_per_instance = 5
 
-root = './haoran'
+root = '/mnt/azureml/cr/j/19c62471467141d39f5f0dc988c1ea42/exe/wd/PartDiffusion/haoran'
+dst_root = '/mnt/azureml/cr/j/19c62471467141d39f5f0dc988c1ea42/exe/wd/PartDiffusion/ignore_files/slider_drawer'
 files = os.listdir(root)
 files = [file for file in files if 'pred_bbox' in file]
 
 file_count_record = {}
 
 for i in range(data_count_per_instance):
-    os.makedirs(f'./ignore_files/instance_{i}', exist_ok=True)
+    os.makedirs(os.path.join(dst_root, f'set_{i}'), exist_ok=True)
 
 for i, file in enumerate(tqdm(files)):
     # obtain the object_id, part_id, rotate angle (inferred from filename)
@@ -28,7 +29,7 @@ for i, file in enumerate(tqdm(files)):
         file_count_record[key] = 0
     else:
         file_count_record[key] += 1
-    dst_path = f'./ignore_files/instance_{file_count_record[key]}/{object_id}_{part_id}.json'
+    dst_path = os.path.join(dst_root, f'set_{file_count_record[key]}/{object_id}_{part_id}.json')
 
     points = open3d.io.read_point_cloud(os.path.join(root, file)).points
     points = np.array(points)
