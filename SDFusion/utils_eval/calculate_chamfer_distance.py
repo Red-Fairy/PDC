@@ -26,8 +26,8 @@ class AverageMeter(object):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gt_root', type=str, default='/mnt/azureml/cr/j/19c62471467141d39f5f0dc988c1ea42/exe/wd/data-rundong/PartDiffusion/dataset/part_meshes/slider_drawer')
-    parser.add_argument('--test_root', type=str, default='/mnt/azureml/cr/j/19c62471467141d39f5f0dc988c1ea42/exe/wd/PartDiffusion/SDFusion/logs/slider-ply2shape-plyrot-scale3-lr0.00001/test_250000_rotate0.0_scale3.0_eta0.0_steps50_volume_mobility_guided_diversity_margin256_haoran/meshes_canonical_selected')
+    parser.add_argument('--gt_root', type=str, default='../../data-rundong/PartDiffusion/dataset/part_meshes/slider_drawer')
+    parser.add_argument('--test_root', type=str, default='./logs/slider_drawer-ply2shape-plyrot-scale3-lr0.00001/test_250000_rotate0.0_scale3.0_eta0.0_steps50_volume_mobility_diversity_margin256-haoran/meshes_canonical_selected')
     args = parser.parse_args()
 
     # run in SDFusion directory
