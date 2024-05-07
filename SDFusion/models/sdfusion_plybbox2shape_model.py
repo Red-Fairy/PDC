@@ -47,7 +47,7 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
         self.isTrain = opt.isTrain
         self.model_name = self.name()
         self.device = 'cuda'
-        assert self.opt.ply_cond
+        assert self.opt.ply_bbox_cond
 
         # self.optimizer_skip = False
         ######## START: Define Networks ########
@@ -176,12 +176,14 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
 
     def switch_train(self):
         self.df.train()
-        self.ply_cond_modell.train()
+        self.ply_cond_model.train()
+        self.bbox_cond_model.train()
         self.vqvae.eval()
 
     def switch_eval(self):
         self.df.eval()
-        self.ply_cond_modell.eval()
+        self.ply_cond_model.eval()
+        self.bbox_cond_model.eval()
         self.vqvae.eval()
 
     # check: ddpm.py, line 891
@@ -278,7 +280,7 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
         else:
             self.ddim_steps = ddim_steps
             
-        B = self.opt.batch_size
+        B = self.x.shape[0]
         shape = self.z_shape
         
         c_ply = self.ply_cond_model(self.ply).unsqueeze(1) # (B, 1, ply_dim), point cloud condition
@@ -305,9 +307,8 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
             latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
 
             # predict the noise residual
-            with torch.no_grad():
-                timesteps = torch.full((B*3,), t, device=self.device, dtype=torch.int64)
-                noise_pred = self.apply_model(latent_model_input, timesteps, c_full)
+            timesteps = torch.full((B*3,), t, device=self.device, dtype=torch.int64)
+            noise_pred = self.apply_model(latent_model_input, timesteps, c_full)
 
             # perform guidance
             noise_pred_uc_bbox, noise_pred_uc_ply, noise_pred_cond = noise_pred.chunk(3)
@@ -318,7 +319,7 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
             latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
 
         # decode z
-        self.gen_df = self.vqvae.decode_no_quant(latents)
+        self.gen_df = self.vqvae.decode_no_quant(latents).detach()
 
         # calculate physical loss
         for i in range(B):
@@ -620,10 +621,10 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
         print(colored('[*] weight successfully load from: %s' % ckpt, 'blue'))
 
         self.ply_cond_model.load_state_dict(state_dict['cond_model_ply'])
-        print(colored('[*] conditional model successfully restored from: %s' % ckpt, 'blue'))
+        print(colored('[*] pcd conditional model successfully restored from: %s' % ckpt, 'blue'))
 
         self.bbox_cond_model.load_state_dict(state_dict['cond_model_bbox'])
-        print(colored('[*] conditional model successfully restored from: %s' % ckpt, 'blue'))
+        print(colored('[*] bbox conditional model successfully restored from: %s' % ckpt, 'blue'))
         # if 'opt' in state_dict:
         for i, optimizer in enumerate(self.optimizers):
             try:

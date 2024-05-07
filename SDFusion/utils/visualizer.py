@@ -192,12 +192,12 @@ class Visualizer():
 				with h5py.File(sdf_path, 'w') as f:
 					f.create_dataset('sdf', data=visuals['sdf'][i], compression='gzip', compression_opts=4)
 
-		if self.opt.bbox_cond:
-			bboxes = visuals['bboxes']
-			data_dict = {
-				'bboxes': bboxes,
-			}
-			np.save(f'{self.img_dir}/{phase}_step{current_iters:05d}_meta.npy', data_dict, allow_pickle=True)
+		# if self.opt.bbox_cond:
+		# 	bboxes = visuals['bboxes']
+		# 	data_dict = {
+		# 		'bboxes': bboxes,
+		# 	}
+		# 	np.save(f'{self.img_dir}/{phase}_step{current_iters:05d}_meta.npy', data_dict, allow_pickle=True)
 			
 		# write images to disk
 		if 'img' in visuals:

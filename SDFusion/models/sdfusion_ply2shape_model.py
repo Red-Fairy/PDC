@@ -428,13 +428,12 @@ class SDFusionModelPly2Shape(BaseModel):
 
                 # perform guidance
                 noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
-                noise_pred = noise_pred_cond
 
             # compute the previous noisy sample x_t -> x_t-1
             if i > ddim_steps // 2:
                 with torch.enable_grad():
                     latents_grad = latents.detach().requires_grad_(True)
-                    pred_x0 = self.noise_scheduler.step(noise_pred, t, latents_grad, eta=ddim_eta).pred_original_sample
+                    pred_x0 = self.noise_scheduler.step(noise_pred_cond, t, latents_grad, eta=ddim_eta).pred_original_sample
 
                     pred_x0_sdf = self.vqvae.decode_no_quant(pred_x0)
                     # setattr(self, f'pred_sdf_x0_{i}', pred_x0_sdf.detach())
@@ -458,11 +457,13 @@ class SDFusionModelPly2Shape(BaseModel):
                     grad = torch.autograd.grad(collision_loss + contact_loss, latents_grad)[0] # (B, *shape)
                     # print(grad.sum().item())
                     # grad = grad / (grad.norm() + 1e-8) # clip grad norm
-                    noise_pred = noise_pred + (1 - self.noise_scheduler.alphas_cumprod[t]) ** 0.5 * grad
+                noise_pred = noise_pred_uncond + (1 - self.noise_scheduler.alphas_cumprod[t]) ** 0.5 * grad + \
+                            self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
 
-            with torch.no_grad():
-                noise_pred = noise_pred + self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
-                latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
+            else:
+                noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
+            
+            latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
 
         # decode z
         self.gen_df = self.vqvae.decode_no_quant(latents).detach()

@@ -51,7 +51,6 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
             --ddim_steps 50 --uc_scale 3 \
             --loss_margin 0.00390625 \
-            --haoran_rotation \
             --test_description margin0-extent256 \
             --use_mobility_constraint "
 
