@@ -78,7 +78,7 @@ class GAPartNetDataset(BaseDataset):
         if not self.opt.isTrain and opt.model_id is not None:
             self.sdf_filepaths = [f for f in self.sdf_filepaths if opt.model_id in f]
 
-        self.bbox_cond = opt.bbox_cond
+        # self.bbox_cond = opt.bbox_cond
 
         self.ply_cond = opt.ply_cond
         self.joint_rotate = opt.joint_rotate
@@ -121,10 +121,10 @@ class GAPartNetDataset(BaseDataset):
             mesh_sdf = mesh_to_sdf(trimesh.load_mesh(bbox_filepath), self.res, trunc=self.opt.trunc_thres, padding=0.2)
             ret['bbox_mesh'] = mesh_sdf
 
-        if self.bbox_cond:
-            bbox_filepath = sdf_h5_file.replace(self.sdf_dir, 'part_bbox').replace('.h5', '.npy')
-            bbox = torch.tensor(np.load(bbox_filepath))
-            ret['bbox'] = bbox
+        # if self.bbox_cond:
+        #     bbox_filepath = sdf_h5_file.replace(self.sdf_dir, 'part_bbox').replace('.h5', '.npy')
+        #     bbox = torch.tensor(np.load(bbox_filepath))
+        #     ret['bbox'] = bbox
 
         if self.ply_cond or self.ply_bbox_cond:
             ply_filepath = sdf_h5_file.replace(self.sdf_dir, 'part_ply_fps').replace('.h5', '.ply')

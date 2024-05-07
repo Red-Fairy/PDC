@@ -76,7 +76,7 @@ class BaseOptions():
 		self.parser.add_argument('--data_version', type=str, default='v.0.2', help='data version for dataset')
 
 		# condition
-		self.parser.add_argument('--bbox_cond', action='store_true', help='if true, use bbox condition')
+		# self.parser.add_argument('--bbox_cond', action='store_true', help='if true, use bbox condition')
 		self.parser.add_argument('--ply_cond', action='store_true', help='if true, use pointcloud condition')
 		self.parser.add_argument('--ply_bbox_cond', action='store_true', help='if true, use both pointcloud and bbox condition')
 		self.parser.add_argument('--ply_rotate', action='store_true', help='if true, rotate the input pointcloud')
@@ -155,16 +155,23 @@ class BaseOptions():
 		if (accelerator is None or accelerator.is_main_process) and not os.path.exists(ckpt_dir):
 			os.makedirs(ckpt_dir)
 
-		rotate_string = '' if not self.opt.ply_cond else f'_rotate{self.opt.rotate_angle}' if self.opt.rotate_angle is not None else '_rotate'
-		self.opt.img_dir = os.path.join(expr_dir, 'train_visuals') if self.isTrain else \
-							os.path.join(expr_dir, f'test{self.opt.testdir}_{self.opt.load_iter}{rotate_string}_scale{self.opt.uc_scale}_eta{self.opt.ddim_eta}_steps{self.opt.ddim_steps}')
-		self.opt.img_dir += '_predscale' if self.opt.use_predicted_scale else ''
-		self.opt.img_dir += '_extent' if self.opt.scale_mode == 'max_extent' else '_volume'
-		self.opt.img_dir += '_mobility' if self.opt.use_mobility_constraint else ''
-		self.opt.img_dir += '_guided' if self.opt.guided_inference else ''
-		self.opt.img_dir += '_diversity' if self.opt.test_diversity else ''
+		# self.opt.img_dir += '_predscale' if self.opt.use_predicted_scale else ''
+		if self.opt.isTrain:
+			self.opt.img_dir = os.path.join(expr_dir, 'train_visuals')
+		else:
+			rotate_string = f'_rotate{self.opt.rotate_angle}' if self.opt.rotate_angle is not None else '_rotate'
+			self.opt.img_dir = os.path.join(expr_dir, f'test_{self.opt.load_iter}{rotate_string}_eta{self.opt.ddim_eta}_steps{self.opt.ddim_steps}')
+			if self.opt.ply_cond:
+				self.opt.img_dir += f'_scale{self.opt.uc_scale}'
+			elif self.opt.ply_bbox_cond:
+				self.opt.img_dir += f'_ply{self.opt.uc_ply_scale}_bbox{self.opt.uc_bbox_scale}'
+			self.opt.img_dir += '_extent' if self.opt.scale_mode == 'max_extent' else '_volume'
+			self.opt.img_dir += '_mobility' if self.opt.use_mobility_constraint else ''
+			self.opt.img_dir += '_guided' if self.opt.guided_inference else ''
+			self.opt.img_dir += '_diversity' if self.opt.test_diversity else ''
+			self.opt.img_dir += f'_{self.opt.test_description}' if self.opt.test_description is not None else ''
+
 		# self.opt.img_dir += f'_{self.opt.model_id}' if self.opt.model_id is not None else ''
-		self.opt.img_dir += f'_{self.opt.test_description}' if self.opt.test_description is not None else ''
 		os.makedirs(self.opt.img_dir, exist_ok=True)
 
 		# print args

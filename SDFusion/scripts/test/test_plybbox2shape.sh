@@ -1,7 +1,7 @@
 logs_dir='logs'
 
 ### model stuff ###
-model='sdfusion-ply2shape'
+model='sdfusion-plybbox2shape'
 df_cfg='configs/sdfusion-ply2shape-128.yaml'
 
 vq_model="vqvae"
@@ -49,7 +49,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --rotate_angle ${rotate_angle} \
             --scale_mode volume \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
-            --ddim_steps 50 --uc_scale 3 \
+            --ddim_steps 50 --uc_ply_scale 0 --uc_bbox_scale 0 \
             --loss_margin 0.00390625 \
             --haoran_rotation \
             --test_description margin0-extent256 \
