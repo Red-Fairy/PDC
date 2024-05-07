@@ -27,14 +27,12 @@ from models.networks.diffusion_networks.network import DiffusionUNet
 from models.model_utils import load_vqvae
 from models.networks.ply_networks.pointnet2 import PointNet2
 from models.networks.bbox_networks.bbox_model import BBoxModel
-from models.loss_utils import get_collision_loss
+from models.loss_utils import get_physical_loss
 
 from diffusers import DDIMScheduler
 from diffusers.optimization import get_cosine_schedule_with_warmup
 
-from planners.base_model import create_planner
-
-from utils.util import AverageMeter
+from utils.util import AverageMeter, Logger
 
 # rendering
 from utils.util_3d import init_mesh_renderer, render_sdf
@@ -71,7 +69,8 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
         self.df = DiffusionUNet(unet_params, vq_conf=vq_conf, conditioning_key=df_conf.model.params.conditioning_key)
         self.df.to(self.device)
         self.parameterization = "eps"
-        self.guidance_scale = opt.uc_scale
+        self.guidance_scale_ply = opt.uc_ply_scale
+        self.guidance_scale_bbox = opt.uc_bbox_scale
         # self.init_diffusion_params(scale=1, opt=opt)
 
         # init vqvae
@@ -129,21 +128,25 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
         self.renderer = init_mesh_renderer(image_size=256, dist=dist, elev=elev, azim=azim, device=self.device)
 
         self.ddim_steps = self.df_conf.model.params.ddim_steps
-        if self.opt.debug == "1":
-            # NOTE: for debugging purpose
-            self.ddim_steps = 7
         cprint(f'[*] setting ddim_steps={self.ddim_steps}', 'blue')
-        self.planner = None
-        if not self.isTrain:
-            self.planner = create_planner(opt)
-
         self.loss_meter = AverageMeter()
         self.loss_meter.reset()
         self.loss_meter_epoch = AverageMeter()
         self.loss_meter_epoch.reset()
+
+        if not self.opt.isTrain:
+            self.collision_loss_meter = AverageMeter()
+            self.collision_loss_meter.reset()
+            self.contact_loss_meter = AverageMeter()
+            self.contact_loss_meter.reset()
+            self.diversity_index = 0 
+            self.loss_tracker = []
+            self.loss_tracker_pred = []
+
+        self.logger = Logger(os.path.join(self.opt.img_dir, 'log.txt'))
     
     def set_input(self, input=None):
-        
+
         self.x = input['sdf'].to(self.device)
         self.ply = input['ply'].to(self.device)
         self.paths = input['path']
@@ -152,18 +155,24 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
         # "ply_points + ply_translation" aligns with "part * part_extent + part_translation"
         if 'ply_translation' in input:
             self.ply_translation = input['ply_translation'].to(self.device)
+            self.ply_rotation = input['ply_rotation'].to(self.device)
             self.part_translation = input['part_translation'].to(self.device)
             self.part_extent = input['part_extent'].to(self.device)
 
         if 'move_axis' in input:
             self.move_axis = input['move_axis'].to(self.device) # (3,)
+            self.move_origin = input['move_origin'].to(self.device) # (3,)
             self.move_limit = input['move_limit'].to(self.device) # (2,) range of motion
         else:
-            self.move_axis = None
-            self.move_limit = None
+            self.move_axis = self.move_limit = self.move_origin = [None] * self.x.shape[0]
 
         if 'bbox_mesh' in input:
             self.bbox_mesh = input['bbox_mesh'].to(self.device)
+
+        if 'ply_rotation_pred' in input:
+            self.part_translation_pred = input['part_translation_pred'].to(self.device)
+            self.part_extent_pred = input['part_extent_pred'].to(self.device)
+            self.ply_rotation_pred = input['ply_rotation_pred'].to(self.device)
 
     def switch_train(self):
         self.df.train()
@@ -277,28 +286,20 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
         c_bbox = self.bbox_cond_model(self.part_extent).unsqueeze(1) # (B, 1, bbox_dim), bbox condition
         uc_bbox = self.bbox_cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1) # (B, 1, bbox_dim), unconditional condition
         
-        c_ply = torch.cat([c_ply, uc_bbox], dim=-1)
-        c_bbox = torch.cat([uc_ply, c_bbox], dim=-1)
-        uc = torch.cat([uc_ply, uc_bbox], dim=-1)
+        c_ply_uc_bbox = torch.cat([c_ply, uc_bbox], dim=-1)
+        uc_ply_c_bbox = torch.cat([uc_ply, c_bbox], dim=-1)
+        c_ply_c_bbox = torch.cat([c_ply, c_bbox], dim=-1)
 
-        c_full = torch.cat([uc, c_ply, c_bbox])
+        c_full = torch.cat([c_ply_uc_bbox, uc_ply_c_bbox, c_ply_c_bbox])
 
-        if not hasattr(self, 'bbox_mesh'):
-            latents = torch.randn((B, *shape), device=self.device)
-            latents = latents * self.noise_scheduler.init_noise_sigma
-        else:
-            bbox_latent = self.vqvae(self.bbox_mesh, forward_no_quant=True, encode_only=True)
-            noise = torch.randn((B, *shape), device=self.device)
-            latents = self.noise_scheduler.add_noise(bbox_latent, noise, 
-                                                     timesteps = torch.full((B,), self.noise_scheduler.config.num_train_timesteps * 0.8 - 1, 
-                                                                            device=self.device, dtype=torch.int64))
+        latents = torch.randn((B, *shape), device=self.device)
+        latents = latents * self.noise_scheduler.init_noise_sigma
 
         self.noise_scheduler.set_timesteps(ddim_steps)
 
         # w/ condition
-        for i, t in tqdm(enumerate(self.noise_scheduler.timesteps)):
-            if i < ddim_steps * 0.2:
-                continue
+        for t in tqdm(self.noise_scheduler.timesteps):
+            
             # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
             latent_model_input = torch.cat([latents] * 3)
             latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
@@ -309,59 +310,69 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
                 noise_pred = self.apply_model(latent_model_input, timesteps, c_full)
 
             # perform guidance
-            noise_pred_uncond, noise_pred_cond_ply, noise_pred_cond_bbox = noise_pred.chunk(3)
-            noise_pred = noise_pred_uncond + \
-                         self.guidance_scale_ply * (noise_pred_cond_ply - noise_pred_uncond) + \
-                            self.guidance_scale_bbox * (noise_pred_cond_bbox - noise_pred_uncond)
+            noise_pred_uc_bbox, noise_pred_uc_ply, noise_pred_cond = noise_pred.chunk(3)
+            noise_pred = noise_pred_cond + self.guidance_scale_ply * (noise_pred_cond - noise_pred_uc_ply) + \
+                            self.guidance_scale_bbox * (noise_pred_cond - noise_pred_uc_bbox)
 
             # compute the previous noisy sample x_t -> x_t-1
-            out = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta)
-            latents, pred_x0 = out.prev_sample, out.pred_original_sample
-
-            if B == 1:
-                setattr(self, f'pred_sdf_x0_{i}', self.vqvae.decode_no_quant(pred_x0).detach())
-
-          # cut the generated sdf using bbox
-            if use_cut_bbox and i > ddim_steps * cut_bbox_limit[0] and i < ddim_steps * cut_bbox_limit[1]:
-                self.gen_df = self.vqvae.decode_no_quant(latents)
-
-                # build a grid of points with resolution gen_df.shape[-3:]
-                res = self.gen_df.shape[-1]
-                grid = np.array([[x, y, z] for x in np.linspace(-1, 1, res) 
-                                    for y in np.linspace(-1, 1, res)
-                                    for z in np.linspace(-1, 1, res)]) # (res^3, 3)
-                grid = torch.from_numpy(grid).float().to(latents.device) # (res^3, 3)
-
-                for i in range(B):
-                    # for each bounding box, calculate each point's distance to the surface
-                    # if the point is outside the surface, replace the original distance in gen_df with the distance to the surface
-                    # if the point is inside the surface, keep the original distance in gen_df
-                    min_corners = self.part_translation[i] - self.part_extent[i] / 2
-                    max_corners = self.part_translation[i] + self.part_extent[i] / 2
-                    mask = torch.any((grid < min_corners) | (grid > max_corners), dim=1).view(1, res, res, res) # outsiders
-                    replace_val = 0.02
-                    self.gen_df[i][(self.gen_df[i] < replace_val) & mask] = replace_val
-                    # convert to trimesh
-                    # TODO: transformation between trimesh and sdf
-                    # mesh_i = sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=(2./res, 2./res, 2./res))
-                    # self.gen_df[i] = mesh_to_sdf(mesh_i, res=res, padding=0.2, trunc=0.2, device=self.device)
-
-                latents = self.vqvae(self.gen_df, forward_no_quant=True, encode_only=True)
+            latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
 
         # decode z
         self.gen_df = self.vqvae.decode_no_quant(latents)
 
-        if print_collision_loss:
-            for i in range(B):
-                gen_sdf_i = self.gen_df[i:i+1].repeat(32, 1, 1, 1, 1)
-                collision_loss = get_collision_loss(gen_sdf_i, self.ply[i:i+1], self.ply_translation[i:i+1], 
-                                                    self.part_extent[i:i+1], self.part_translation[i:i+1],
-                                                    move_limit=self.move_limit[i], move_axis=self.move_axis[i],
-                                                    use_bbox=True, linspace=True)
-                print(f'Collision Loss for Instance {i}:', collision_loss.item())
+        # calculate physical loss
+        for i in range(B):
+            collision_loss, contact_loss = get_physical_loss(self.gen_df[i:i+1], self.ply[i:i+1], 
+                                                self.ply_translation[i:i+1], self.ply_rotation[i:i+1],
+                                                self.part_extent_pred[i:i+1] if self.opt.haoran else self.part_extent[i:i+1],
+                                                self.part_translation[i:i+1],
+                                                move_limit=self.move_limit[i], 
+                                                move_axis=self.move_axis[i],
+                                                move_origin=self.move_origin[i],
+                                                move_type=self.opt.mobility_type,
+                                                move_samples=self.opt.mobility_sample_count, res=self.shape_res,
+                                                scale_mode=self.opt.scale_mode,
+                                                margin=self.opt.loss_margin,
+                                                loss_collision_weight=self.opt.loss_collision_weight,
+                                                loss_contact_weight=self.opt.loss_contact_weight,
+                                                use_bbox=False, linspace=True)
+            instance_name = self.paths[i].split('/')[-1].split('.')[0]
+            if not self.opt.test_diversity:
+                self.logger.log(f'part {instance_name}, collision loss {collision_loss.item():.4f}, contact loss {contact_loss.item():.4f}')
+                self.collision_loss_meter.update(collision_loss.item())
+                self.contact_loss_meter.update(contact_loss.item())
+            else:
+                if self.opt.haoran:
+                    collision_loss_pred, contact_loss_pred = get_physical_loss(self.gen_df[i:i+1], self.ply[i:i+1], 
+                                                        self.ply_translation[i:i+1], self.ply_rotation_pred[i:i+1],
+                                                        self.part_extent_pred[i:i+1], self.part_translation_pred[i:i+1],
+                                                        move_limit=self.move_limit[i], 
+                                                        move_axis=self.move_axis[i],
+                                                        move_origin=self.move_origin[i],
+                                                        move_type=self.opt.mobility_type,
+                                                        move_samples=self.opt.mobility_sample_count, res=self.shape_res,
+                                                        scale_mode=self.opt.scale_mode,
+                                                        margin=self.opt.loss_margin,
+                                                        loss_collision_weight=self.opt.loss_collision_weight,
+                                                        loss_contact_weight=self.opt.loss_contact_weight,
+                                                        use_bbox=False, linspace=True)
+                else:
+                    collision_loss_pred, contact_loss_pred = collision_loss, contact_loss
+                self.loss_tracker.append((collision_loss.item(), contact_loss.item()))
+                self.loss_tracker_pred.append((collision_loss_pred.item(), contact_loss_pred.item()))
+                self.logger.log(f'part {instance_name} instance {self.diversity_index}, collision loss {collision_loss_pred:.4f}, contact loss {contact_loss_pred:.4f}')
+                self.diversity_index += 1
+                if self.diversity_index % self.opt.diversity_count == 0:
+                    # find the best prediction
+                    best_idx = np.argmin([loss[0] + loss[1] for loss in self.loss_tracker_pred])
+                    best_loss = self.loss_tracker[best_idx]
+                    self.logger.log(f'part {instance_name} best {best_idx}, collision loss {best_loss[0]:.4f}, contact loss {best_loss[1]:.4f}')
+                    self.diversity_index = 0
+                    self.loss_tracker, self.loss_tracker_pred = [], []
+                    self.collision_loss_meter.update(best_loss[0])
+                    self.contact_loss_meter.update(best_loss[1])
 
-    def guided_inference(self, data, ddim_steps=None, ddim_eta=0., n_sample_x0=1,
-                         print_collision_loss=False):
+    def guided_inference(self, data, ddim_steps=None, ddim_eta=0.):
         
         self.switch_eval()
         self.set_input(data)
@@ -371,65 +382,127 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
         else:
             self.ddim_steps = ddim_steps
 
-        B = self.x.shape[0]
-        assert B == 1 # only support batch size 1 for now
+        B = self.x.shape[0] # B == 1, only support batch size 1 for now
         shape = self.z_shape
-        c = self.ply_cond_model(self.ply).unsqueeze(1) # (B, context_dim), point cloud condition
-        uc = self.ply_cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1)
-        c_full = torch.cat([uc, c])
 
-        latents = torch.randn((B, *shape), device=self.device) # (B, *shape)
+        c_ply = self.ply_cond_model(self.ply).unsqueeze(1) # (B, 1, ply_dim), point cloud condition
+        uc_ply = self.ply_cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1) # (B, 1, ply_dim), unconditional condition
+        c_bbox = self.bbox_cond_model(self.part_extent).unsqueeze(1) # (B, 1, bbox_dim), bbox condition
+        uc_bbox = self.bbox_cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1) # (B, 1, bbox_dim), unconditional condition
+        
+        c_ply_uc_bbox = torch.cat([c_ply, uc_bbox], dim=-1)
+        uc_ply_c_bbox = torch.cat([uc_ply, c_bbox], dim=-1)
+        c_ply_c_bbox = torch.cat([c_ply, c_bbox], dim=-1)
+
+        c_full = torch.cat([c_ply_uc_bbox, uc_ply_c_bbox, c_ply_c_bbox])
+
+        latents = torch.randn((B, *shape), device=self.device)
         latents = latents * self.noise_scheduler.init_noise_sigma
 
         self.noise_scheduler.set_timesteps(ddim_steps)
-
         # w/ condition
         for i, t in tqdm(enumerate(self.noise_scheduler.timesteps)):
+
             # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
-            latent_model_input = torch.cat([latents] * 2)
+            latent_model_input = torch.cat([latents] * 3)
             latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
 
             # predict the noise residual
             with torch.no_grad():
-                timesteps = torch.full((B*2,), t, device=self.device, dtype=torch.int64)
+                timesteps = torch.full((B*3,), t, device=self.device, dtype=torch.int64)
                 noise_pred = self.apply_model(latent_model_input, timesteps, c_full)
 
-            # perform guidance
-            noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
-            noise_pred = noise_pred_cond
+                # perform guidance
+                noise_pred_uc_bbox, noise_pred_uc_ply, noise_pred_cond = noise_pred.chunk(3)
+                noise_pred = noise_pred_cond
 
             # compute the previous noisy sample x_t -> x_t-1
-            with torch.enable_grad():
-                latents_grad = latents.detach().requires_grad_(True)
-                pred_x0 = self.noise_scheduler.step(noise_pred, t, latents_grad, eta=ddim_eta).pred_original_sample
+            if i > ddim_steps // 2:
+                with torch.enable_grad():
+                    latents_grad = latents.detach().requires_grad_(True)
+                    pred_x0 = self.noise_scheduler.step(noise_pred, t, latents_grad, eta=ddim_eta).pred_original_sample
 
-                setattr(self, f'pred_sdf_x0_{i}', self.vqvae.decode_no_quant(pred_x0).detach())
-                
-                # add noise to pred_x0, with std = sigma_t / sqrt(1 + sigma_t^2)
-                # prev_t = t - self.noise_scheduler.config.num_train_timesteps // self.noise_scheduler.num_inference_steps
-                # sigma_t = self.noise_scheduler._get_variance(t, prev_t) ** 0.5
-                # noise = torch.randn([n_sample_x0, *shape], device=self.device) * (sigma_t / (1 + sigma_t ** 2) ** 0.5) # (n_sample_x0, *shape)
-                # pred_x0_noisy = pred_x0.expand(n_sample_x0, -1, -1, -1, -1) + noise
-                
-                pred_x0_noisy = pred_x0.expand(n_sample_x0, -1, -1, -1, -1)
+                    pred_x0_sdf = self.vqvae.decode_no_quant(pred_x0)
+                    # setattr(self, f'pred_sdf_x0_{i}', pred_x0_sdf.detach())
 
-                pred_x0_noisy_sdf = self.vqvae.decode(pred_x0_noisy)
+                    collision_loss, contact_loss = get_physical_loss(pred_x0_sdf, self.ply, 
+                                                        self.ply_translation, self.ply_rotation_pred,
+                                                        self.part_extent, self.part_translation,
+                                                        move_limit=self.move_limit[0], 
+                                                        move_axis=self.move_axis[0],
+                                                        move_origin=self.move_origin[0],
+                                                        move_type=self.opt.mobility_type,
+                                                        move_samples=self.opt.mobility_sample_count, res=self.shape_res,
+                                                        scale_mode=self.opt.scale_mode,
+                                                        margin=self.opt.loss_margin,
+                                                        loss_collision_weight=self.opt.loss_collision_weight,
+                                                        loss_contact_weight=self.opt.loss_contact_weight,
+                                                        use_bbox=False, linspace=True)
 
-                collision_loss = get_collision_loss(pred_x0_noisy_sdf, self.ply, self.ply_translation, self.part_extent, self.part_translation,
-                                                    move_limit=self.move_limit[0], move_axis=self.move_axis[0], loss_collision_weight=1)
-                print('Collision Loss:', collision_loss, '\n')
-                
-                if i >= ddim_steps // 2:
-                    grad = torch.autograd.grad(collision_loss, latents_grad)[0] # (B, *shape)
-                    grad = 20 * grad / (grad.norm() + 1e-8) # clip grad norm
+                    # print(f'collision {collision_loss.item():.4f}, contact {contact_loss.item():.4f}')
+                    
+                    grad = torch.autograd.grad(collision_loss + contact_loss, latents_grad)[0] # (B, *shape)
+                    # print(grad.sum().item())
+                    # grad = grad / (grad.norm() + 1e-8) # clip grad norm
                     noise_pred = noise_pred + (1 - self.noise_scheduler.alphas_cumprod[t]) ** 0.5 * grad
-            
-            noise_pred = noise_pred + (self.guidance_scale - 1) * (noise_pred_cond - noise_pred_uncond)
 
-            latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
+            with torch.no_grad():
+                noise_pred = noise_pred + self.guidance_scale_ply * (noise_pred_cond - noise_pred_uc_ply) + \
+                                self.guidance_scale_bbox * (noise_pred_cond - noise_pred_uc_bbox)
+                latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
 
         # decode z
-        self.gen_df = self.vqvae.decode_no_quant(latents)
+        self.gen_df = self.vqvae.decode_no_quant(latents).detach()
+
+        with torch.no_grad():
+            collision_loss, contact_loss = get_physical_loss(self.gen_df, self.ply, 
+                                                self.ply_translation, self.ply_rotation,
+                                                self.part_extent_pred if self.opt.haoran else self.part_extent,
+                                                self.part_translation,
+                                                move_limit=self.move_limit[0], 
+                                                move_axis=self.move_axis[0],
+                                                move_origin=self.move_origin[0],
+                                                move_type=self.opt.mobility_type,
+                                                move_samples=self.opt.mobility_sample_count, res=self.shape_res,
+                                                scale_mode=self.opt.scale_mode,
+                                                margin=self.opt.loss_margin,
+                                                loss_collision_weight=self.opt.loss_collision_weight,
+                                                loss_contact_weight=self.opt.loss_contact_weight,
+                                                use_bbox=False, linspace=True)
+            instance_name = self.paths[0].split('/')[-1].split('.')[0]
+            if not self.opt.test_diversity:
+                self.logger.log(f'part {instance_name}, collision loss {collision_loss.item():.4f}, contact loss {contact_loss.item():.4f}')
+                self.collision_loss_meter.update(collision_loss.item())
+                self.contact_loss_meter.update(contact_loss.item())
+            else:
+                if self.opt.haoran:
+                    collision_loss_pred, contact_loss_pred = get_physical_loss(self.gen_df, self.ply, 
+                                                        self.ply_translation, self.ply_rotation_pred,
+                                                        self.part_extent_pred, self.part_translation_pred,
+                                                        move_limit=self.move_limit[0], 
+                                                        move_axis=self.move_axis[0],
+                                                        move_origin=self.move_origin[0],
+                                                        move_type=self.opt.mobility_type,
+                                                        move_samples=self.opt.mobility_sample_count, res=self.shape_res,
+                                                        scale_mode=self.opt.scale_mode,
+                                                        margin=self.opt.loss_margin,
+                                                        loss_collision_weight=self.opt.loss_collision_weight,
+                                                        loss_contact_weight=self.opt.loss_contact_weight,
+                                                        use_bbox=False, linspace=True)
+                else:
+                    collision_loss_pred, contact_loss_pred = collision_loss, contact_loss
+                self.loss_tracker.append((collision_loss.item(), contact_loss.item()))
+                self.loss_tracker_pred.append((collision_loss_pred.item(), contact_loss_pred.item()))
+                self.logger.log(f'part {instance_name} instance {self.diversity_index}, collision loss {collision_loss_pred:.4f}, contact loss {contact_loss_pred:.4f}')
+                self.diversity_index += 1
+                if self.diversity_index % self.opt.diversity_count == 0:
+                    best_idx = np.argmin([loss[0] + loss[1] for loss in self.loss_tracker_pred])
+                    best_loss = self.loss_tracker[best_idx]
+                    self.logger.log(f'part {instance_name} best {best_idx}, collision loss {best_loss[0]:.4f}, contact loss {best_loss[1]:.4f}')
+                    self.diversity_index = 0
+                    self.loss_tracker, self.loss_tracker_pred = [], []
+                    self.collision_loss_meter.update(best_loss[0])
+                    self.contact_loss_meter.update(best_loss[1])
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
@@ -478,24 +551,24 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
 
     def get_current_visuals(self):
 
-        with torch.no_grad():
-            self.img_gt = render_sdf(self.renderer, self.x)
-            self.img_gen_df = render_sdf(self.renderer, self.gen_df)
-            spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
-            meshes = [sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=spc) for i in range(self.gen_df.shape[0])]
-
-        vis_tensor_names = [
-            'img_gt',
-            'img_gen_df',
-        ]
-        vis_ims = self.tnsrs2ims(vis_tensor_names)
-        visuals = zip(vis_tensor_names, vis_ims)
+        spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
+        meshes = [sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=spc) for i in range(self.gen_df.shape[0])]
         visuals_dict = {
-            "img": OrderedDict(visuals),
             "meshes": meshes,
             "paths": self.paths,
-            "points": self.ply.cpu().numpy(), # (B, 3, N)
+            "points": self.ply.detach().cpu().numpy(), # (B, 3, N)
         }
+
+        if self.opt.isTrain:
+            self.img_gt = render_sdf(self.renderer, self.x).detach()
+            self.img_gen_df = render_sdf(self.renderer, self.gen_df).detach()
+            vis_tensor_names = [
+                'img_gt',
+                'img_gen_df',
+            ]
+            vis_ims = self.tnsrs2ims(vis_tensor_names)
+            visuals = zip(vis_tensor_names, vis_ims)
+            visuals_dict['img'] = OrderedDict(visuals)
 
         if hasattr(self, f'pred_sdf_x0_{self.ddim_steps-1}'):
             meshes_pred = [sdf_to_mesh_trimesh(getattr(self, f'pred_sdf_x0_{i}')[0][0], spacing=spc) for i in range(self.ddim_steps)]
@@ -503,12 +576,17 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
         
         if hasattr(self, 'ply_translation'):
             visuals_dict['ply_translation'] = self.ply_translation.cpu().numpy()
+            visuals_dict['ply_rotation'] = self.ply_rotation.cpu().numpy()
             visuals_dict['part_translation'] = self.part_translation.cpu().numpy()
-            mesh_extents = torch.zeros(0, 3)
-            for mesh in meshes:
-                mesh_extents = torch.cat([mesh_extents, torch.tensor(mesh.extents).unsqueeze(0)], dim=0)
-            # visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / torch.max(mesh_extents, dim=1)[0]).cpu().numpy()
-            visuals_dict['part_scale'] = (torch.max(self.part_extent, dim=1)[0] / (4 / 2.2)).cpu().numpy()
+
+            visuals_dict['part_scale'] = np.zeros([len(meshes)], dtype=np.float32)
+            for i, mesh in enumerate(meshes):
+                if self.opt.haoran:
+                    visuals_dict['part_scale'][i] = torch.max(self.part_extent_pred[i]).item() / np.max(mesh.extents) if self.opt.scale_mode == 'max_extent' else \
+                        (torch.prod(self.part_extent_pred[i]).item() / np.prod(mesh.extents)) ** (1/3)
+                else:
+                    visuals_dict['part_scale'][i] = torch.max(self.part_extent[i]).item() / np.max(mesh.extents) if self.opt.scale_mode == 'max_extent' else \
+                        (torch.prod(self.part_extent[i]).item() / np.prod(mesh.extents)) ** (1/3)
 
         return visuals_dict
 

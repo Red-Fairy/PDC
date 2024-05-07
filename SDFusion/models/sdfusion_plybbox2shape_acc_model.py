@@ -292,6 +292,7 @@ class SDFusionModelPlyBBox2ShapeAcc(BaseModel):
 
         # w/ condition
         for t in tqdm(self.noise_scheduler.timesteps):
+            
             # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
             latent_model_input = torch.cat([latents] * 3)
             latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
