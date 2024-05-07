@@ -35,7 +35,6 @@ gpu_ids=$2
 load_iter=$3
 model_id='10489_2'
 cat="slider_drawer"
-mobility_type="rotation"
 rotate_angle=$4
 
 # --loss_margin 0.00390625 1/256
@@ -47,7 +46,6 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --dataset_mode ${dataset_mode} --res ${res} --cat ${cat} --trunc_thres ${trunc_thres} \
             --total_iters ${total_iters} --dataroot ${dataroot} \
             --ply_rotate \
-            --mobility_type ${mobility_type} \
             --rotate_angle ${rotate_angle} \
             --scale_mode volume \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \

@@ -132,6 +132,11 @@ class BaseOptions():
 		self.opt = self.parser.parse_args()
 		self.opt.isTrain = self.isTrain   # train or test
 
+		if self.opt.cat == 'slider_drawer':
+			self.opt.mobility_type = 'translation'
+		elif self.opt.cat == 'hinge_door':
+			self.opt.mobility_type = 'rotation'
+
 		if self.opt.isTrain:
 			self.opt.phase = 'train'
 		else:
