@@ -8,12 +8,14 @@ import torch
 
 data_count_per_instance = 5
 
-root = '../haoran/slider_drawer_legacy'
-dst_root = '../ignore_files/slider_drawer_legacy'
+root = '/mnt/azureml/cr/j/7aaae224465249e79ffd6396abc43217/exe/wd/data-rundong/PartDiffusion/eval_output'
+dst_root = '../ignore_files/slider_drawer'
 files = os.listdir(root)
 files = [file for file in files if 'pred_bbox' in file]
 
 file_count_record = {}
+
+sum_angle_diff = 0
 
 for i in range(data_count_per_instance):
     os.makedirs(os.path.join(dst_root, f'set_{i}'), exist_ok=True)
@@ -52,7 +54,8 @@ for i, file in enumerate(tqdm(files)):
     r = R.from_euler('y', -rotate_angle_pred, degrees=True)
     points = points @ r.as_matrix().T
 
-    print(rotate_angle, rotate_angle_pred)
+    # print(rotate_angle, rotate_angle_pred)
+    sum_angle_diff += abs(rotate_angle - rotate_angle_pred)
 
     # r = R.from_euler('xyz', [0, -rotate_angle, 0], degrees=True)
     # points = points @ r.as_matrix().T
@@ -70,6 +73,8 @@ for i, file in enumerate(tqdm(files)):
     # save json
     with open(dst_path, 'w') as f:
         json.dump(bbox, f)
+
+print(sum_angle_diff / len(files))
 
 
 def representation_to_bbox(representation):
