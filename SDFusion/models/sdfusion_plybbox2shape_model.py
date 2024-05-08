@@ -445,12 +445,15 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
                     grad = torch.autograd.grad(collision_loss + contact_loss, latents_grad)[0] # (B, *shape)
                     # print(grad.sum().item())
                     # grad = grad / (grad.norm() + 1e-8) # clip grad norm
-                    noise_pred = noise_pred + (1 - self.noise_scheduler.alphas_cumprod[t]) ** 0.5 * grad
+                    noise_pred = noise_pred_cond + (1 - self.noise_scheduler.alphas_cumprod[t]) ** 0.5 * grad + \
+                                    self.guidance_scale_ply * (noise_pred_cond - noise_pred_uc_ply) + \
+                                    self.guidance_scale_bbox * (noise_pred_cond - noise_pred_uc_bbox)
 
-            with torch.no_grad():
-                noise_pred = noise_pred + self.guidance_scale_ply * (noise_pred_cond - noise_pred_uc_ply) + \
+            else:
+                noise_pred = noise_pred_cond + self.guidance_scale_ply * (noise_pred_cond - noise_pred_uc_ply) + \
                                 self.guidance_scale_bbox * (noise_pred_cond - noise_pred_uc_bbox)
-                latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
+            
+            latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
 
         # decode z
         self.gen_df = self.vqvae.decode_no_quant(latents).detach()
