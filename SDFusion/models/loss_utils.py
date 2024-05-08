@@ -126,36 +126,34 @@ def get_physical_loss(sdf, ply, ply_translation, ply_rotation,
     ply_rotated = torch.bmm(torch.tensor([[0, 0, 1.], [0, 1., 0], [-1., 0, 0]], device=sdf.device, dtype=torch.float32).repeat(B, 1, 1), ply) # (B, 3, N)
 
     ply_rotated = ply_rotated.transpose(1, 2) # (B, N, 3)
-
-    # export the point cloud and mesh for debug, save 
-    # ply_file = open3d.geometry.PointCloud()
-    # ply_file.points = open3d.utility.Vector3dVector((ply[0].T).cpu().numpy())
-    # open3d.io.write_point_cloud('debug.ply', ply_file)
-    # mesh = sdf_to_mesh_trimesh(sdf[0][0], spacing=(2./res, 2./res, 2./res))
-    # sdf = mesh_to_sdf(mesh).unsqueeze(0).repeat(B,1,1,1,1)
-    # mesh.apply_translation(-mesh.bounding_box.centroid)
-    # mesh.export('debug.obj')
-    # exit()
     
     # 3) query the sdf value at the transformed point cloud
     # input: (B, 1, res_sdf, res_sdf, res_sdf), (B, 1, 1, N, 3) -> (B, 1, 1, 1, N)
-    sdf_ply = F.grid_sample(sdf, ply_rotated.unsqueeze(1).unsqueeze(1), align_corners=True, padding_mode='zeros').squeeze(1).squeeze(1).squeeze(1) # (B, N)
+    sdf_ply = F.grid_sample(sdf, ply_rotated.unsqueeze(1).unsqueeze(1), align_corners=True, padding_mode='border').squeeze(1).squeeze(1).squeeze(1) # (B, N)
 
     # 4) calculate the collision loss
     loss_collision = torch.sum(torch.max(F.relu(-sdf_ply-margin), dim=0)[0])
 
     # 4+) calculate the contact loss, punish if all points are outside the part
-    loss_contact = torch.sum(torch.min(F.relu(sdf_ply), dim=1)[0])
+    loss_contact = torch.sum(torch.min(F.relu(sdf_ply-margin), dim=1)[0])
 
     # debug, filter the points with positive sampled sdf values
     # ply_file = open3d.geometry.PointCloud()
+    # ply_file.points = open3d.utility.Vector3dVector((ply[0].T).cpu().numpy())
+    # open3d.io.write_point_cloud('debug_ori_0.ply', ply_file)
+    # ply_file.points = open3d.utility.Vector3dVector((ply[0].T).cpu().numpy())
+    # open3d.io.write_point_cloud('debug_ori_moved.ply', ply_file)
+    # mesh = sdf_to_mesh_trimesh(sdf[0][0], spacing=(2./res, 2./res, 2./res))
+    # sdf = mesh_to_sdf(mesh).unsqueeze(0).repeat(B,1,1,1,1)
+    # mesh.apply_translation(-mesh.bounding_box.centroid)
+    # mesh.export('debug.obj')
+    # ply_file = open3d.geometry.PointCloud()
     # sdf_max = torch.max(F.relu(-sdf_ply-margin), dim=0)[0]
-    # # sdf_max = F.relu(-sdf_ply-margin)
-    # ply_file.points = open3d.utility.Vector3dVector((ply[0].T)[torch.where(sdf_max > 0)].cpu().numpy())
-    # open3d.io.write_point_cloud('debug.ply', ply_file)
-    # exit()
-
-    # loss_collision = torch.sum(F.relu(-sdf_ply-margin), dim=1).mean() # (B, N) -> (B, 1), return as a vector
+    # sdf_max = sdf_ply-margin
+    # ply_file.points = open3d.utility.Vector3dVector((ply[0].T)[torch.where(sdf_max[0] < 0)].cpu().numpy())
+    # open3d.io.write_point_cloud('debug_ori_collision.ply', ply_file)
+    # ply_file.points = open3d.utility.Vector3dVector((ply[-1].T)[torch.where(sdf_max[-1] < 0)].cpu().numpy())
+    # open3d.io.write_point_cloud('debug_moved_collision.ply', ply_file)
 
     return loss_collision * loss_collision_weight, loss_contact * loss_contact_weight
 

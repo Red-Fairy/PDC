@@ -1,8 +1,8 @@
 logs_dir='logs'
 
 ### model stuff ###
-model='sdfusion-plybbox2shape'
-df_cfg='configs/sdfusion-plybbox2shape.yaml'
+model='sdfusion-ply2shape'
+df_cfg='configs/sdfusion-ply2shape-128.yaml'
 
 vq_model="vqvae"
 vq_dset='gapnet'
@@ -10,12 +10,12 @@ vq_cat="slider_drawer"
 vq_ckpt="../../data-rundong/PartDiffusion/SDFusion/logs/gapnet-res128-vqvae-lr0.00002/ckpt/vqvae_steps-latest.pth"
 vq_cfg="configs/vqvae_gapnet-128.yaml"
 
-cond_ckpt="../pretrained_checkpoint/pointnet2.pth"
+cond_ckpt="../../data-rundong/PartDiffusion/pretrained_checkpoint/pointnet2.pth"
 
 ### dataset stuff ###
 max_dataset_size=1000000
 dataset_mode='gapnet'
-dataroot="../../data-rundong/PartDiffusion/dataset/"
+dataroot="../../data-rundong/PartDiffusion/dataset"
 
 res=128
 trunc_thres=0.2
@@ -34,7 +34,7 @@ name=$1
 gpu_ids=$2
 load_iter=$3
 model_id='10489_2'
-cat="hinge_door"
+cat="slider_drawer"
 rotate_angle=$4
 
 # --loss_margin 0.00390625 1/256
@@ -48,11 +48,11 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --ply_rotate \
             --rotate_angle ${rotate_angle} \
             --scale_mode volume \
-            --ply_bbox_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
-            --ddim_steps 50 --uc_ply_scale 2 --uc_bbox_scale 2 \
+            --haoran \
+            --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
+            --ddim_steps 50 --uc_scale 3 \
             --loss_margin 0.00390625 \
-            --test_description margin256 \
+            --test_description margin256-haoran \
             --use_mobility_constraint "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
-

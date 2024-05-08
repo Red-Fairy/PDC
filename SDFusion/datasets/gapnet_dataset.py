@@ -158,11 +158,11 @@ class GAPartNetDataset(BaseDataset):
                     if self.opt.cat == 'slider_drawer':
                         move_axis = torch.tensor([0, 0, 1], dtype=torch.float32)
                         move_limit = torch.tensor([0, 0.25], dtype=torch.float32)
-                        move_origin = part_translate + part_extent * 0.5
+                        move_origin = part_translate_pred + part_extent_pred * 0.5
                     elif self.opt.cat == 'hinge_door':
                         move_axis = torch.tensor([1, 0, 0], dtype=torch.float32)
                         move_limit = torch.tensor([0, 90], dtype=torch.float32)
-                        move_origin = part_translate + part_extent * 0.5
+                        move_origin = part_translate_pred + part_extent_pred * 0.5
                 else:
                     mobility_path = sdf_h5_file.replace(self.sdf_dir, 'part_mobility').replace('.h5', '.json')
                     with open(mobility_path, 'r') as f:
