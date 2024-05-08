@@ -8,7 +8,7 @@ import torch
 
 data_count_per_instance = 5
 
-root = '/mnt/azureml/cr/j/7aaae224465249e79ffd6396abc43217/exe/wd/data-rundong/PartDiffusion/eval_output'
+root = '../../data-rundong/PartDiffusion/eval_output'
 dst_root = '../ignore_files/slider_drawer'
 files = os.listdir(root)
 files = [file for file in files if 'pred_bbox' in file]
