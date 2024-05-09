@@ -36,8 +36,6 @@ from accelerate import Accelerator
 
 from utils.util import AverageMeter
 
-from planners.base_model import create_planner
-
 # rendering
 from utils.util_3d import init_mesh_renderer, render_sdf
 
@@ -109,15 +107,6 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
             self.optimizers = [self.optimizer1, self.optimizer2]
             self.schedulers = [self.scheduler1, self.scheduler2]
 
-            # self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True] + \
-            #                 [p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
-
-            # lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
-            # self.scheduler1 = optim.lr_scheduler.LambdaLR(self.optimizer1, lr_lambda1)
-
-            # self.optimizers = [self.optimizer1]
-            # self.schedulers = [self.scheduler1]
-
             self.print_networks(verbose=False)
 
             if opt.continue_train:
@@ -134,23 +123,11 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         ######## END: Define Networks ########
 
         # setup renderer
-        if 'snet' in opt.dataset_mode:
-            dist, elev, azim = 1.7, 20, 120
-        elif 'pix3d' in opt.dataset_mode:
-            dist, elev, azim = 1.7, 20, 120
-        elif opt.dataset_mode == 'buildingnet':
-            dist, elev, azim = 1.0, 20, 120
-        elif opt.dataset_mode == 'gapnet':
-            dist, elev, azim = 1.0, 20, 120
-
+        dist, elev, azim = 1.0, 20, 120
         self.renderer = init_mesh_renderer(image_size=256, dist=dist, elev=elev, azim=azim, device=self.device)
 
         self.ddim_steps = self.df_conf.model.params.ddim_steps
         cprint(f'[*] setting ddim_steps={self.ddim_steps}', 'blue')
-
-        self.planner = None
-        if not self.isTrain:
-            self.planner = create_planner(opt)
         
         self.loss_meter = AverageMeter()
         self.loss_meter.reset()
@@ -261,7 +238,6 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         loss = self.get_loss(model_output, target).mean()
         return loss
 
-    # check: ddpm.py, log_images(). line 1317~1327
     @torch.no_grad()
     def inference(self, data, sample=True, ddim_steps=None, ddim_eta=0., quantize_denoised=True,
                   infer_all=False, max_sample=16):
@@ -481,13 +457,3 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
         return iter_passed
 
-    def set_planner(self, planner):
-        if not self.isTrain:
-            self.planner = planner
-            if self.planner is not None:
-                print(colored('[*] planner type: %s' % planner.__class__.__name__,
-                            'red'))
-            else:
-                print(colored('[*] planner type: None', 'red'))
-        else:
-            raise NotImplementedError('planner setter is only for inference')

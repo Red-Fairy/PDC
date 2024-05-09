@@ -113,23 +113,11 @@ class SDFusionModelPly2Shape(BaseModel):
         self.noise_scheduler = DDIMScheduler()
 
         # setup renderer
-        if 'snet' in opt.dataset_mode:
-            dist, elev, azim = 1.7, 20, 120
-        elif 'pix3d' in opt.dataset_mode:
-            dist, elev, azim = 1.7, 20, 120
-        elif opt.dataset_mode == 'buildingnet':
-            dist, elev, azim = 1.0, 20, 120
-        elif opt.dataset_mode == 'gapnet':
-            dist, elev, azim = 1.0, 20, 120
-
+        dist, elev, azim = 1.0, 20, 120
         self.renderer = init_mesh_renderer(image_size=256, dist=dist, elev=elev, azim=azim, device=self.device)
 
         self.ddim_steps = self.df_conf.model.params.ddim_steps
         cprint(f'[*] setting ddim_steps={self.ddim_steps}', 'blue')
-
-        # self.planner = None
-        # if not self.isTrain:
-        #     self.planner = create_planner(opt)
 
         self.loss_meter = AverageMeter()
         self.loss_meter.reset()
@@ -656,13 +644,3 @@ class SDFusionModelPly2Shape(BaseModel):
 
         return iter_passed
 
-    # def set_planner(self, planner):
-    #     if not self.isTrain:
-    #         self.planner = planner
-    #         if self.planner is not None:
-    #             print(colored('[*] planner type: %s' % planner.__class__.__name__,
-    #                         'red'))
-    #         else:
-    #             print(colored('[*] planner type: None', 'red'))
-    #     else:
-    #         raise NotImplementedError('planner setter is only for inference')
