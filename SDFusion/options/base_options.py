@@ -134,8 +134,10 @@ class BaseOptions():
 
 		if self.opt.cat == 'slider_drawer':
 			self.opt.mobility_type = 'translation'
+			self.opt.scale_mode = 'volume'
 		elif self.opt.cat == 'hinge_door':
 			self.opt.mobility_type = 'rotation'
+			self.opt.scale_mode = 'max_extent'
 
 		if self.opt.isTrain:
 			self.opt.phase = 'train'
