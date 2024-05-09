@@ -4,7 +4,7 @@ logs_dir='logs'
 
 ### model stuff ###
 model='sdfusion'
-df_cfg='configs/sdfusion-uncond.yaml'
+df_cfg='configs/sdfusion-uncond-128.yaml'
 
 vq_model="vqvae"
 vq_dset='gapnet'

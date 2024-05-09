@@ -21,22 +21,6 @@ def create_model(opt, accelerator=None, input_instance=None):
         else:
             from models.sdfusion_acc_model import SDFusionModelAcc
             model = SDFusionModelAcc(opt, accelerator)
-        
-    elif opt.model == 'sdfusion-txt2shape':
-        from models.sdfusion_txt2shape_model import SDFusionText2ShapeModel
-        model = SDFusionText2ShapeModel(opt)
-
-    elif opt.model == 'sdfusion-img2shape':
-        from models.sdfusion_img2shape_model import SDFusionImage2ShapeModel
-        model = SDFusionImage2ShapeModel(opt)
-
-    elif opt.model == 'sdfusion-mm2shape':
-        from models.sdfusion_mm_model import SDFusionMultiModal2ShapeModel
-        model = SDFusionMultiModal2ShapeModel(opt)
-
-    elif opt.model == 'sdfusion-bbox2shape':
-        from models.sdfusion_bbox2shape_model import SDFusionBbox2ShapeModel
-        model = SDFusionBbox2ShapeModel(opt)
 
     elif opt.model == 'sdfusion-ply2shape':
         if accelerator is None:
@@ -150,14 +134,6 @@ class BaseModel():
                     print(net)
                 print('[Network %s] Total number of parameters : %.3f M' % (name, num_params / 1e6))
         print('-----------------------------------------------')
-
-    # def tocuda(self, var_names):
-    #     for name in var_names:
-    #         if isinstance(name, str):
-    #             var = getattr(self, name)
-    #             # setattr(self, name, var.cuda(self.gpu_ids[0], non_blocking=True))
-    #             setattr(self, name, var.cuda(self.opt.device, non_blocking=True))
-
 
     def tnsrs2ims(self, tensor_names):
         ims = []
