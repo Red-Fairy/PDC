@@ -158,7 +158,7 @@ class Visualizer():
 				mesh_path = os.path.join(self.img_dir, filename_format.format(object_ids[0], part_ids[0], i, 'pred.obj'))
 				visual_mesh.export(mesh_path, 'obj')
 
-		if self.opt.ply_cond:
+		if 'points' in visuals:
 			# save the visualized ply files, points are stored in visuals['points']
 			for i in range(visuals['points'].shape[0]):
 				ply_file = open3d.geometry.PointCloud()
