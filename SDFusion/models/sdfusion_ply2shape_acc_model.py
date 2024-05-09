@@ -287,40 +287,6 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
         self.gen_df = self.vqvae.module.decode_no_quant(latents).detach()
 
     @torch.no_grad()
-    def uncond(self, ngen=1, ddim_steps=200, ddim_eta=0.):
-
-        self.switch_eval()
-            
-        if ddim_steps is None:
-            ddim_steps = self.ddim_steps
-            
-        # get noise, denoise, and decode with vqvae
-        B = ngen
-        shape = self.z_shape
-        c = None
-
-        latents = torch.randn((B, *shape), device=self.device)
-        latents = latents * self.noise_scheduler.init_noise_sigma
-
-        self.noise_scheduler.set_timesteps(ddim_steps)
-        
-        for t in tqdm(self.noise_scheduler.timesteps):
-            # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
-            latent_model_input = torch.cat([latents])
-            latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
-
-            # predict the noise residual
-            with torch.no_grad():
-                timesteps = torch.full((B,), t, device=self.device, dtype=torch.int64)
-                noise_pred = self.apply_model(latent_model_input, timesteps, c)
-
-            # compute the previous noisy sample x_t -> x_t-1
-            latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
-
-        # decode z
-        self.gen_df = self.vqvae.module.decode_no_quant(latents).detach()
-
-    @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
 
         ret = OrderedDict([

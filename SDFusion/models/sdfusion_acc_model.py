@@ -27,8 +27,6 @@ from models.model_utils import load_vqvae
 from diffusers import DDIMScheduler
 from diffusers.optimization import get_cosine_schedule_with_warmup
 
-from planners.base_model import create_planner
-
 from accelerate import Accelerator
 
 from utils.util import AverageMeter
@@ -74,15 +72,15 @@ class SDFusionModelAcc(BaseModel):
 
         if self.isTrain:
             # initialize optimizers
-            self.optimizer = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True], lr=opt.lr)
-            self.scheduler = get_cosine_schedule_with_warmup(
-                optimizer=self.optimizer,
-                num_warmup_steps=1000,
-                num_training_steps=opt.total_iters,
-            )
+            self.optimizer1 = optim.AdamW([p for p in self.df.parameters() if p.requires_grad == True], lr=opt.lr)
 
-            self.optimizers = [self.optimizer]
-            self.schedulers = [self.scheduler]
+            lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
+            self.scheduler1 = optim.lr_scheduler.LambdaLR(self.optimizer1, lr_lambda1)
+
+            self.optimizer1, self.scheduler1 = accelerator.prepare(self.optimizer1, self.scheduler1)
+
+            self.optimizers = [self.optimizer1]
+            self.schedulers = [self.scheduler1]
 
             self.print_networks(verbose=False)
 
@@ -232,42 +230,7 @@ class SDFusionModelAcc(BaseModel):
             latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
 
         # decode z
-        self.gen_df = self.vqvae.module.decode_no_quant(latents)
-
-    @torch.no_grad()
-    def uncond(self, ngen=1, ddim_steps=200, ddim_eta=0.):
-
-        self.switch_eval()
-            
-        if ddim_steps is None:
-            ddim_steps = self.ddim_steps
-            
-        # get noise, denoise, and decode with vqvae
-        B = ngen
-        shape = self.z_shape
-        c = None
-
-        latents = torch.randn((B, *shape), device=self.device)
-        latents = latents * self.noise_scheduler.init_noise_sigma
-
-        self.noise_scheduler.set_timesteps(ddim_steps)
-        
-        for t in tqdm(self.noise_scheduler.timesteps):
-            # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
-            latent_model_input = torch.cat([latents])
-            latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
-
-            # predict the noise residual
-            with torch.no_grad():
-                timesteps = torch.full((B,), t, device=self.device, dtype=torch.int64)
-                noise_pred = self.apply_model(latent_model_input, timesteps, c)
-
-            # compute the previous noisy sample x_t -> x_t-1
-            latents = self.noise_scheduler.step(noise_pred, t, latents, eta=ddim_eta).prev_sample
-
-        # decode z
-        self.gen_df = self.vqvae.module.decode_no_quant(latents)
-        return self.gen_df
+        self.gen_df = self.vqvae.module.decode_no_quant(latents).detach()
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
@@ -280,7 +243,7 @@ class SDFusionModelAcc(BaseModel):
         return ret
 
     def backward(self):
-        self.accelerator.backward(self.loss)
+        raise NotImplementedError('backward() is not used in this model')
 
     def optimize_parameters(self, total_steps):
         # self.set_requires_grad([self.df], requires_grad=True)

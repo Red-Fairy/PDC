@@ -521,7 +521,7 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
         return ret
 
     def backward(self): # not used
-        raise NotImplementedError 
+        raise NotImplementedError('backward() is not used in this model')
 
     def optimize_parameters(self, total_steps):
         # self.set_requires_grad([self.df], requires_grad=True)
