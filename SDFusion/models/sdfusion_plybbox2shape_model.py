@@ -72,7 +72,6 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
         self.guidance_scale_ply = opt.uc_ply_scale
         self.guidance_scale_bbox = opt.uc_bbox_scale
         self.guidance_scale = opt.uc_scale
-        # self.init_diffusion_params(scale=1, opt=opt)
 
         # init vqvae
         self.vqvae = load_vqvae(vq_conf, vq_ckpt=opt.vq_ckpt, opt=opt).to(self.device)

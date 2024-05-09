@@ -34,16 +34,15 @@ from utils.util import AverageMeter
 # rendering
 from utils.util_3d import init_mesh_renderer, render_sdf
 
-class SDFusionModelAcc(BaseModel):
+class SDFusionModel(BaseModel):
     def name(self):
-        return 'SDFusion-Model-Accelerate'
+        return 'SDFusion-Model'
 
-    def __init__(self, opt, accelerator: Accelerator):
+    def __init__(self, opt):
         super().__init__(opt)
         self.isTrain = opt.isTrain
         self.model_name = self.name()
-        self.device = accelerator.device
-        self.accelerator = accelerator
+        self.device = 'cuda'
 
         # self.optimizer_skip = False
         ######## START: Define Networks ########
@@ -62,8 +61,7 @@ class SDFusionModelAcc(BaseModel):
         self.z_shape = (z_ch, z_sp_dim, z_sp_dim, z_sp_dim)
         # init diffusion networks
         unet_params = df_conf.unet.params
-        self.df = DiffusionUNet(unet_params, vq_conf=vq_conf)
-        self.df.to(self.device)
+        self.df = DiffusionUNet(unet_params, vq_conf=vq_conf).to(self.device)
         self.parameterization = "eps"
 
         # init vqvae
@@ -76,8 +74,6 @@ class SDFusionModelAcc(BaseModel):
             lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
             self.scheduler1 = optim.lr_scheduler.LambdaLR(self.optimizer1, lr_lambda1)
 
-            self.optimizer1, self.scheduler1 = accelerator.prepare(self.optimizer1, self.scheduler1)
-
             self.optimizers = [self.optimizer1]
             self.schedulers = [self.scheduler1]
 
@@ -87,9 +83,6 @@ class SDFusionModelAcc(BaseModel):
                 self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
             else:
                 self.start_iter = 0
-
-        # prepare accelerate
-        self.df, self.vqvae = accelerator.prepare(self.df, self.vqvae)
 
         # noise scheduler
         self.noise_scheduler = DDIMScheduler()
@@ -229,7 +222,7 @@ class SDFusionModelAcc(BaseModel):
             latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
 
         # decode z
-        self.gen_df = self.vqvae.module.decode_no_quant(latents).detach()
+        self.gen_df = self.vqvae.decode_no_quant(latents).detach()
 
     @torch.no_grad()
     def eval_metrics(self, dataloader, thres=0.0, global_step=0):
@@ -245,13 +238,12 @@ class SDFusionModelAcc(BaseModel):
         raise NotImplementedError('backward() is not used in this model')
 
     def optimize_parameters(self, total_steps):
-        # self.set_requires_grad([self.df], requires_grad=True)
 
         loss = self.forward()
         avg_loss = self.accelerator.gather(loss).mean()
         self.loss_meter.update(avg_loss, self.opt.batch_size)
         self.loss_meter_epoch.update(avg_loss, self.opt.batch_size)
-        self.accelerator.backward(loss)
+        loss.backward()
         
         # clip grad norm
         torch.nn.utils.clip_grad_norm_(self.df.parameters(), 1.0)
@@ -298,8 +290,7 @@ class SDFusionModelAcc(BaseModel):
     def save(self, label, global_step, save_opt=False):
 
         state_dict = {
-            # 'vqvae': self.vqvae.state_dict(),
-            'df': self.df.module.state_dict(),
+            'df': self.df.state_dict(),
             'global_step': global_step,
         }
 

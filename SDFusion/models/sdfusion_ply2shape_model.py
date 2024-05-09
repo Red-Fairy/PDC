@@ -71,7 +71,6 @@ class SDFusionModelPly2Shape(BaseModel):
         self.df.to(self.device)
         self.parameterization = "eps"
         self.guidance_scale = opt.uc_scale
-        # self.init_diffusion_params(scale=1, opt=opt)
 
         # init vqvae
         self.vqvae = load_vqvae(vq_conf, vq_ckpt=opt.vq_ckpt, opt=opt).to(self.device)
