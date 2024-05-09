@@ -37,7 +37,8 @@ model_id='48876_1'
 cat="hinge_door"
 rotate_angle=$4
 
-# --loss_margin 0.00390625 1/256
+# 0.00390625 1/256
+# 0.0078125 1/128
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --batch_size ${batch_size} --max_dataset_size ${max_dataset_size} \
@@ -47,11 +48,11 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --total_iters ${total_iters} --dataroot ${dataroot} \
             --ply_rotate \
             --rotate_angle ${rotate_angle} \
-            --scale_mode volume \
+            --scale_mode max_extent \
             --ply_bbox_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
             --ddim_steps 50 --uc_ply_scale 2 --uc_bbox_scale 2 \
-            --loss_margin 0.00390625 \
-            --test_description margin256-debug \
+            --loss_margin 0.0078125 \
+            --test_description margin128 \
             --use_mobility_constraint "
             # --model_id ${model_id}"
 
