@@ -90,21 +90,6 @@ def train_main_worker(opt, model, train_dl, test_dl, accelerator: Accelerator):
                 cur_name = f'steps-{iter_ip1}'
                 model.save(cur_name, iter_ip1)
 
-            # eval every 3000 steps
-            if iter_ip1 % opt.save_steps_freq == 0:
-                metrics = model.eval_metrics(test_dl, global_step=iter_ip1)
-                # visualizer.print_current_metrics(epoch, metrics, phase='test')
-                visualizer.print_current_metrics(iter_ip1, metrics, phase='test')
-                # print(metrics)
-                
-                cprint(f'[*] End of steps %d \t Time Taken: %d sec \n%s' %
-                    (
-                        iter_ip1,
-                        time.time() - iter_start_time,
-                        os.path.abspath( os.path.join(opt.logs_dir, opt.name) )
-                    ), 'blue', attrs=['bold']
-                    )
-
         # model.update_learning_rate()
 
         pbar.update(1)

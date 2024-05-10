@@ -51,7 +51,7 @@ class GAPartNetDataset(BaseDataset):
         if self.phase == 'refine':
             assert opt.batch_size == 1
 
-        self.sdf_dir = f'part_sdf_{opt.res}'
+        self.sdf_dir = f'{opt.sdf_mode}_sdf_{opt.res}'
 
         if cat != 'all':
             dataroot = os.path.join(opt.dataroot, self.sdf_dir, cat)

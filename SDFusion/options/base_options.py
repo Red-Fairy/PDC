@@ -72,8 +72,8 @@ class BaseOptions():
 		self.parser.add_argument("--backend", type=str, default="gloo", help="which backend to use")
 		self.parser.add_argument("--local_rank", type=int, default=0, help="local rank for distributed training")
 		
-		# data version
-		self.parser.add_argument('--data_version', type=str, default='v.0.2', help='data version for dataset')
+		# data stuff
+		self.parser.add_argument('--sdf_mode', choices=['part', 'full'], default='part', help='sdf_mode')
 
 		# condition
 		# self.parser.add_argument('--bbox_cond', action='store_true', help='if true, use bbox condition')
