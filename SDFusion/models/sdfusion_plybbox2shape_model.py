@@ -158,9 +158,6 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
         else:
             self.move_axis = self.move_limit = self.move_origin = [None] * self.x.shape[0]
 
-        if 'bbox_mesh' in input:
-            self.bbox_mesh = input['bbox_mesh'].to(self.device)
-
         if 'ply_rotation_pred' in input:
             self.part_translation_pred = input['part_translation_pred'].to(self.device)
             self.part_extent_pred = input['part_extent_pred'].to(self.device)
@@ -429,7 +426,7 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
 
                     collision_loss, contact_loss = get_physical_loss(pred_x0_sdf, self.ply, 
                                                         self.ply_translation, self.ply_rotation_pred,
-                                                        self.part_extent, self.part_translation,
+                                                        self.part_extent_pred, self.part_translation_pred,
                                                         move_limit=self.move_limit[0], 
                                                         move_axis=self.move_axis[0],
                                                         move_origin=self.move_origin[0],

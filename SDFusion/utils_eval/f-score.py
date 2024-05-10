@@ -1,13 +1,13 @@
 import os
-import tqdm
+from tqdm import tqdm
 import open3d
 import argparse
 import typing
 
 def calculate_fscore(gt: open3d.geometry.PointCloud, pr: open3d.geometry.PointCloud, th: float=0.01) -> typing.Tuple[float, float, float]:
     '''Calculates the F-score between two point clouds with the corresponding threshold value.'''
-    d1 = open3d.compute_point_cloud_to_point_cloud_distance(gt, pr)
-    d2 = open3d.compute_point_cloud_to_point_cloud_distance(pr, gt)
+    d1 = gt.compute_point_cloud_distance(pr)
+    d2 = pr.compute_point_cloud_distance(gt)
     
     if len(d1) and len(d2):
         recall = float(sum(d < th for d in d2)) / float(len(d2))
@@ -26,25 +26,22 @@ def calculate_fscore(gt: open3d.geometry.PointCloud, pr: open3d.geometry.PointCl
 
 CUBE_SIDE_LEN = 1.0
 
-open3d.set_verbosity_level(open3d.utility.VerbosityLevel.Error)
+open3d.utility.set_verbosity_level(open3d.utility.VerbosityLevel.Error)
 
 parser = argparse.ArgumentParser(description='F-score evaluation')
 parser.add_argument('--gt_models', type=str, required=True)
-parser.add_argument('--pr_models', type=str, required=True)
+parser.add_argument('--pred_models', type=str, required=True)
 
-parser.add_argument('--pr_path', type=str, required=True)
-parser.add_argument('--out_path', type=str)
+parser.add_argument('--out_path', type=str, default=None)
 parser.add_argument('--th', type=float)
 
-parser.add_argument('--num_points', type=int, default=10000)
+parser.add_argument('--num_points', type=int, default=20000)
 
 args = parser.parse_args()
 
-if args.out_path is None:
-    out_path = "fscore"
-else:
-    out_path = args.out_path
-os.mkdir(out_path)
+out_path = os.path.basename(args.pred_models) if args.out_path is None else args.out_path
+print(out_path)
+os.makedirs(out_path, exist_ok=True)
 
 if args.th is None:
     threshold_list = [CUBE_SIDE_LEN/200, CUBE_SIDE_LEN/100,
@@ -55,7 +52,7 @@ else:
 
 num_points = args.num_points
 
-model_names = [x for x in os.listdir(args.pr_models) if x.endswith(".obj")]
+model_names = [x for x in os.listdir(args.pred_models) if x.endswith(".obj")]
 
 result_dict = {}
 for th in threshold_list:
@@ -63,7 +60,7 @@ for th in threshold_list:
 
 for model_name in tqdm(model_names):
     gt_mesh_path = os.path.join(args.gt_models, model_name)
-    pr_mesh_path = os.path.join(args.pr_models, model_name)
+    pr_mesh_path = os.path.join(args.pred_models, model_name)
 
     gt_mesh = open3d.io.read_triangle_mesh(gt_mesh_path)
     pr_mesh = open3d.io.read_triangle_mesh(pr_mesh_path)
