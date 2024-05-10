@@ -101,9 +101,9 @@ class BaseOptions():
 		self.parser.add_argument('--use_predicted_volume', action='store_true', help='use predicted volume for mobility constraint')
 		self.parser.add_argument('--guided_inference', action='store_true', help='use guided inference')
 		self.parser.add_argument('--test_description', type=str, default=None, help='test description')
-		self.parser.add_argument('--loss_margin', type=float, default=1./256, help='margin for collision loss')
+		self.parser.add_argument('--loss_margin', type=float, default=1./128, help='margin for collision loss')
 		self.parser.add_argument('--loss_collision_weight', type=float, default=1.0, help='collision loss weight')
-		self.parser.add_argument('--loss_contact_weight', type=float, default=1.0, help='contact loss weight')
+		self.parser.add_argument('--loss_contact_weight', type=float, default=0.1, help='contact loss weight')
 		self.parser.add_argument('--haoran', action='store_true', help='haoran dataset')
 		self.parser.add_argument('--haoran_rotation', action='store_true', help='haoran dataset')
 

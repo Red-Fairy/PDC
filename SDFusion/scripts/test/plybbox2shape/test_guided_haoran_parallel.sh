@@ -52,14 +52,13 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --ply_rotate \
             --use_mobility_constraint \
             --rotate_angle ${rotate_angle} \
-            --scale_mode volume \
             --guided_inference \
             --haoran \
-            --loss_margin 0.00390625 \
+            --loss_margin 0.0078125 \
             --test_diversity \
             --ply_bbox_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
             --start_idx $5 --end_idx $6  --uc_ply_scale 2 --uc_bbox_scale 2 \
-            --ddim_steps 50 --uc_scale 3 --test_description margin256_haoran "
+            --ddim_steps 50 --uc_scale 3 --test_description margin128_haoran "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args &
 
