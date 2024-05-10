@@ -56,22 +56,22 @@ class GAPartNetDataset(BaseDataset):
         if cat != 'all':
             dataroot = os.path.join(opt.dataroot, self.sdf_dir, cat)
             self.sdf_filepaths = [os.path.join(dataroot, f) for f in os.listdir(dataroot) if f.endswith('.h5')]
+            if self.phase == 'train' or self.phase == 'test':
+                filelist_path = opt.dataroot.replace('dataset', 'data_lists/'+phase)
+                with open(os.path.join(filelist_path, cat+'.txt'), 'r') as f:
+                    file_names = [line.strip() for line in f]
+                self.sdf_filepaths = [f for f in self.sdf_filepaths if f.split('/')[-1].split('.')[0] in file_names]
+            self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace(self.sdf_dir, 'part_ply_fps').replace('.h5', '.ply')), self.sdf_filepaths))
         else:
             self.sdf_filepaths = []
             for c in os.listdir(os.path.join(opt.dataroot, self.sdf_dir)):
                 cat_dir = os.path.join(opt.dataroot, self.sdf_dir, c)
                 cat_files = [os.path.join(cat_dir, f) for f in os.listdir(cat_dir) if f.endswith('.h5')]
+                self.sdf_filepaths.extend(cat_files)
                 extend_scale = max(int(5000 / len(cat_files)), 1)
                 self.sdf_filepaths.extend(cat_files * extend_scale)
                 print('Extend scale for %s: %d, ori len %d' % (c, extend_scale, len(cat_files)))
-        
-        if self.phase == 'train' or self.phase == 'test':
-            filelist_path = opt.dataroot.replace('dataset', 'data_lists/'+phase)
-            with open(os.path.join(filelist_path, cat+'.txt'), 'r') as f:
-                file_names = [line.strip() for line in f]
-            self.sdf_filepaths = [f for f in self.sdf_filepaths if f.split('/')[-1].split('.')[0] in file_names]
 
-        self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace(self.sdf_dir, 'part_ply_fps').replace('.h5', '.ply')), self.sdf_filepaths))
         if self.haoran or self.haoran_rotation:
             self.sdf_filepaths = list(filter(lambda f: os.path.exists(os.path.join(self.haoran_override, os.path.basename(f).replace('.h5', '.json'))), self.sdf_filepaths))
 
@@ -86,7 +86,7 @@ class GAPartNetDataset(BaseDataset):
 
         self.ply_bbox_cond = opt.ply_bbox_cond
 
-        self.df_conf = OmegaConf.load(opt.df_cfg)
+        # self.df_conf = OmegaConf.load(opt.df_cfg)
 
         self.sdf_filepaths = self.sdf_filepaths[:self.max_dataset_size]
         self.sdf_filepaths = sorted(self.sdf_filepaths)
@@ -103,6 +103,7 @@ class GAPartNetDataset(BaseDataset):
     def __getitem__(self, index):
 
         sdf_h5_file = self.sdf_filepaths[index]
+        # print(sdf_h5_file)
 
         ret = {'path': sdf_h5_file}
 
@@ -194,6 +195,8 @@ class GAPartNetDataset(BaseDataset):
                 # points_stat['centroid'] = torch.mm(rot_matrix, points_stat['centroid'].view(3, 1)).view(3)
 
             if self.joint_rotate: # jointly rotate the mesh and point cloud condition, calculate mesh on the fly
+
+                assert False # not used now
 
                 mesh_path = sdf_h5_file.replace(self.sdf_dir, 'part_meshes').replace('.h5', '.obj')
                 mesh = trimesh.load_mesh(mesh_path)

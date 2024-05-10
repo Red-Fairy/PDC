@@ -34,6 +34,7 @@ args = parser.parse_args()
 CATS = ['slider_drawer', 'hinge_door']
 CATS = ['slider_button', 'hinge_lid', 'line_fixed_handle', 
         'hinge_handle', 'round_fixed_handle', 'hinge_knob', 'slider_lid']
+# CATS = ['slider_button']
 
 SPACING = 2. / args.res
 
@@ -63,49 +64,53 @@ if __name__ == '__main__':
         filenames = [f for f in os.listdir(mesh_basedir) if f.endswith('.obj')]
 
         for file_name in tqdm(filenames):
-            cprint(f'process mesh: {file_name}', 'green')
+            try:
+                cprint(f'process mesh: {file_name}', 'green')
 
-            object_id, part_id = file_name.split('.obj')[0].split('_')
-            mesh = trimesh.load(os.path.join(mesh_basedir, file_name))
+                object_id, part_id = file_name.split('.obj')[0].split('_')
+                mesh = trimesh.load(os.path.join(mesh_basedir, file_name))
 
-            # rotate the mesh by ZYX euler (90, 0, -90)
-            if args.haoran_convention:
-                mesh.apply_transform(trimesh.transformations.rotation_matrix(np.radians(90), [0, 0, 1]))
-                mesh.apply_transform(trimesh.transformations.rotation_matrix(np.radians(0), [0, 1, 0]))
-                mesh.apply_transform(trimesh.transformations.rotation_matrix(np.radians(-90), [1, 0, 0]))
+                # rotate the mesh by ZYX euler (90, 0, -90)
+                if args.haoran_convention:
+                    mesh.apply_transform(trimesh.transformations.rotation_matrix(np.radians(90), [0, 0, 1]))
+                    mesh.apply_transform(trimesh.transformations.rotation_matrix(np.radians(0), [0, 1, 0]))
+                    mesh.apply_transform(trimesh.transformations.rotation_matrix(np.radians(-90), [1, 0, 0]))
 
-            T = np.array(mesh.bounding_box.centroid)
-            S = mesh.bounding_box.extents
+                T = np.array(mesh.bounding_box.centroid)
+                S = mesh.bounding_box.extents
 
-            # generate the SDF
-            sdf = mesh_to_sdf(mesh, args.res, padding=args.padding, trunc=args.truncation)
+                # generate the SDF
+                sdf = mesh_to_sdf(mesh, args.res, padding=args.padding, trunc=args.truncation)
 
-            if args.gen_recon:
-                vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf.squeeze(0).cpu().numpy(), level=0.02, spacing=(SPACING, SPACING, SPACING))
-                mesh_recon = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_normals=normals)
-                mesh_recon.apply_translation(-mesh_recon.bounding_box.centroid)
-                mesh_recon.apply_scale(np.max(S) / np.max(mesh_recon.bounding_box.extents))
-                mesh_recon.apply_translation(T)
+                if args.gen_recon:
+                    vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf.squeeze(0).cpu().numpy(), level=0.02, spacing=(SPACING, SPACING, SPACING))
+                    mesh_recon = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_normals=normals)
+                    mesh_recon.apply_translation(-mesh_recon.bounding_box.centroid)
+                    mesh_recon.apply_scale(np.max(S) / np.max(mesh_recon.bounding_box.extents))
+                    mesh_recon.apply_translation(T)
 
-                recon_filename = os.path.join(mesh_recon_basedir, f'{object_id}_{part_id}.obj')
-                mesh_recon.export(recon_filename)
+                    recon_filename = os.path.join(mesh_recon_basedir, f'{object_id}_{part_id}.obj')
+                    mesh_recon.export(recon_filename)
 
-            sdf = sdf.reshape(-1, 1)
-            h5_filename = file_name[:-4] + '.h5'
-            h5f = h5py.File(os.path.join(sdf_basedir, h5_filename), 'w')
-            h5f.create_dataset('pc_sdf_sample', data=sdf.cpu().numpy().astype(np.float32), compression='gzip', compression_opts=4)
-            h5f.close()
+                sdf = sdf.reshape(-1, 1)
+                h5_filename = file_name[:-4] + '.h5'
+                h5f = h5py.File(os.path.join(sdf_basedir, h5_filename), 'w')
+                h5f.create_dataset('pc_sdf_sample', data=sdf.cpu().numpy().astype(np.float32), compression='gzip', compression_opts=4)
+                h5f.close()
 
-            if args.gen_bbox:
-                bbox = {
-                    'centroid': T.tolist(),
-                    'extents': S.tolist()
-                }
-                with open(os.path.join(part_bbox_basedir, f'{object_id}_{part_id}.json'), 'w') as f:
-                    json.dump(bbox, f)
+                if args.gen_bbox:
+                    bbox = {
+                        'centroid': T.tolist(),
+                        'extents': S.tolist()
+                    }
+                    with open(os.path.join(part_bbox_basedir, f'{object_id}_{part_id}.json'), 'w') as f:
+                        json.dump(bbox, f)
 
-            if args.debug:
-                break
+                if args.debug:
+                    break
+            except:
+                with open('error_log.txt', 'a') as f:
+                    f.write(f'{file_name}\n')
 
             # if ROTATION:
             #     ## rotate the mesh
