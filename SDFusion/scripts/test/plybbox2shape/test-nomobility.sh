@@ -34,7 +34,7 @@ name=$1
 gpu_ids=$2
 load_iter=$3
 model_id='48876_1'
-cat="line_fixed_handle"
+cat="hinge_knob"
 rotate_angle=$4
 
 # 0.00390625 1/256
@@ -52,9 +52,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --ply_bbox_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
             --ddim_steps 50 --uc_ply_scale 2 --uc_bbox_scale 2 \
             --loss_margin 0.0078125 \
-            --test_description margin128 \
-            --use_mobility_constraint "
-            # --model_id ${model_id}"
+            --test_description margin128 "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
 
