@@ -9,7 +9,7 @@ df_cfg='configs/sdfusion-uncond-128.yaml'
 vq_model="vqvae"
 vq_dset='gapnet'
 vq_cat="slider_drawer"
-vq_ckpt="../../data-rundong/PartDiffusion/SDFusion/logs/gapnet-res128-vqvae-lr0.00002/ckpt/vqvae_steps-latest.pth"
+vq_ckpt="../../data-rundong/PartDiffusion/SDFusion/logs/vqvae-gapnet-full-vqvae-lr0.00001/ckpt/vqvae_steps-40000.pth"
 vq_cfg="configs/vqvae_gapnet-128.yaml"
 
 cond_ckpt="../pretrained_checkpoint/pointnet2.pth"
@@ -25,13 +25,14 @@ trunc_thres=0.2
 
 ### display & log stuff ###
 display_freq=250
-print_freq=25
-total_iters=150000
+print_freq=50
+total_iters=100000
 save_steps_freq=5000
 ###########################
 
 multi_gpu=1
-batch_size=3
+batch_size=5
+sdf_mode='full'
 name=$1
 cat=$2
 lr=$3
@@ -47,7 +48,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --dataset_mode ${dataset_mode} --res ${res} --cat ${cat} --trunc_thres ${trunc_thres} \
             --display_freq ${display_freq} --print_freq ${print_freq} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
-            --dataroot ${dataroot} "
+            --dataroot ${dataroot} --sdf_mode ${sdf_mode}"
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 
