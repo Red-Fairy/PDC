@@ -25,6 +25,7 @@ res=128
 trunc_thres=0.2
 name=$1
 lr=$2
+nnode=$3
 cat="all"
 
 logs_dir="/mnt/data-rundong/PartDiffusion/SDFusion/logs"
@@ -39,7 +40,7 @@ args="--name ${name} --logs_dir ${logs_dir} --lr ${lr} --batch_size ${batch_size
                 --ply_rotate --continue_train "
 
 if [ $multi_gpu = 1 ]; then
-    torchrun --nproc_per_node=8 --nnode=1 --node_rank=$AZUREML_CR_NODE_RANK --master_addr=$AZ_BATCHAI_JOB_MASTER_NODE_IP --master_port=9901 train_accelerate.py $args
+    torchrun --nproc_per_node=8 --nnode=${nnode} --node_rank=$AZUREML_CR_NODE_RANK --master_addr=$AZ_BATCHAI_JOB_MASTER_NODE_IP --master_port=9901 train_accelerate.py $args
 else
     python train.py $args
 fi
