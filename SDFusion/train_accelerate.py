@@ -39,7 +39,7 @@ def train_main_worker(opt, model, train_dl, test_dl, accelerator: Accelerator):
 
     train_dg, test_dg = accelerator.prepare(train_dg, test_dg)
 
-    pbar = tqdm(total=opt.total_iters, disable=not accelerator.is_local_main_process)
+    pbar = tqdm(total=opt.total_iters, disable=not accelerator.is_main_process)
     pbar.update(model.start_iter)
     pbar.set_description("Training Iters")
     # pbar = tqdm(total=opt.total_iters)
