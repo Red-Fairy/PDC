@@ -13,7 +13,7 @@ dataroot="/mnt/data-rundong/PartDiffusion/dataset/"
 ### display & log stuff ###
 display_freq=500 # default: log every display_freq batches
 print_freq=50 # default:
-total_iters=100000
+total_iters=75000
 save_steps_freq=20000
 ###########################
 
