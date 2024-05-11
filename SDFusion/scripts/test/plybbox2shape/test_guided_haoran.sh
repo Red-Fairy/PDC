@@ -35,8 +35,10 @@ gpu_ids=$2
 load_iter=$3
 model_id='20411_0'
 # cat="slider_drawer"
-cat="hinge_door"
+cat="slider_drawer"
 rotate_angle=$4
+ply_scale=$5
+bbox_scale=$6
 
 # slider-ply2shape-plyrot-scale3-lr0.00001
 
@@ -57,8 +59,8 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --loss_margin 0.0078125 \
             --test_diversity \
             --ply_bbox_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
-            --uc_ply_scale 2 --uc_bbox_scale 2 \
-            --ddim_steps 50 --uc_scale 3 --test_description margin128_haoran "
+            --uc_ply_scale ${ply_scale} --uc_bbox_scale ${bbox_scale} \
+            --ddim_steps 50 --test_description margin128_haoran "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
 
