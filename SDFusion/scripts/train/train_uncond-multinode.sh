@@ -5,7 +5,7 @@ df_cfg='configs/sdfusion-uncond-128.yaml'
 vq_model="vqvae"
 vq_dset='gapnet'
 vq_cat="slider_drawer"
-vq_ckpt="/mnt/data-rundong/PartDiffusion/SDFusion/logs/vqvae-gapnet-full-vqvae-lr0.00001/ckpt/vqvae_steps-40000.pth"
+vq_ckpt="/mnt/data-rundong/PartDiffusion/SDFusion/logs/full-part-gen-vqvae-lr0.00001/ckpt/vqvae_steps-latest.pth"
 vq_cfg="configs/vqvae_gapnet-128.yaml"
 
 cond_ckpt="/mnt/data-rundong/PartDiffusion/pretrained_checkpoint/pointnet2.pth"
@@ -37,7 +37,7 @@ nnode=$4
 logs_dir='/mnt/data-rundong/PartDiffusion/SDFusion/logs'
 name="${name}-uncond-lr${lr}"
 
-args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
+args="--name ${name} --logs_dir ${logs_dir} \
             --lr ${lr} --batch_size ${batch_size} --max_dataset_size ${max_dataset_size} \
             --model ${model} --df_cfg ${df_cfg} \
             --vq_model ${vq_model} --vq_cfg ${vq_cfg} --vq_ckpt ${vq_ckpt} --vq_dset ${vq_dset} --vq_cat ${vq_cat} \
