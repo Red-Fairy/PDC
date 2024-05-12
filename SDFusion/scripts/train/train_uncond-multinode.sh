@@ -44,7 +44,7 @@ args="--name ${name} --logs_dir ${logs_dir} \
             --dataset_mode ${dataset_mode} --res ${res} --cat ${cat} --trunc_thres ${trunc_thres} \
             --display_freq ${display_freq} --print_freq ${print_freq} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
-            --dataroot ${dataroot} --sdf_mode ${sdf_mode}"
+            --dataroot ${dataroot} --sdf_mode ${sdf_mode} --continue_train "
 
 # set available gpus
 if [ $multi_gpu = 1 ]; then
