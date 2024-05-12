@@ -64,7 +64,7 @@ def train_main_worker(opt, model, train_dl, test_dl, accelerator: Accelerator):
 
             if iter_i % opt.print_freq == 0:
                 errors = model.get_current_errors()
-                t = (time.time() - iter_start_time) / opt.batch_size
+                t = time.time() - iter_start_time
                 visualizer.print_current_errors(iter_i, errors, t)
 
             # display every n batches
