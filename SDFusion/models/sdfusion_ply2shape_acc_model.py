@@ -304,8 +304,8 @@ class SDFusionModelPly2ShapeAcc(BaseModel):
 
         loss = self.forward()
         avg_loss = self.accelerator.gather(loss).mean()
-        self.loss_meter.update(avg_loss, self.opt.batch_size)
-        self.loss_meter_epoch.update(avg_loss, self.opt.batch_size)
+        self.loss_meter.update(avg_loss, self.opt.batch_size * self.accelerator.num_processes)
+        self.loss_meter_epoch.update(avg_loss, self.opt.batch_size * self.accelerator.num_processes)
         self.accelerator.backward(loss)
         
         # clip grad norm

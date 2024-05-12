@@ -51,12 +51,12 @@ class GAPartNetDataset(BaseDataset):
         if self.phase == 'refine':
             assert opt.batch_size == 1
 
-        self.sdf_dir = f'part_sdf_{opt.res}'
+        self.sdf_dir = f'{opt.sdf_mode}_sdf_{opt.res}'
 
         if cat != 'all':
             dataroot = os.path.join(opt.dataroot, self.sdf_dir, cat)
             self.sdf_filepaths = [os.path.join(dataroot, f) for f in os.listdir(dataroot) if f.endswith('.h5')]
-            if self.phase == 'train' or self.phase == 'test':
+            if (self.phase == 'train' or self.phase == 'test') and opt.sdf_mode == 'part':
                 filelist_path = opt.dataroot.replace('dataset', 'data_lists/'+phase)
                 with open(os.path.join(filelist_path, cat+'.txt'), 'r') as f:
                     file_names = [line.strip() for line in f]
@@ -91,7 +91,7 @@ class GAPartNetDataset(BaseDataset):
         self.sdf_filepaths = self.sdf_filepaths[:self.max_dataset_size]
         self.sdf_filepaths = sorted(self.sdf_filepaths)
         if self.opt.start_idx is not None and self.opt.end_idx is not None:
-            self.sdf_filepaths = self.sdf_filepaths[self.opt.start_idx:self.opt.end_idx]
+            self.sdf_filepaths = self.sdf_filepaths[self.opt.start_idx: min(self.opt.end_idx, len(self.sdf_filepaths))]
         cprint('[*] %d samples loaded.' % (len(self.sdf_filepaths)), 'yellow')
 
         if not self.opt.isTrain and self.opt.test_diversity: # repeat the dataset for diversity testing
@@ -158,7 +158,7 @@ class GAPartNetDataset(BaseDataset):
                 if self.haoran:
                     if self.opt.cat == 'slider_drawer':
                         move_axis = torch.tensor([0, 0, 1], dtype=torch.float32)
-                        move_limit = torch.tensor([0, 0.25], dtype=torch.float32)
+                        move_limit = torch.tensor([0, 0.2], dtype=torch.float32)
                         move_origin = part_translate_pred + part_extent_pred * 0.5
                     elif self.opt.cat == 'hinge_door':
                         move_axis = torch.tensor([1, 0, 0], dtype=torch.float32)

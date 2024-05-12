@@ -144,15 +144,26 @@ class SDFusionModelPlyBBox2ShapeAcc(BaseModel):
         self.x = input['sdf'].to(self.device)
         self.ply = input['ply'].to(self.device)
         self.paths = input['path']
-        
+
         # transformation info for calculating collision loss
         # "ply_points + ply_translation" aligns with "part * part_extent + part_translation"
         if 'ply_translation' in input:
             self.ply_translation = input['ply_translation'].to(self.device)
             self.ply_rotation = input['ply_rotation'].to(self.device)
-            self.ply_scale = input['ply_scale'].to(self.device)
             self.part_translation = input['part_translation'].to(self.device)
             self.part_extent = input['part_extent'].to(self.device)
+
+        if 'move_axis' in input:
+            self.move_axis = input['move_axis'].to(self.device) # (3,)
+            self.move_origin = input['move_origin'].to(self.device) # (3,)
+            self.move_limit = input['move_limit'].to(self.device) # (2,) range of motion
+        else:
+            self.move_axis = self.move_limit = self.move_origin = [None] * self.x.shape[0]
+
+        if 'ply_rotation_pred' in input:
+            self.part_translation_pred = input['part_translation_pred'].to(self.device)
+            self.part_extent_pred = input['part_extent_pred'].to(self.device)
+            self.ply_rotation_pred = input['ply_rotation_pred'].to(self.device)
 
     def switch_train(self):
         self.df.train()
@@ -318,8 +329,8 @@ class SDFusionModelPlyBBox2ShapeAcc(BaseModel):
 
         loss = self.forward()
         avg_loss = self.accelerator.gather(loss).mean()
-        self.loss_meter.update(avg_loss, self.opt.batch_size)
-        self.loss_meter_epoch.update(avg_loss, self.opt.batch_size)
+        self.loss_meter.update(avg_loss, self.opt.batch_size * self.accelerator.num_processes)
+        self.loss_meter_epoch.update(avg_loss, self.opt.batch_size * self.accelerator.num_processes)
         self.accelerator.backward(loss)
         
         # clip grad norm

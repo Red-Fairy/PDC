@@ -37,6 +37,8 @@ model_id='20411_0'
 cat="slider_drawer"
 # cat="hinge_door"
 rotate_angle=$4
+ply_scale=$5
+bbox_scale=$6
 
 # slider-ply2shape-plyrot-scale3-lr0.00001
 
@@ -52,14 +54,14 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --ply_rotate \
             --use_mobility_constraint \
             --rotate_angle ${rotate_angle} \
-            --scale_mode volume \
             --guided_inference \
             --haoran \
-            --loss_margin 0.00390625 \
+            --loss_margin 0.0078125 \
             --test_diversity \
             --ply_bbox_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
-            --start_idx $5 --end_idx $6  --uc_ply_scale 2 --uc_bbox_scale 2 \
-            --ddim_steps 50 --uc_scale 3 --test_description margin256_haoran "
+            --uc_ply_scale ${ply_scale} --uc_bbox_scale ${bbox_scale} \
+            --start_idx $7 --end_idx $8 \
+            --ddim_steps 50 --uc_scale 3 --test_description margin128_haoran "
 
-CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args &
+CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args & 
 

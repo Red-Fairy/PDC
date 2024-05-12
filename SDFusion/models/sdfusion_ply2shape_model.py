@@ -427,7 +427,7 @@ class SDFusionModelPly2Shape(BaseModel):
 
                     collision_loss, contact_loss = get_physical_loss(pred_x0_sdf, self.ply, 
                                                         self.ply_translation, self.ply_rotation_pred,
-                                                        self.part_extent, self.part_translation,
+                                                        self.part_extent_pred, self.part_translation_pred,
                                                         move_limit=self.move_limit[0], 
                                                         move_axis=self.move_axis[0],
                                                         move_origin=self.move_origin[0],

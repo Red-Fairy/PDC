@@ -34,7 +34,7 @@ name=$1
 gpu_ids=$2
 load_iter=$3
 model_id='48876_1'
-cat="hinge_door"
+cat="line_fixed_handle"
 rotate_angle=$4
 
 # 0.00390625 1/256
