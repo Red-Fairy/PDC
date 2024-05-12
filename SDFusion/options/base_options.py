@@ -8,6 +8,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from accelerate import Accelerator
+import math
 
 class BaseOptions():
 	def __init__(self):
@@ -136,6 +137,12 @@ class BaseOptions():
 
 		self.opt = self.parser.parse_args()
 		self.opt.isTrain = self.isTrain   # train or test
+
+		# scale the lr
+		if accelerator is not None:
+			self.opt.lr = self.opt.lr * math.sqrt(accelerator.num_processes * self.opt.batch_size)
+		else:
+			self.opt.lr = self.opt.lr * math.sqrt(len(self.opt.gpu_ids.split(',')) * self.opt.batch_size)
 
 		if self.opt.cat == 'slider_drawer':
 			self.opt.mobility_type = 'translation'
