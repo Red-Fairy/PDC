@@ -128,26 +128,26 @@ class Visualizer():
 		if 'meshes' in visuals:
 			visual_meshes = visuals['meshes']
 
-			if self.opt.visual_mode == 'mesh' and 'ply_translation' in visuals:
-				part_scale = visuals['part_scale']
-				part_translation = visuals['part_translation']
+			if self.opt.visual_mode == 'mesh':
 				for i, mesh in enumerate(visual_meshes):
-					# print(f'mesh {i} max extent: {np.max(mesh.extents)}')
-					mesh.apply_scale((part_scale[i], part_scale[i], part_scale[i]))
-					mesh.apply_translation(part_translation[i])
 					instance_label = self.get_instance_label(i)
-					# save the mesh under canonical pose
-					mesh_path = os.path.join(self.img_dir, 'meshes_canonical', filename_format.format(object_ids[i], part_ids[i], instance_label, 'obj'))
-					mesh.export(mesh_path, 'obj')
-					# rotate the mesh by 'ply_rotation' to make them align with the point cloud
-					mesh.apply_transform(visuals['ply_rotation'][i])
+					if 'ply_translation' in visuals:
+						part_scale = visuals['part_scale']
+						part_translation = visuals['part_translation']
+				
+						# print(f'mesh {i} max extent: {np.max(mesh.extents)}')
+						mesh.apply_scale((part_scale[i], part_scale[i], part_scale[i]))
+						mesh.apply_translation(part_translation[i])
+						
+						# save the mesh under canonical pose
+						mesh_path = os.path.join(self.img_dir, 'meshes_canonical', filename_format.format(object_ids[i], part_ids[i], instance_label, 'obj'))
+						mesh.export(mesh_path, 'obj')
+
+						# rotate the mesh by 'ply_rotation' to make them align with the point cloud
+						mesh.apply_transform(visuals['ply_rotation'][i])
+
 					mesh_path = os.path.join(self.img_dir, 'meshes', filename_format.format(object_ids[i], part_ids[i], instance_label, 'obj'))
 					mesh.export(mesh_path, 'obj')
-						 
-				# for i, visual_mesh in enumerate(visual_meshes):
-				# 	instance_label = self.get_instance_label(i)
-				# 	mesh_path = os.path.join(self.img_dir, filename_format.format(object_ids[i], part_ids[i], instance_label, 'obj'))
-				# 	visual_mesh.export(mesh_path, 'obj')
 		
 		if 'meshes_pred' in visuals:
 			part_scale = visuals['part_scale'][0]
