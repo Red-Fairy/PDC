@@ -197,7 +197,7 @@ def init_mesh_renderer(image_size=512, dist=3.5, elev=90, azim=90, camera='0', d
 ############################# END: renderer #######################################
 
 
-def sdf_to_mesh_trimesh(sdf, level=None,spacing=(0.01,0.01,0.01)):
+def sdf_to_mesh_trimesh(sdf, level=0.02, spacing=(0.01,0.01,0.01)):
     if torch.is_tensor(sdf):
         sdf = sdf.detach().cpu().numpy()
     vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf, level=level, spacing=spacing)

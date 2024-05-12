@@ -78,11 +78,9 @@ def train_main_worker(opt, model, train_dl, test_dl, ):
                 model.inference(data)
                 visualizer.display_current_results(model.get_current_visuals(), iter_i, phase='train')
 
-                # model.set_input(next(test_dg))
                 test_data = next(test_dg)
                 model.inference(test_data)
                 visualizer.display_current_results(model.get_current_visuals(), iter_i, phase='test')
-                # torch.cuda.empty_cache()
 
             if iter_ip1 % opt.save_latest_freq == 0:
                 cprint('saving the latest model (current_iter %d)' % (iter_i), 'blue')

@@ -20,7 +20,7 @@ from models.networks.vqvae_networks.network import VQVAE
 from models.loss_utils import VQLoss
 
 import utils.util
-from utils.util_3d import init_mesh_renderer, render_sdf
+from utils.util_3d import init_mesh_renderer, render_sdf, sdf_to_mesh_trimesh
 
 from accelerate import Accelerator
 
@@ -115,7 +115,7 @@ class VQVAEAccModel(BaseModel):
 
         with torch.no_grad():
             self.z = self.vqvae(self.x, forward_no_quant=True, encode_only=True)
-            self.x_recon = self.vqvae.module.decode_no_quant(self.z)
+            self.x_recon = self.vqvae.module.decode_no_quant(self.z).detach()
 
             if should_render:
                 self.image = render_sdf(self.renderer, self.x)
@@ -207,19 +207,22 @@ class VQVAEAccModel(BaseModel):
             self.img = render_sdf(self.renderer, self.x)
             self.img_recon = render_sdf(self.renderer, self.x_recon)
 
-        vis_tensor_names = [
-            'img',
-            'img_recon',
-        ]
+        spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
+        meshes = [sdf_to_mesh_trimesh(self.z[i][0], spacing=spc) for i in range(self.z.shape[0])]
 
+        vis_tensor_names = [
+            'image',
+            'image_recon',
+        ]
         vis_ims = self.tnsrs2ims(vis_tensor_names)
         visuals = zip(vis_tensor_names, vis_ims)
 
         visuals_dict = {
-            "img": OrderedDict(visuals),
+            "meshes": meshes,
             "paths": self.paths,
-        }
-                            
+            'img': OrderedDict(visuals),
+        }  
+
         return visuals_dict
 
     def save(self, label, global_step=0, save_opt=False):
