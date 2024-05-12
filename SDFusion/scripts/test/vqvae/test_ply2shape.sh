@@ -20,8 +20,6 @@ name=$1
 gpu_ids=$2
 load_iter=$3
 
-# --loss_margin 0.00390625 1/256
-
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --batch_size ${batch_size} --max_dataset_size ${max_dataset_size} \
             --model ${model} --vq_cfg ${vq_cfg} \
