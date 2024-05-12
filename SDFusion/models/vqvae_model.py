@@ -68,9 +68,9 @@ class VQVAEModel(BaseModel):
                 self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'vqvae_steps-{opt.load_iter}.pth'))
             else:
                 self.start_iter = 0
-                
+
         else:
-            self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
+            self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'vqvae_steps-{opt.load_iter}.pth'))
 
         # setup renderer
         dist, elev, azim = 1.0, 20, 120  #! require to be check
