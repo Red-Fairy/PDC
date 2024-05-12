@@ -60,6 +60,11 @@ class BaseOptions():
 		self.parser.add_argument('--vq_cat', type=str, default=None, help='dataset category vqvae originally trained on')
 		self.parser.add_argument('--vq_ckpt', type=str, default=None, help='vqvae ckpt to load.')
 
+
+		## baseline
+		# cvae stuff
+		self.parser.add_argument('--cvae_cfg', type=str, default='configs/cvae_snet.yaml', help='cvae model config file')
+
 		# condition model
 		self.parser.add_argument('--cond_ckpt', type=str, default=None, help='condition model ckpt to load.')
 		############## END: model related options ################

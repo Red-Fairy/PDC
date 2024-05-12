@@ -44,6 +44,13 @@ def create_model(opt, accelerator=None, input_instance=None):
         else:
             from models.sdfusion_ply2shape_refine_acc_model import SDFusionModelPly2ShapeRefineAcc
             model = SDFusionModelPly2ShapeRefineAcc(opt, accelerator, input_instance)
+    
+    elif opt.model == 'cvae-ply2shape':
+        if accelerator is None:
+            from models.cvae_ply2shape_model import CVAEModelPly2Shape
+            model = CVAEModelPly2Shape(opt)
+        else:
+            raise NotImplementedError("CVAE Model with accelerator not implemented yet")
         
     else:
         raise ValueError("Model [%s] not recognized." % opt.model)

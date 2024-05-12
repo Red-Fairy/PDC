@@ -31,9 +31,12 @@ cuda_avail = torch.cuda.is_available()
 print(f"CUDA TORCH AVAILABLE: {cuda_avail}")
 
 
-def train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, visualizer):
+def train_main_worker(opt, model, train_dl, test_dl, ):
 
     if get_rank() == 0:
+        # setup visualizer for the main process
+        visualizer = Visualizer(opt)
+        visualizer.setup_io()
         cprint('[*] Start training. name: %s' % opt.name, 'blue')
 
     train_dg = get_data_generator(train_dl)
@@ -53,7 +56,6 @@ def train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, visualize
         
         data = next(train_dg)
         if iter_i == 0 and get_rank() == 0:
-            print(f"123")
             print(f"!!!! data Shape on single GPU: {data['sdf'].shape}")
         model.set_input(data)
         model.optimize_parameters(iter_i)
@@ -97,7 +99,7 @@ def train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, visualize
 
             # eval every 3000 steps
             if iter_ip1 % opt.save_steps_freq == 0:
-                metrics = model.eval_metrics(test_dl_for_eval, global_step=iter_ip1)
+                metrics = model.eval_metrics(test_dl, global_step=iter_ip1)
                 # visualizer.print_current_metrics(epoch, metrics, phase='test')
                 visualizer.print_current_metrics(iter_ip1, metrics, phase='test')
                 # print(metrics)
@@ -127,7 +129,7 @@ def main():
     # this will parse args, setup log_dirs, multi-gpus
     opt = TrainOptions().parse_and_setup()
     # device = opt.device
-    rank = opt.rank
+    # rank = opt.rank
 
     # CUDA_VISIBLE_DEVICES = int(os.environ["LOCAL_RANK"]) 
     # import pdb; pdb.set_trace()
@@ -136,7 +138,7 @@ def main():
     from datetime import datetime
     opt.exp_time = datetime.now().strftime('%Y-%m-%dT%H-%M')
 
-    train_dl, test_dl, test_dl_for_eval = CreateDataLoader(opt)
+    train_dl, test_dl = CreateDataLoader(opt)
     train_ds, test_ds = train_dl.dataset, test_dl.dataset
 
     dataset_size = len(train_ds)
@@ -152,9 +154,9 @@ def main():
     cprint(f'[*] "{opt.model}" initialized.', 'cyan')
 
     # visualizer
-    visualizer = Visualizer(opt)
-    if get_rank() == 0:
-        visualizer.setup_io()
+    # visualizer = Visualizer(opt)
+    # if get_rank() == 0:
+    #     visualizer.setup_io()
 
     # save model and dataset files
     if get_rank() == 0:
@@ -176,8 +178,13 @@ def main():
             df_cfg = opt.df_cfg
             cfg_out = os.path.join(expr_dir, os.path.basename(df_cfg))
             os.system(f'cp {df_cfg} {cfg_out}')
+        
+        if opt.cvae_cfg is not None:
+            cvae_cfg = opt.cvae_cfg
+            cfg_out = os.path.join(expr_dir, os.path.basename(cvae_cfg))
+            os.system(f'cp {cvae_cfg} {cfg_out}')
 
-    train_main_worker(opt, model, train_dl, test_dl, test_dl_for_eval, visualizer)
+    train_main_worker(opt, model, train_dl, test_dl)
 
 if __name__ == "__main__":
     main()
