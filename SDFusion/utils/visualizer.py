@@ -57,9 +57,13 @@ class Visualizer():
 
 		self.img_dir = opt.img_dir
 		
-		os.makedirs(os.path.join(self.img_dir, 'meshes'), exist_ok=True)
-		os.makedirs(os.path.join(self.img_dir, 'meshes_canonical'), exist_ok=True)
-		os.makedirs(os.path.join(self.img_dir, 'pcd'), exist_ok=True)
+		if 'vqvae' in opt.model:
+			os.makedirs(os.path.join(self.img_dir, 'meshes'), exist_ok=True)
+			os.makedirs(os.path.join(self.img_dir, 'meshes_recon'), exist_ok=True)
+		if 'sdfusion' in opt.model:
+			os.makedirs(os.path.join(self.img_dir, 'meshes'), exist_ok=True)
+			os.makedirs(os.path.join(self.img_dir, 'meshes_pred'), exist_ok=True)
+			os.makedirs(os.path.join(self.img_dir, 'pcd'), exist_ok=True)
 
 		self.name = opt.name
 		self.opt = opt
@@ -149,6 +153,12 @@ class Visualizer():
 					mesh_path = os.path.join(self.img_dir, 'meshes', filename_format.format(object_ids[i], part_ids[i], instance_label, 'obj'))
 					mesh.export(mesh_path, 'obj')
 		
+		if 'meshes_recon' in visuals:
+			for i, visual_mesh in enumerate(visuals['meshes_recon']):
+				instance_label = self.get_instance_label(i)
+				mesh_path = os.path.join(self.img_dir, 'meshes_recon', filename_format.format(object_ids[i], part_ids[i], instance_label, 'obj'))
+				visual_mesh.export(mesh_path, 'obj')
+			
 		if 'meshes_pred' in visuals:
 			part_scale = visuals['part_scale'][0]
 			part_translation = visuals['part_translation'][0]

@@ -210,18 +210,19 @@ class VQVAEAccModel(BaseModel):
         spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
         meshes = [sdf_to_mesh_trimesh(self.z[i][0], spacing=spc) for i in range(self.z.shape[0])]
 
-        vis_tensor_names = [
-            'image',
-            'image_recon',
-        ]
-        vis_ims = self.tnsrs2ims(vis_tensor_names)
-        visuals = zip(vis_tensor_names, vis_ims)
-
         visuals_dict = {
             "meshes": meshes,
             "paths": self.paths,
-            'img': OrderedDict(visuals),
         }  
+
+        if self.opt.isTrain:
+            vis_tensor_names = [
+                'image',
+                'image_recon',
+            ]
+            vis_ims = self.tnsrs2ims(vis_tensor_names)
+            visuals = zip(vis_tensor_names, vis_ims)
+            visuals_dict.update(visuals)
 
         return visuals_dict
 

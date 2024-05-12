@@ -206,20 +206,23 @@ class VQVAEModel(BaseModel):
             self.image_recon = render_sdf(self.renderer, self.x_recon)
 
         spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
-        meshes = [sdf_to_mesh_trimesh(self.z[i][0], spacing=spc) for i in range(self.z.shape[0])]
-
-        vis_tensor_names = [
-            'image',
-            'image_recon',
-        ]
-        vis_ims = self.tnsrs2ims(vis_tensor_names)
-        visuals = zip(vis_tensor_names, vis_ims)
+        meshes = [sdf_to_mesh_trimesh(self.x[i][0], spacing=spc) for i in range(self.x.shape[0])]
+        meshes_recon = [sdf_to_mesh_trimesh(self.z[i][0], spacing=spc) for i in range(self.z.shape[0])]
 
         visuals_dict = {
             "meshes": meshes,
+            "meshes_recon": meshes_recon,
             "paths": self.paths,
-            'img': OrderedDict(visuals),
         }  
+
+        if self.opt.isTrain:
+            vis_tensor_names = [
+                'image',
+                'image_recon',
+            ]
+            vis_ims = self.tnsrs2ims(vis_tensor_names)
+            visuals = zip(vis_tensor_names, vis_ims)
+            visuals_dict.update(visuals)
 
         return visuals_dict
 
