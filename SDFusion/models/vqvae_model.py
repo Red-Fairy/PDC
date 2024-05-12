@@ -27,7 +27,7 @@ class VQVAEModel(BaseModel):
     def name(self):
         return 'VQVAE-Model'
 
-    def initialize(self, opt):
+    def __init__(self, opt):
         # model
         self.isTrain = opt.isTrain
         self.model_name = self.name()
@@ -44,6 +44,7 @@ class VQVAEModel(BaseModel):
         n_embed = mparam.n_embed
         embed_dim = mparam.embed_dim
         ddconfig = mparam.ddconfig
+        self.shape_res = ddconfig.resolution
 
         self.vqvae = VQVAE(ddconfig, n_embed, embed_dim).to(self.device)
 
@@ -62,11 +63,14 @@ class VQVAEModel(BaseModel):
 
             self.print_networks(verbose=False)
 
-        # continue training
-        if opt.continue_train:
-            self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'vqvae_steps-{opt.load_iter}.pth'))
+            # continue training
+            if opt.continue_train:
+                self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'vqvae_steps-{opt.load_iter}.pth'))
+            else:
+                self.start_iter = 0
+                
         else:
-            self.start_iter = 0
+            self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
 
         # setup renderer
         dist, elev, azim = 1.0, 20, 120  #! require to be check

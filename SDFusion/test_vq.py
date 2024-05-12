@@ -20,16 +20,17 @@ import numpy as np
 from utils.visualizer import Visualizer
 
 if __name__ == '__main__':
-    opt = TestOptions().parse_and_setup()
+	opt = TestOptions().parse_and_setup()
 
-    train_dl, test_dl = CreateDataLoader(opt)
+	train_dl, test_dl = CreateDataLoader(opt)
 
-    model = create_model(opt)
+	model = create_model(opt)
 
-    visualizer = Visualizer(opt)
+	visualizer = Visualizer(opt)
+	visualizer.setup_io()
 
-    for i, test_data in tqdm(enumerate(test_dl)):
+	for i, test_data in tqdm(enumerate(test_dl)):
 
-        model.inference(test_data)
+		model.inference(test_data)
 
-        visualizer.display_current_results(model.get_current_visuals(), i, phase='test')
+		visualizer.display_current_results(model.get_current_visuals(), i, phase='test')
