@@ -12,9 +12,11 @@ from tqdm import tqdm
 import json
 import skimage
 from scipy.spatial.transform import Rotation as R
+import torch
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--root', type=str, default='../../dataset/')
+parser.add_argument('--root', type=str, default='/mnt/data-rundong/PartDiffusion/dataset')
+parser.add_argument('--save_root', type=str, default='/mnt/azureml/cr/j/7aaae224465249e79ffd6396abc43217/exe/wd')
 parser.add_argument('--cat', type=str, default='slider_drawer', help='category name')
 parser.add_argument('--padding', type=float, default=0.2, help='length of the bounding box')
 parser.add_argument('--res', type=int, default=128, help='resolution of the sdf')
@@ -34,7 +36,7 @@ args = parser.parse_args()
 CATS = ['slider_drawer', 'hinge_door']
 CATS = ['slider_button', 'hinge_lid', 'line_fixed_handle', 
         'hinge_handle', 'round_fixed_handle', 'hinge_knob', 'slider_lid']
-# CATS = ['slider_button']
+CATS = ['slider_drawer']
 
 SPACING = 2. / args.res
 
@@ -50,20 +52,22 @@ if __name__ == '__main__':
     for CAT in CATS:
         print('processing category:', CAT)
         mesh_basedir = os.path.join(args.root, 'full_meshes', CAT)
-        sdf_basedir = os.path.join(args.root, f'full_sdf_{RES}', CAT)
+        sdf_basedir = os.path.join(args.save_root, f'full_sdf_{RES}', CAT)
         os.makedirs(sdf_basedir, exist_ok=True)
 
         if args.gen_recon:
-            mesh_recon_basedir = os.path.join(args.root, f'full_meshes_recon', CAT)
+            mesh_recon_basedir = os.path.join(args.save_root, f'full_meshes_recon', CAT)
             os.makedirs(mesh_recon_basedir, exist_ok=True)
 
         if args.gen_bbox:
-            part_bbox_basedir = os.path.join(args.root, f'part_bbox_aligned', CAT)
+            part_bbox_basedir = os.path.join(args.save_root, f'part_bbox_aligned', CAT)
             os.makedirs(part_bbox_basedir, exist_ok=True)
 
         filenames = [f for f in os.listdir(mesh_basedir) if f.endswith('.obj')]
 
         for file_name in tqdm(filenames):
+            if not '12085_1' in file_name:
+                continue
             try:
                 cprint(f'process mesh: {file_name}', 'green')
 
@@ -82,7 +86,16 @@ if __name__ == '__main__':
                 # generate the SDF
                 sdf = mesh_to_sdf(mesh, args.res, padding=args.padding, trunc=args.truncation)
 
+                sdf = sdf.reshape(-1, 1)
+                h5_filename = file_name[:-4] + '.h5'
+                h5f = h5py.File(os.path.join(sdf_basedir, h5_filename), 'w')
+                h5f.create_dataset('pc_sdf_sample', data=sdf.cpu().numpy().astype(np.float32), compression='gzip', compression_opts=4)
+                h5f.close()
+
                 if args.gen_recon:
+                    h5_file = h5py.File(os.path.join(sdf_basedir, h5_filename), 'r')
+                    sdf = h5_file['pc_sdf_sample'][:].astype(np.float32)
+                    sdf = torch.Tensor(sdf).view(1, args.res, args.res, args.res)
                     vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf.squeeze(0).cpu().numpy(), level=0.02, spacing=(SPACING, SPACING, SPACING))
                     mesh_recon = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_normals=normals)
                     mesh_recon.apply_translation(-mesh_recon.bounding_box.centroid)
@@ -91,12 +104,6 @@ if __name__ == '__main__':
 
                     recon_filename = os.path.join(mesh_recon_basedir, f'{object_id}_{part_id}.obj')
                     mesh_recon.export(recon_filename)
-
-                sdf = sdf.reshape(-1, 1)
-                h5_filename = file_name[:-4] + '.h5'
-                h5f = h5py.File(os.path.join(sdf_basedir, h5_filename), 'w')
-                h5f.create_dataset('pc_sdf_sample', data=sdf.cpu().numpy().astype(np.float32), compression='gzip', compression_opts=4)
-                h5f.close()
 
                 if args.gen_bbox:
                     bbox = {

@@ -687,3 +687,14 @@ def get_normalize_mesh(model_file):
     return ori_mesh, centroid, m
 
 ############################# END: preprocess #############################
+
+if __name__ == '__main__':
+    sdf_path = '/mnt/data-rundong/PartDiffusion/dataset/full_sdf_128/slider_drawer/12085_1.h5'
+    res = 128
+    h5_f = h5py.File(sdf_path, 'r')
+    sdf = h5_f['pc_sdf_sample'][:].astype(np.float32)
+    sdf = torch.Tensor(sdf).view(1, res, res, res)
+
+    mesh = sdf_to_mesh_trimesh(sdf[0].detach().cpu().numpy(), level=0.02, spacing=(2./res, 2./res, 2./res))
+    # export
+    mesh.export('test.obj')
