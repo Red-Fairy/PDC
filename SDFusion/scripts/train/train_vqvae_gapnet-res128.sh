@@ -35,7 +35,7 @@ name="${name}-vqvae-lr${lr}"
 
 args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} --lr ${lr} --batch_size ${batch_size} \
                 --model ${model} --vq_cfg ${vq_cfg} \
-                --dataroot ${dataroot} --dataset_mode ${dataset_mode} --cat ${cat} \
+                --dataroot ${dataroot} --cat ${cat} \
                 --res ${res} --trunc_thres ${trunc_thres} --max_dataset_size ${max_dataset_size} \
                 --display_freq ${display_freq} --print_freq ${print_freq} \
                 --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} 

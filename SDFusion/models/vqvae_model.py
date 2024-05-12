@@ -7,6 +7,7 @@ import omegaconf
 from termcolor import colored
 from einops import rearrange
 from tqdm import tqdm
+from utils.util_3d import sdf_to_mesh_trimesh,init_mesh_renderer, render_sdf
 
 import torch
 from torch import nn, optim
@@ -20,18 +21,17 @@ from models.networks.vqvae_networks.network import VQVAE
 from models.loss_utils import VQLoss
 
 import utils.util
-from utils.util_3d import init_mesh_renderer, render_sdf
-from utils.distributed import reduce_loss_dict
+from utils.util import AverageMeter
 
 class VQVAEModel(BaseModel):
     def name(self):
         return 'VQVAE-Model'
 
     def initialize(self, opt):
-        BaseModel.initialize(self, opt)
+        # model
         self.isTrain = opt.isTrain
         self.model_name = self.name()
-        self.device = opt.device
+        self.device = 'cuda'
 
         # -------------------------------
         # Define Networks
@@ -45,8 +45,7 @@ class VQVAEModel(BaseModel):
         embed_dim = mparam.embed_dim
         ddconfig = mparam.ddconfig
 
-        self.vqvae = VQVAE(ddconfig, n_embed, embed_dim)
-        self.vqvae.to(self.device)
+        self.vqvae = VQVAE(ddconfig, n_embed, embed_dim).to(self.device)
 
         if self.isTrain:
             # define loss functions
@@ -54,8 +53,9 @@ class VQVAEModel(BaseModel):
             self.loss_vq = VQLoss(codebook_weight=codebook_weight).to(self.device)
 
             # initialize optimizers
-            self.optimizer = optim.Adam(self.vqvae.parameters(), lr=opt.lr, betas=(0.5, 0.9))
-            self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, 1000, 0.9)
+            self.optimizer = optim.AdamW(self.vqvae.parameters(), lr=opt.lr, betas=(0.9, 0.999), weight_decay=1e-4)
+            lr_lambda = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
+            self.scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda)
 
             self.optimizers = [self.optimizer]
             self.schedulers = [self.scheduler]
@@ -63,27 +63,21 @@ class VQVAEModel(BaseModel):
             self.print_networks(verbose=False)
 
         # continue training
-        if opt.ckpt is not None:
-            self.load_ckpt(opt.ckpt, load_opt=self.isTrain)
+        if opt.continue_train:
+            self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'vqvae_steps-{opt.load_iter}.pth'))
+        else:
+            self.start_iter = 0
 
         # setup renderer
-        if 'snet' in opt.dataset_mode:
-            dist, elev, azim = 1.7, 20, 20
-        elif opt.dataset_mode == 'buildingnet':
-            dist, elev, azim = 1.0, 20, 20
-        elif opt.dataset_mode == 'gapnet':
-            dist, elev, azim = 1.0, 20, 20  #! require to be check
+        dist, elev, azim = 1.0, 20, 120  #! require to be check
         self.renderer = init_mesh_renderer(image_size=256, dist=dist, elev=elev, azim=azim, device=self.device)
 
         # for saving best ckpt
         self.best_iou = -1e12
 
-        # for distributed training
-        if self.opt.distributed:
-            self.make_distributed(opt)
-            self.vqvae_module = self.vqvae.module
-        else:
-            self.vqvae_module = self.vqvae
+        self.loss_names = ['total', 'codebook', 'nll', 'rec']
+        self.loss_meter_dict = {name: AverageMeter() for name in self.loss_names}
+        self.loss_meter_epoch_dict = {name: AverageMeter() for name in self.loss_names}
 
     def switch_eval(self):
         self.vqvae.eval()
@@ -91,35 +85,27 @@ class VQVAEModel(BaseModel):
     def switch_train(self):
         self.vqvae.train()
 
-    def make_distributed(self, opt):
-        self.vqvae = nn.parallel.DistributedDataParallel(
-            self.vqvae,
-            device_ids=[opt.local_rank],
-            output_device=opt.local_rank,
-            broadcast_buffers=False,
-        )
-
     def set_input(self, input):
-        
-        
-        x = input['sdf']
-        self.x = x
-        self.cur_bs = x.shape[0] # to handle last batch
-        vars_list = ['x']
-
-        self.tocuda(var_names=vars_list)
+        self.paths = input['path']
+        self.x = input['sdf'].to(self.device)
+        # self.cur_bs = self.x.shape[0] # to handle last batch 
 
     def forward(self):
+
+        self.switch_train()
+        self.start_iter += 1
+
         self.x_recon, self.qloss = self.vqvae(self.x, verbose=False)
 
     @torch.no_grad()
     def inference(self, data, should_render=False, verbose=False):
+
         self.switch_eval()
         self.set_input(data)
 
         with torch.no_grad():
             self.z = self.vqvae(self.x, forward_no_quant=True, encode_only=True)
-            self.x_recon = self.vqvae_module.decode_no_quant(self.z)
+            self.x_recon = self.vqvae.decode_no_quant(self.z).detach()
 
             if should_render:
                 self.image = render_sdf(self.renderer, self.x)
@@ -150,10 +136,6 @@ class VQVAEModel(BaseModel):
                 iou = self.test_iou(test_data, thres=thres)
                 iou_list.append(iou.detach())
 
-                # DEBUG                
-                # self.image_recon = render_sdf(self.renderer, self.x_recon)
-                # vutils.save_image(self.image_recon, f'tmp/{ix}-{global_step}-recon.png')
-
         iou = torch.cat(iou_list)
         iou_mean, iou_std = iou.mean(), iou.std()
         
@@ -173,35 +155,43 @@ class VQVAEModel(BaseModel):
 
 
     def backward(self):
-        '''backward pass for the generator in training the unsupervised model'''
-        total_loss, loss_dict = self.loss_vq(self.qloss, self.x, self.x_recon)
-
-        self.loss = total_loss
-
-        self.loss_dict = reduce_loss_dict(loss_dict)
-
-        self.loss_total = loss_dict['loss_total']
-        self.loss_codebook = loss_dict['loss_codebook']
-        self.loss_nll = loss_dict['loss_nll']
-        self.loss_rec = loss_dict['loss_rec']
-
-        self.loss.backward()
+        raise NotImplementedError 
 
     def optimize_parameters(self, total_steps):
 
         self.forward()
-        self.optimizer.zero_grad(set_to_none=True)
-        self.backward()
-        self.optimizer.step()
+        total_loss, loss_dict = self.loss_vq(self.qloss, self.x, self.x_recon)
+
+        avg_loss_dict = {k: self.accelerator.gather(v).mean() for k, v in loss_dict.items()}
+        for k, v in avg_loss_dict.items():
+            self.loss_meter_dict[k].update(v.item(), self.opt.batch_size)
+            self.loss_meter_epoch_dict[k].update(v.item(), self.opt.batch_size)
+
+        total_loss.backward()
+
+        # clip grad norm
+        # torch.nn.utils.clip_grad_norm_(self.latent, 0.1)
+        
+        for optimizer in self.optimizers:
+            optimizer.step()
+        
+        for scheduler in self.schedulers:
+            scheduler.step()
+
+        for optimizer in self.optimizers:
+            optimizer.zero_grad()
     
     def get_current_errors(self):
         
-        ret = OrderedDict([
-            ('total', self.loss_total.mean().data),
-            ('codebook', self.loss_codebook.mean().data),
-            ('nll', self.loss_nll.mean().data),
-            ('rec', self.loss_rec.mean().data),
-        ])
+        ret = OrderedDict([(k, v.avg) for k, v in self.loss_meter_dict.items()])
+
+        for _, v in self.loss_meter_dict.items():
+            v.reset()
+
+        # print learning rate
+            
+        for i, scheduler in enumerate(self.schedulers):
+            print(f'learning rate at iter {self.start_iter}: {scheduler.get_last_lr()}', flush=True)
 
         return ret
 
@@ -211,21 +201,28 @@ class VQVAEModel(BaseModel):
             self.image = render_sdf(self.renderer, self.x)
             self.image_recon = render_sdf(self.renderer, self.x_recon)
 
+        spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
+        meshes = [sdf_to_mesh_trimesh(self.z[i][0], spacing=spc) for i in range(self.z.shape[0])]
+
         vis_tensor_names = [
             'image',
             'image_recon',
         ]
-
         vis_ims = self.tnsrs2ims(vis_tensor_names)
         visuals = zip(vis_tensor_names, vis_ims)
-                            
-        return OrderedDict(visuals)
+
+        visuals_dict = {
+            "meshes": meshes,
+            "paths": self.paths,
+            'img': OrderedDict(visuals),
+        }  
+
+        return visuals_dict
 
     def save(self, label, global_step=0, save_opt=False):
 
         state_dict = {
-            'vqvae': self.vqvae_module.state_dict(),
-            # 'opt': self.optimizer.state_dict(),
+            'vqvae': self.vqvae.state_dict(),
             'global_step': global_step,
         }
         

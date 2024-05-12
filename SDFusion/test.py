@@ -24,7 +24,7 @@ cuda_avail = torch.cuda.is_available()
 print(f"CUDA TORCH AVAILABLE: {cuda_avail}")
 
 
-def eval_main_worker(opt, model, test_dl, visualizer):
+def eval_main_worker(opt, model, test_dl, visualizer: Visualizer):
 
 	for i, test_data in tqdm(enumerate(test_dl)):
 

@@ -78,12 +78,7 @@ class VQVAEAccModel(BaseModel):
         self.vqvae = accelerator.prepare(self.vqvae)
 
         # setup renderer
-        if 'snet' in opt.dataset_mode:
-            dist, elev, azim = 1.7, 20, 120
-        elif opt.dataset_mode == 'buildingnet':
-            dist, elev, azim = 1.0, 20, 120
-        elif opt.dataset_mode == 'gapnet':
-            dist, elev, azim = 1.0, 20, 120  #! require to be check
+        dist, elev, azim = 1.0, 20, 120  #! require to be check
         self.renderer = init_mesh_renderer(image_size=256, dist=dist, elev=elev, azim=azim, device=self.device)
 
         # for saving best ckpt
@@ -148,10 +143,6 @@ class VQVAEAccModel(BaseModel):
 
                 iou = self.test_iou(test_data, thres=thres)
                 iou_list.append(iou.detach())
-
-                # DEBUG                
-                # self.image_recon = render_sdf(self.renderer, self.x_recon)
-                # vutils.save_image(self.image_recon, f'tmp/{ix}-{global_step}-recon.png')
 
         iou = torch.cat(iou_list)
         iou_mean, iou_std = iou.mean(), iou.std()
