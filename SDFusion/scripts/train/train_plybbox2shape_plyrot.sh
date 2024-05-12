@@ -9,7 +9,7 @@ df_cfg='configs/sdfusion-plybbox2shape.yaml'
 vq_model="vqvae"
 vq_dset='gapnet'
 vq_cat="slider_drawer"
-vq_ckpt="../../data-rundong/PartDiffusion/SDFusion/logs/gapnet-res128-vqvae-lr0.00002/ckpt/vqvae_steps-80000.pth"
+vq_ckpt="../../data-rundong/PartDiffusion/SDFusion/logs/gapnet-res128-vqvae-lr0.00002/ckpt/vqvae_steps-latest.pth"
 vq_cfg="configs/vqvae_gapnet-128.yaml"
 
 cond_ckpt="../pretrained_checkpoint/pointnet2.pth"
