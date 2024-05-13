@@ -62,6 +62,10 @@ def train_main_worker(opt, model, train_dl, test_dl, accelerator: Accelerator):
 
         if accelerator.is_main_process:
 
+            print(model.scheduler.get_last_lr())
+            # print iter inferred from optimizer
+            print(model.optimizer.state[model.optimizer.param_groups[0]["params"][-1]]["step"])
+
             if iter_i % opt.print_freq == 0:
                 errors = model.get_current_errors()
                 t = time.time() - iter_start_time

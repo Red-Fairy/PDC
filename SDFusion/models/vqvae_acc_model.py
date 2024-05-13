@@ -63,18 +63,17 @@ class VQVAEAccModel(BaseModel):
             lr_lambda = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
             self.scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda)
 
-            self.optimizer, self.scheduler = accelerator.prepare(self.optimizer, self.scheduler)
-
             self.optimizers = [self.optimizer]
             self.schedulers = [self.scheduler]
 
-            self.print_networks(verbose=False)
+            if opt.continue_train: # continue training
+                self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'vqvae_steps-{opt.load_iter}.pth'))
+            else:
+                self.start_iter = 0
 
-        # continue training
-        if opt.continue_train:
-            self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'vqvae_steps-{opt.load_iter}.pth'))
-        else:
-            self.start_iter = 0
+            self.optimizer, self.scheduler = accelerator.prepare(self.optimizer, self.scheduler)
+
+            self.print_networks(verbose=False)
 
         self.vqvae = accelerator.prepare(self.vqvae)
 
@@ -275,7 +274,7 @@ class VQVAEAccModel(BaseModel):
             print(colored('[*] optimizer not loaded from: %s' % ckpt, 'blue'))
             for _ in range(iter_passed):
                 for scheduler in self.schedulers:
-                    scheduler.step()     
+                    scheduler.step()
 
         return iter_passed
 

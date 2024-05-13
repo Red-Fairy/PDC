@@ -28,6 +28,7 @@ class VQVAEModel(BaseModel):
         return 'VQVAE-Model'
 
     def __init__(self, opt):
+        super().__init__(opt)
         # model
         self.isTrain = opt.isTrain
         self.model_name = self.name()
@@ -166,7 +167,7 @@ class VQVAEModel(BaseModel):
         self.forward()
         total_loss, loss_dict = self.loss_vq(self.qloss, self.x, self.x_recon)
 
-        avg_loss_dict = {k: self.accelerator.gather(v).mean() for k, v in loss_dict.items()}
+        avg_loss_dict = {k: v.mean() for k, v in loss_dict.items()}
         for k, v in avg_loss_dict.items():
             self.loss_meter_dict[k].update(v.item(), self.opt.batch_size)
             self.loss_meter_epoch_dict[k].update(v.item(), self.opt.batch_size)
@@ -260,8 +261,21 @@ class VQVAEModel(BaseModel):
             self.vqvae.load_state_dict(state_dict['vqvae'])
             
         print(colored('[*] weight successfully load from: %s' % ckpt, 'blue'))
+
+        iter_passed = state_dict['global_step']
         if load_opt:
-            self.optimizer.load_state_dict(state_dict['opt'])
-            print(colored('[*] optimizer successfully restored from: %s' % ckpt, 'blue'))
+            for i, optimizer in enumerate(self.optimizers):
+                optimizer.load_state_dict(state_dict[f'opt{i}'])
+            for i, scheduler in enumerate(self.schedulers):
+                scheduler.load_state_dict(state_dict[f'sch{i}'])
+            print(colored('[*] optimizer successfully load from: %s' % ckpt, 'blue'))
+        else:
+            print(colored('[*] optimizer not loaded from: %s' % ckpt, 'blue'))
+            for _ in range(iter_passed):
+                for scheduler in self.schedulers:
+                    scheduler.step()
+                    print(scheduler.get_last_lr())
+
+        return iter_passed
 
 

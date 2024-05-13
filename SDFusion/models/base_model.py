@@ -68,7 +68,6 @@ class BaseModel():
         self.opt = opt
         # self.gpu_ids = opt.gpu_ids
         self.isTrain = opt.isTrain
-        # self.Tensor = torch.cuda.FloatTensor if self.gpu_ids else torch.Tensor
 
         self.model_names = []
         self.epoch_labels = []

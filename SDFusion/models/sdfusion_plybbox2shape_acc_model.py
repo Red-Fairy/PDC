@@ -105,18 +105,19 @@ class SDFusionModelPlyBBox2ShapeAcc(BaseModel):
             lr_lambda2 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters)) if it > freeze_iters else 0
             self.scheduler2 = optim.lr_scheduler.LambdaLR(self.optimizer2, lr_lambda2)
 
-            self.optimizer1, self.optimizer2 = accelerator.prepare(self.optimizer1, self.optimizer2)
-            self.scheduler1, self.scheduler2 = accelerator.prepare(self.scheduler1, self.scheduler2)
-
             self.optimizers = [self.optimizer1, self.optimizer2]
             self.schedulers = [self.scheduler1, self.scheduler2]
-
-            self.print_networks(verbose=False)
 
             if opt.continue_train:
                 self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
             else:
                 self.start_iter = 0
+
+            self.optimizer1, self.optimizer2 = accelerator.prepare(self.optimizer1, self.optimizer2)
+            self.scheduler1, self.scheduler2 = accelerator.prepare(self.scheduler1, self.scheduler2)
+
+            self.print_networks(verbose=False)
+
 
         # prepare accelerate
         self.df, self.vqvae, self.ply_cond_model, self.bbox_cond_model = \

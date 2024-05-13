@@ -98,12 +98,12 @@ class SDFusionModelPly2Shape(BaseModel):
             self.optimizers = [self.optimizer1]
             self.schedulers = [self.scheduler1]
 
-            self.print_networks(verbose=False)
-
             if opt.continue_train:
                 self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
             else:
                 self.start_iter = 0
+
+            self.print_networks(verbose=False)
 
         else:
             self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
@@ -522,9 +522,8 @@ class SDFusionModelPly2Shape(BaseModel):
         # self.set_requires_grad([self.df], requires_grad=True)
 
         loss = self.forward()
-        avg_loss = self.accelerator.gather(loss).mean()
-        self.loss_meter.update(avg_loss, self.opt.batch_size)
-        self.loss_meter_epoch.update(avg_loss, self.opt.batch_size)
+        self.loss_meter.update(loss, self.opt.batch_size)
+        self.loss_meter_epoch.update(loss, self.opt.batch_size)
         loss.backward()
         
         # clip grad norm

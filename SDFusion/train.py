@@ -33,83 +33,60 @@ print(f"CUDA TORCH AVAILABLE: {cuda_avail}")
 
 def train_main_worker(opt, model, train_dl, test_dl, ):
 
-    if get_rank() == 0:
-        # setup visualizer for the main process
-        visualizer = Visualizer(opt)
-        visualizer.setup_io()
-        cprint('[*] Start training. name: %s' % opt.name, 'blue')
+    # setup visualizer for the main process
+    visualizer = Visualizer(opt)
+    visualizer.setup_io()
+    # start training
+    cprint('[*] Start training. name: %s' % opt.name, 'blue')
 
     train_dg = get_data_generator(train_dl)
     test_dg = get_data_generator(test_dl)
 
     pbar = tqdm(total=opt.total_iters)
     pbar.update(model.start_iter)
+    pbar.set_description("Training Iters")
+    # pbar = tqdm(total=opt.total_iters)
 
     iter_start_time = time.time()
     for iter_i in range(model.start_iter+1, opt.total_iters+1):
 
-        opt.iter_i = iter_i
+        # opt.iter_i = iter_i
         iter_ip1 = iter_i + 1
-
-        if get_rank() == 0:
-            visualizer.reset()
         
         data = next(train_dg)
-        if iter_i == 0 and get_rank() == 0:
-            print(f"!!!! data Shape on single GPU: {data['sdf'].shape}")
+        if iter_i == 0:
+            print(f"data Shape on single GPU: {data['sdf'].shape}")
+
         model.set_input(data)
         model.optimize_parameters(iter_i)
 
-        if get_rank() == 0:
-            if iter_i % opt.print_freq == 0:
-                errors = model.get_current_errors()
+        if iter_i % opt.print_freq == 0:
+            errors = model.get_current_errors()
+            t = time.time() - iter_start_time
+            visualizer.print_current_errors(iter_i, errors, t)
 
-                t = (time.time() - iter_start_time) / opt.batch_size
-                epoch_steps = iter_i
-                visualizer.print_current_errors(iter_i, errors, t)
+        # display every n batches
+        if iter_i % opt.display_freq == 0:
+            # eval
+            model.inference(data)
+            visualizer.display_current_results(model.get_current_visuals(), iter_i, phase='train')
 
-            # display every n batches
-            if iter_i % opt.display_freq == 0:
-                if iter_i == 0 and opt.debug == "1":
-                    pbar.update(1)
-                    continue
+            test_data = next(test_dg)
+            model.inference(test_data)
+            visualizer.display_current_results(model.get_current_visuals(), iter_i, phase='test')
 
-                # eval
-                model.inference(data)
-                visualizer.display_current_results(model.get_current_visuals(), iter_i, phase='train')
+        if iter_ip1 % opt.save_latest_freq == 0:
+            cprint('saving the latest model (current_iter %d)' % (iter_i), 'blue')
+            latest_name = f'steps-latest'
+            model.save(latest_name, iter_ip1)
 
-                test_data = next(test_dg)
-                model.inference(test_data)
-                visualizer.display_current_results(model.get_current_visuals(), iter_i, phase='test')
-
-            if iter_ip1 % opt.save_latest_freq == 0:
-                cprint('saving the latest model (current_iter %d)' % (iter_i), 'blue')
-                latest_name = f'steps-latest'
-                model.save(latest_name, iter_ip1)
-
-            # save every 3000 steps (batches)
-            if iter_ip1 % opt.save_steps_freq == 0:
-                cprint('saving the model at iters %d' % iter_ip1, 'blue')
-                latest_name = f'steps-latest'
-                model.save(latest_name, iter_ip1)
-                cur_name = f'steps-{iter_ip1}'
-                model.save(cur_name, iter_ip1)
-
-            # eval every 3000 steps
-            if iter_ip1 % opt.save_steps_freq == 0:
-                metrics = model.eval_metrics(test_dl, global_step=iter_ip1)
-                # visualizer.print_current_metrics(epoch, metrics, phase='test')
-                visualizer.print_current_metrics(iter_ip1, metrics, phase='test')
-                # print(metrics)
-                
-                cprint(f'[*] End of steps %d \t Time Taken: %d sec \n%s' %
-                    (
-                        iter_ip1,
-                        time.time() - iter_start_time,
-                        os.path.abspath( os.path.join(opt.logs_dir, opt.name) )
-                    ), 'blue', attrs=['bold']
-                    )
-        # model.update_learning_rate()
+        # save every 3000 steps (batches)
+        if iter_ip1 % opt.save_steps_freq == 0:
+            cprint('saving the model at iters %d' % iter_ip1, 'blue')
+            latest_name = f'steps-latest'
+            model.save(latest_name, iter_ip1)
+            cur_name = f'steps-{iter_ip1}'
+            model.save(cur_name, iter_ip1)
 
         pbar.update(1)
         
