@@ -255,8 +255,6 @@ class VQVAEAccModel(BaseModel):
             state_dict = torch.load(ckpt, map_location=map_fn)
         else:
             state_dict = ckpt
-
-        iter_passed = state_dict['global_step']
         
         # NOTE: handle version difference...
         if 'vqvae' not in state_dict:
@@ -265,14 +263,19 @@ class VQVAEAccModel(BaseModel):
             self.vqvae.load_state_dict(state_dict['vqvae'])
             
         print(colored('[*] weight successfully load from: %s' % ckpt, 'blue'))
+
+        iter_passed = state_dict['global_step']
         if load_opt:
-            self.optimizer.load_state_dict(state_dict['opt'])
-            print(colored('[*] optimizer successfully restored from: %s' % ckpt, 'blue'))
+            for i, optimizer in enumerate(self.optimizers):
+                optimizer.load_state_dict(state_dict[f'opt{i}'])
+            for i, scheduler in enumerate(self.schedulers):
+                scheduler.load_state_dict(state_dict[f'sch{i}'])
+            print(colored('[*] optimizer successfully load from: %s' % ckpt, 'blue'))
         else:
             print(colored('[*] optimizer not loaded from: %s' % ckpt, 'blue'))
-            for _ in range(state_dict['global_step']):
+            for _ in range(iter_passed):
                 for scheduler in self.schedulers:
-                    scheduler.step()
+                    scheduler.step()     
 
         return iter_passed
 

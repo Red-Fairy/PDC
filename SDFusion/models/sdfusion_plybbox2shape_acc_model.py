@@ -434,25 +434,18 @@ class SDFusionModelPlyBBox2ShapeAcc(BaseModel):
         print(colored('[*] conditional model successfully restored from: %s' % ckpt, 'blue'))
 
         # if 'opt' in state_dict:
-        for i, optimizer in enumerate(self.optimizers):
-            try:
-                optimizer.load_state_dict(state_dict[f'opt{i}'])
-                print(colored('[*] optimizer successfully restored from: %s' % ckpt, 'blue'))
-            except:
-                print(colored('[*] optimizer not loaded', 'red'))
-        
         iter_passed = state_dict['global_step']
-        
-        if 'sch' in state_dict:
+        if load_opt:
+            for i, optimizer in enumerate(self.optimizers):
+                optimizer.load_state_dict(state_dict[f'opt{i}'])
             for i, scheduler in enumerate(self.schedulers):
-                try:
-                    scheduler.load_state_dict(state_dict[f'sch{i}'])
-                    print(colored('[*] scheduler successfully restored from: %s' % ckpt, 'blue'))
-                except:
-                    print(colored('[*] scheduler not loaded', 'red'))
-                    for _ in range(state_dict['global_step']):
-                        scheduler.step()
-            
+                scheduler.load_state_dict(state_dict[f'sch{i}'])
+            print(colored('[*] optimizer successfully load from: %s' % ckpt, 'blue'))
+        else:
+            print(colored('[*] optimizer not loaded from: %s' % ckpt, 'blue'))
+            for _ in range(iter_passed):
+                for scheduler in self.schedulers:
+                    scheduler.step()     
 
         return iter_passed
 
