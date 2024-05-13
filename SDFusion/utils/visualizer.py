@@ -62,7 +62,7 @@ class Visualizer():
 			os.makedirs(os.path.join(self.img_dir, 'meshes_recon'), exist_ok=True)
 		if 'sdfusion' in opt.model:
 			os.makedirs(os.path.join(self.img_dir, 'meshes'), exist_ok=True)
-			os.makedirs(os.path.join(self.img_dir, 'meshes_pred'), exist_ok=True)
+			os.makedirs(os.path.join(self.img_dir, 'meshes_canonical'), exist_ok=True)
 			os.makedirs(os.path.join(self.img_dir, 'pcd'), exist_ok=True)
 		if 'cvae' in opt.model:
 			os.makedirs(os.path.join(self.img_dir, 'meshes'), exist_ok=True)

@@ -34,8 +34,7 @@ name=$1
 gpu_ids=$2
 load_iter=$3
 model_id='48876_1'
-cat="line_fixed_handle"
-rotate_angle=$4
+cat="hinge_door"
 
 # 0.00390625 1/256
 # 0.0078125 1/128
@@ -47,7 +46,6 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --dataset_mode ${dataset_mode} --res ${res} --cat ${cat} --trunc_thres ${trunc_thres} \
             --total_iters ${total_iters} --dataroot ${dataroot} \
             --ply_rotate \
-            --rotate_angle ${rotate_angle} \
             --scale_mode max_extent \
             --ply_bbox_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
             --ddim_steps 50 --uc_ply_scale 2 --uc_bbox_scale 2 \
