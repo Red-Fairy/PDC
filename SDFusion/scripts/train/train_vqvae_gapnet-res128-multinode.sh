@@ -26,7 +26,7 @@ trunc_thres=0.2
 name=$1
 lr=$2
 nnode=$3
-cat="all"
+cat="slider_drawer"
 
 logs_dir="/mnt/data-rundong/PartDiffusion/SDFusion/logs"
 name="${name}-vqvae-lr${lr}"
@@ -37,7 +37,7 @@ args="--name ${name} --logs_dir ${logs_dir} --lr ${lr} --batch_size ${batch_size
                 --res ${res} --trunc_thres ${trunc_thres} --max_dataset_size ${max_dataset_size} \
                 --display_freq ${display_freq} --print_freq ${print_freq} \
                 --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} 
-                --ply_rotate --continue_train --load_iter 80000 "
+                --ply_rotate --continue_train --load_iter 100000"
 
 if [ $multi_gpu = 1 ]; then
     torchrun --nproc_per_node=8 --nnode=${nnode} --node_rank=$AZUREML_CR_NODE_RANK --master_addr=$AZ_BATCHAI_JOB_MASTER_NODE_IP --master_port=9901 train_accelerate.py $args
