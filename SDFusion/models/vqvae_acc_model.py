@@ -268,6 +268,11 @@ class VQVAEAccModel(BaseModel):
         if load_opt:
             self.optimizer.load_state_dict(state_dict['opt'])
             print(colored('[*] optimizer successfully restored from: %s' % ckpt, 'blue'))
+        else:
+            print(colored('[*] optimizer not loaded from: %s' % ckpt, 'blue'))
+            for _ in range(state_dict['global_step']):
+                for scheduler in self.schedulers:
+                    scheduler.step()
 
         return iter_passed
 
