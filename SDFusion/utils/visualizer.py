@@ -94,7 +94,7 @@ class Visualizer():
 	def print_current_errors(self, current_iters, errors, t):
 		# message = '(GPU: %s, epoch: %d, iters: %d, time: %.3f) ' % (self.opt.gpu_ids_str, t)
 		# message = f"[{self.opt.exp_time}] (GPU: {self.opt.gpu_ids_str}, iters: {current_iters}, time: {t:.3f}) "
-		message = f"[{self.opt.name}] iters: {current_iters}, time: {t:.3f}) "
+		message = f"[{self.opt.name}] iters: {current_iters}, time: {t:.3f} "
 		for k, v in errors.items():
 			message += '%s: %.6f ' % (k, v)
 
