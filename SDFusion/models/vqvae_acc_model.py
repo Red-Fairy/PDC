@@ -49,6 +49,7 @@ class VQVAEAccModel(BaseModel):
         n_embed = mparam.n_embed
         embed_dim = mparam.embed_dim
         ddconfig = mparam.ddconfig
+        self.shape_res = ddconfig.resolution
 
         self.vqvae = VQVAE(ddconfig, n_embed, embed_dim).to(self.device)
 
