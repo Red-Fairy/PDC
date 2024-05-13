@@ -5,6 +5,7 @@ pretrained_checkpoint/*
 dataset_gallery/*
 ignore_files/*
 haoran/*
+slurms/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
