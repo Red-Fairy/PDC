@@ -190,10 +190,13 @@ class CVAEModelPly2Shape(BaseModel):
     def optimize_parameters(self, total_steps):
         loss = self.forward()
         avg_loss = loss.mean()
+        if avg_loss > 100:
+            print(colored(f"Loss too large: {avg_loss.item()} | operation: skipping", 'red'))
+            return
         self.loss_meter.update(avg_loss, self.opt.batch_size)
         self.loss_meter_epoch.update(avg_loss, self.opt.batch_size)
         loss.backward()
-        
+
         # clip grad norm
         torch.nn.utils.clip_grad_norm_(self.cvae.parameters(), 1.0)
         # torch.nn.utils.clip_grad_norm_(self.cond_model.parameters(), 1.0)
