@@ -275,6 +275,8 @@ class VQVAEAccModel(BaseModel):
             for _ in range(iter_passed):
                 for scheduler in self.schedulers:
                     scheduler.step()
+                    if self.accelerator.is_main_process:
+                        print(scheduler.get_last_lr())
 
         return iter_passed
 

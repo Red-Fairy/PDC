@@ -40,7 +40,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} --lr ${lr} --ba
                 --res ${res} --trunc_thres ${trunc_thres} --max_dataset_size ${max_dataset_size} \
                 --display_freq ${display_freq} --print_freq ${print_freq} \
                 --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} 
-                --ply_rotate --continue_train --load_iter 10000 "
+                --ply_rotate --continue_train --load_iter 20000 "
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 
