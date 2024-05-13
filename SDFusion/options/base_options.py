@@ -139,7 +139,7 @@ class BaseOptions():
 		self.opt.isTrain = self.isTrain   # train or test
 
 		# scale the lr
-		if accelerator is not None:
+		if accelerator is not None and self.opt.isTrain:
 			self.opt.lr = self.opt.lr * math.sqrt(accelerator.num_processes * self.opt.batch_size)
 		else:
 			self.opt.lr = self.opt.lr * math.sqrt(len(self.opt.gpu_ids.split(',')) * self.opt.batch_size)
