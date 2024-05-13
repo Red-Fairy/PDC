@@ -7,15 +7,15 @@ df_cfg='configs/sdfusion-ply2shape-128.yaml'
 vq_model="vqvae"
 vq_dset='gapnet'
 vq_cat="slider_drawer"
-vq_ckpt="../../data-rundong/PartDiffusion/SDFusion/logs/gapnet-res128-vqvae-lr0.00002/ckpt/vqvae_steps-latest.pth"
+vq_ckpt="/mnt/data-rundong/PartDiffusion/SDFusion/logs/gapnet-res128-vqvae-lr0.00002/ckpt/vqvae_steps-latest.pth"
 vq_cfg="configs/vqvae_gapnet-128.yaml"
 
-cond_ckpt="../../data-rundong/PartDiffusion/pretrained_checkpoint/pointnet2.pth"
+cond_ckpt="/mnt/data-rundong/PartDiffusion/pretrained_checkpoint/pointnet2.pth"
 
 ### dataset stuff ###
 max_dataset_size=1000000
 dataset_mode='gapnet'
-dataroot="../../data-rundong/PartDiffusion/dataset"
+dataroot="/mnt/data-rundong/PartDiffusion/dataset"
 
 res=128
 trunc_thres=0.2
@@ -47,11 +47,10 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --total_iters ${total_iters} --dataroot ${dataroot} \
             --ply_rotate \
             --rotate_angle ${rotate_angle} \
-            --scale_mode volume \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
             --ddim_steps 50 --uc_scale 3 \
-            --loss_margin 0.00390625 \
-            --test_description margin0-extent256 \
+            --loss_margin 0.0078125 \
+            --test_description margin0-extent128 \
             --use_mobility_constraint "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args

@@ -9,7 +9,7 @@ df_cfg='configs/sdfusion-plybbox2shape.yaml'
 vq_model="vqvae"
 vq_dset='gapnet'
 vq_cat="slider_drawer"
-vq_ckpt="../../data-rundong/PartDiffusion/SDFusion/logs/gapnet-res128-vqvae-lr0.00002/ckpt/vqvae_steps-latest.pth"
+vq_ckpt="/mnt/data-rundong/PartDiffusion/SDFusion/logs/gapnet-res128-vqvae-lr0.00002/ckpt/vqvae_steps-latest.pth"
 vq_cfg="configs/vqvae_gapnet-128.yaml"
 
 cond_ckpt="../pretrained_checkpoint/pointnet2.pth"
@@ -17,7 +17,7 @@ cond_ckpt="../pretrained_checkpoint/pointnet2.pth"
 ### dataset stuff ###
 max_dataset_size=1000000
 dataset_mode='gapnet'
-dataroot="../../data-rundong/PartDiffusion/dataset/"
+dataroot="/mnt/data-rundong/PartDiffusion/dataset/"
 
 res=128
 trunc_thres=0.2
@@ -26,7 +26,7 @@ trunc_thres=0.2
 ### display & log stuff ###
 display_freq=250
 print_freq=25
-total_iters=150000
+total_iters=200000
 save_steps_freq=5000
 ###########################
 

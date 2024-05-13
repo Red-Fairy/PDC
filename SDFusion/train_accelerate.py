@@ -62,6 +62,8 @@ def train_main_worker(opt, model, train_dl, test_dl, accelerator: Accelerator):
 
         if accelerator.is_main_process:
 
+            # print(model.schedulers[0].get_last_lr())
+
             if iter_i % opt.print_freq == 0:
                 errors = model.get_current_errors()
                 t = time.time() - iter_start_time

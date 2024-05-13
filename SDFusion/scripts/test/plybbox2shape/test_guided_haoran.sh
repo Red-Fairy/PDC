@@ -36,9 +36,8 @@ load_iter=$3
 model_id='20411_0'
 # cat="slider_drawer"
 cat="slider_drawer"
-rotate_angle=$4
-ply_scale=$5
-bbox_scale=$6
+ply_scale=$4
+bbox_scale=$5
 
 # slider-ply2shape-plyrot-scale3-lr0.00001
 
@@ -53,7 +52,6 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --total_iters ${total_iters} --dataroot ${dataroot} \
             --ply_rotate \
             --use_mobility_constraint \
-            --rotate_angle ${rotate_angle} \
             --guided_inference \
             --haoran \
             --loss_margin 0.0078125 \

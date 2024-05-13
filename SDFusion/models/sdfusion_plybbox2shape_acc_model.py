@@ -73,6 +73,7 @@ class SDFusionModelPlyBBox2ShapeAcc(BaseModel):
         self.parameterization = "eps"
         self.guidance_scale_ply = opt.uc_ply_scale
         self.guidance_scale_bbox = opt.uc_bbox_scale
+        self.guidance_scale = opt.uc_scale
 
         # init vqvae
         self.vqvae = load_vqvae(vq_conf, vq_ckpt=opt.vq_ckpt, opt=opt).to(self.device)
@@ -105,18 +106,19 @@ class SDFusionModelPlyBBox2ShapeAcc(BaseModel):
             lr_lambda2 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters)) if it > freeze_iters else 0
             self.scheduler2 = optim.lr_scheduler.LambdaLR(self.optimizer2, lr_lambda2)
 
-            self.optimizer1, self.optimizer2 = accelerator.prepare(self.optimizer1, self.optimizer2)
-            self.scheduler1, self.scheduler2 = accelerator.prepare(self.scheduler1, self.scheduler2)
-
             self.optimizers = [self.optimizer1, self.optimizer2]
             self.schedulers = [self.scheduler1, self.scheduler2]
-
-            self.print_networks(verbose=False)
 
             if opt.continue_train:
                 self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
             else:
                 self.start_iter = 0
+
+            self.optimizer1, self.optimizer2 = accelerator.prepare(self.optimizer1, self.optimizer2)
+            self.scheduler1, self.scheduler2 = accelerator.prepare(self.scheduler1, self.scheduler2)
+
+            self.print_networks(verbose=False)
+
 
         # prepare accelerate
         self.df, self.vqvae, self.ply_cond_model, self.bbox_cond_model = \
@@ -277,11 +279,9 @@ class SDFusionModelPlyBBox2ShapeAcc(BaseModel):
         c_bbox = self.bbox_cond_model(self.part_extent).unsqueeze(1) # (B, 1, bbox_dim), bbox condition
         uc_bbox = self.bbox_cond_model(uncond=True).unsqueeze(0).unsqueeze(0).repeat(B, 1, 1) # (B, 1, bbox_dim), unconditional condition
         
-        c_ply_uc_bbox = torch.cat([c_ply, uc_bbox], dim=-1)
-        uc_ply_c_bbox = torch.cat([uc_ply, c_bbox], dim=-1)
         c_ply_c_bbox = torch.cat([c_ply, c_bbox], dim=-1)
-
-        c_full = torch.cat([c_ply_uc_bbox, uc_ply_c_bbox, c_ply_c_bbox])
+        uc_ply_uc_bbox = torch.cat([uc_ply, uc_bbox], dim=-1)
+        c_full = torch.cat([uc_ply_uc_bbox, c_ply_c_bbox])
 
         latents = torch.randn((B, *shape), device=self.device)
         latents = latents * self.noise_scheduler.init_noise_sigma
@@ -292,18 +292,17 @@ class SDFusionModelPlyBBox2ShapeAcc(BaseModel):
         for t in tqdm(self.noise_scheduler.timesteps):
 
             # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
-            latent_model_input = torch.cat([latents] * 3)
+            latent_model_input = torch.cat([latents] * 2)
             latent_model_input = self.noise_scheduler.scale_model_input(latent_model_input, timestep=t)
 
             # predict the noise residual
             with torch.no_grad():
-                timesteps = torch.full((B*3,), t, device=self.device, dtype=torch.int64)
+                timesteps = torch.full((B*2,), t, device=self.device, dtype=torch.int64)
                 noise_pred = self.apply_model(latent_model_input, timesteps, c_full)
 
             # perform guidance
-            noise_pred_uc_bbox, noise_pred_uc_ply, noise_pred_cond = noise_pred.chunk(3)
-            noise_pred = noise_pred_cond + self.guidance_scale_ply * (noise_pred_cond - noise_pred_uc_ply) + \
-                            self.guidance_scale_bbox * (noise_pred_cond - noise_pred_uc_bbox)
+            noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
+            noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
 
             # compute the previous noisy sample x_t -> x_t-1
             latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
