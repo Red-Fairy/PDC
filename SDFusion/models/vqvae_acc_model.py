@@ -223,7 +223,7 @@ class VQVAEAccModel(BaseModel):
             ]
             vis_ims = self.tnsrs2ims(vis_tensor_names)
             visuals = zip(vis_tensor_names, vis_ims)
-            visuals_dict.update(visuals)
+            visuals_dict['img'] = OrderedDict(visuals)
 
         return visuals_dict
 
