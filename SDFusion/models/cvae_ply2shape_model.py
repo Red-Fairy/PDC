@@ -230,16 +230,16 @@ class CVAEModelPly2Shape(BaseModel):
             "points": self.ply.detach().cpu().numpy(), # (B, 3, N)
         }
 
-        if self.opt.isTrain:
-            self.img_gt = render_sdf(self.renderer, self.x.to('cpu')).detach()
-            self.img_gen_df = render_sdf(self.renderer, self.gen_df.to('cpu')).detach()
-            vis_tensor_names = [
-                'img_gt',
-                'img_gen_df',
-            ]
-            vis_ims = self.tnsrs2ims(vis_tensor_names)
-            visuals = zip(vis_tensor_names, vis_ims)
-            visuals_dict['img'] = OrderedDict(visuals)
+        # if self.opt.isTrain:
+        #     self.img_gt = render_sdf(self.renderer, self.x.to('cpu')).detach()
+        #     self.img_gen_df = render_sdf(self.renderer, self.gen_df.to('cpu')).detach()
+        #     vis_tensor_names = [
+        #         'img_gt',
+        #         'img_gen_df',
+        #     ]
+        #     vis_ims = self.tnsrs2ims(vis_tensor_names)
+        #     visuals = zip(vis_tensor_names, vis_ims)
+        #     visuals_dict['img'] = OrderedDict(visuals)
         
         if hasattr(self, 'ply_translation'):
             visuals_dict['ply_translation'] = self.ply_translation.cpu().numpy()
