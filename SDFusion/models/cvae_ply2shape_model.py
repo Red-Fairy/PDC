@@ -86,7 +86,7 @@ class CVAEModelPly2Shape(BaseModel):
         
         # setup renderer
         dist, elev, azim = 1.0, 20, 120
-        self.renderer = init_mesh_renderer(image_size=256, dist=dist, elev=elev, azim=azim, device=self.device)
+        self.renderer = init_mesh_renderer(image_size=256, dist=dist, elev=elev, azim=azim, device='cpu')
 
         self.loss_meter = AverageMeter()
         self.loss_meter.reset()
@@ -228,8 +228,8 @@ class CVAEModelPly2Shape(BaseModel):
         }
 
         if self.opt.isTrain:
-            self.img_gt = render_sdf(self.renderer, self.x).detach()
-            self.img_gen_df = render_sdf(self.renderer, self.gen_df).detach()
+            self.img_gt = render_sdf(self.renderer, self.x.to('cpu')).detach()
+            self.img_gen_df = render_sdf(self.renderer, self.gen_df.to('cpu')).detach()
             vis_tensor_names = [
                 'img_gt',
                 'img_gen_df',
