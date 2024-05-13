@@ -7,15 +7,15 @@ df_cfg='configs/sdfusion-plybbox2shape.yaml'
 vq_model="vqvae"
 vq_dset='gapnet'
 vq_cat="slider_drawer"
-vq_ckpt="../../data-rundong/PartDiffusion/SDFusion/logs/gapnet-res128-vqvae-lr0.00002/ckpt/vqvae_steps-latest.pth"
+vq_ckpt="/mnt/data-rundong/PartDiffusion/SDFusion/logs/gapnet-res128-vqvae-lr0.00002/ckpt/vqvae_steps-latest.pth"
 vq_cfg="configs/vqvae_gapnet-128.yaml"
 
-cond_ckpt="../pretrained_checkpoint/pointnet2.pth"
+cond_ckpt="/mnt/data-rundong/PartDiffusion/pretrained_checkpoint/pointnet2.pth"
 
 ### dataset stuff ###
 max_dataset_size=1000000
 dataset_mode='gapnet'
-dataroot="../../data-rundong/PartDiffusion/dataset/"
+dataroot="/mnt/data-rundong/PartDiffusion/dataset/"
 
 res=128
 trunc_thres=0.2
@@ -57,9 +57,9 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --loss_margin 0.0078125 \
             --test_diversity \
             --ply_bbox_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
-            --uc_ply_scale ${ply_scale} --uc_bbox_scale ${bbox_scale} \
-            --start_idx $7 --end_idx $8 \
+            --uc_ply_scale ${ply_scale} --uc_bbox_scale ${bbox_scale} --uc_scale 2 \
+            --start_idx $6 --end_idx $7 \
             --ddim_steps 50 --uc_scale 3 --test_description margin128_haoran "
 
-CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args & 
+CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args 
 

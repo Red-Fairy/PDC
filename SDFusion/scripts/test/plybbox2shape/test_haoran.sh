@@ -10,7 +10,7 @@ vq_cat="slider_drawer"
 vq_ckpt="/mnt/data-rundong/PartDiffusion/SDFusion/logs/gapnet-res128-vqvae-lr0.00002/ckpt/vqvae_steps-latest.pth"
 vq_cfg="configs/vqvae_gapnet-128.yaml"
 
-cond_ckpt="../pretrained_checkpoint/pointnet2.pth"
+cond_ckpt="/mnt/data-rundong/PartDiffusion/pretrained_checkpoint/pointnet2.pth"
 
 ### dataset stuff ###
 max_dataset_size=1000000
