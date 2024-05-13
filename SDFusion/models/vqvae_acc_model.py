@@ -218,8 +218,8 @@ class VQVAEAccModel(BaseModel):
 
         if self.opt.isTrain:
             vis_tensor_names = [
-                'image',
-                'image_recon',
+                'img',
+                'img_recon',
             ]
             vis_ims = self.tnsrs2ims(vis_tensor_names)
             visuals = zip(vis_tensor_names, vis_ims)
