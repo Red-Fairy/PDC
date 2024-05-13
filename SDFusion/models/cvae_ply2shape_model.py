@@ -55,7 +55,7 @@ class CVAEModelPly2Shape(BaseModel):
 
         # record z_shape
         self.shape_res = ddconfig.resolution
-        z_ch, n_down = ddconfig.z_ch, ddconfig.n_down
+        z_ch, n_down = ddconfig.z_channels, len(ddconfig.ch_mult)-1
         z_sp_dim = self.shape_res // (2 ** n_down)
         self.z_shape = (z_ch, z_sp_dim, z_sp_dim, z_sp_dim)
         
@@ -219,7 +219,6 @@ class CVAEModelPly2Shape(BaseModel):
     
     @torch.no_grad()
     def get_current_visuals(self):
-
         spc = (2./self.shape_res, 2./self.shape_res, 2./self.shape_res)
         meshes = [sdf_to_mesh_trimesh(self.gen_df[i][0], spacing=spc) for i in range(self.gen_df.shape[0])]
         visuals_dict = {
@@ -238,10 +237,6 @@ class CVAEModelPly2Shape(BaseModel):
             vis_ims = self.tnsrs2ims(vis_tensor_names)
             visuals = zip(vis_tensor_names, vis_ims)
             visuals_dict['img'] = OrderedDict(visuals)
-
-        if hasattr(self, f'pred_sdf_x0_{self.ddim_steps-1}'):
-            meshes_pred = [sdf_to_mesh_trimesh(getattr(self, f'pred_sdf_x0_{i}')[0][0], spacing=spc) for i in range(self.ddim_steps)]
-            visuals_dict['meshes_pred'] = meshes_pred
         
         if hasattr(self, 'ply_translation'):
             visuals_dict['ply_translation'] = self.ply_translation.cpu().numpy()
@@ -250,20 +245,16 @@ class CVAEModelPly2Shape(BaseModel):
 
             visuals_dict['part_scale'] = np.zeros([len(meshes)], dtype=np.float32)
             for i, mesh in enumerate(meshes):
-                if self.opt.haoran:
-                    visuals_dict['part_scale'][i] = torch.max(self.part_extent_pred[i]).item() / np.max(mesh.extents) if self.opt.scale_mode == 'max_extent' else \
-                        (torch.prod(self.part_extent_pred[i]).item() / np.prod(mesh.extents)) ** (1/3)
-                else:
-                    visuals_dict['part_scale'][i] = torch.max(self.part_extent[i]).item() / np.max(mesh.extents) if self.opt.scale_mode == 'max_extent' else \
-                        (torch.prod(self.part_extent[i]).item() / np.prod(mesh.extents)) ** (1/3)
+                visuals_dict['part_scale'][i] = torch.max(self.part_extent[i]).item() / np.max(mesh.extents) if self.opt.scale_mode == 'max_extent' else \
+                    (torch.prod(self.part_extent[i]).item() / np.prod(mesh.extents)) ** (1/3)
 
         return visuals_dict
 
     @torch.no_grad()
     def save(self, label, global_step, save_opt=False):
         state_dict = {
-            'df': self.df.state_dict(),
-            'cond_model': self.cond_model.state_dict(),
+            'cvae': self.cvae.state_dict(),
+            # 'cond_model': self.cond_model.state_dict(),
             'global_step': global_step,
         }
 

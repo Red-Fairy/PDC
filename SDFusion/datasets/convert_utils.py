@@ -26,6 +26,9 @@ from kaolin.ops.mesh import check_sign, index_vertices_by_faces
 def sdf_to_mesh_trimesh(sdf, spacing=(0.01,0.01,0.01), level=0.02):
     if torch.is_tensor(sdf):
         sdf = sdf.detach().cpu().numpy()
+    # avoid triggering ValueError: Surface level must be within volume data range.
+    if level > np.max(sdf) or level < np.min(sdf):
+        level = np.mean(sdf)
     vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf, level=level, spacing=spacing)
     mesh_mar = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_normals=normals)
 

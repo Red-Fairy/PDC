@@ -18,19 +18,19 @@ trunc_thres=0.2
 #####################
 
 ### display & log stuff ###
-display_freq=250
+display_freq=1
 print_freq=25
 total_iters=250000
 save_steps_freq=25000
 ###########################
 
 multi_gpu=0  # multi-gpu
-batch_size=16
+batch_size=2
 name=$1
 cat=$2
 lr=$3
 port=$4
-gpu_ids=$5
+gpu_ids="0"
 
 name="${name}-cvae-scale${uc_scale}-lr${lr}"
 
@@ -42,8 +42,8 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} \
             --dataroot ${dataroot} \
             --ply_cond \
-            --cond_ckpt ${cond_ckpt} \
-            --continue_train --load_iter 200000"
+            --cond_ckpt ${cond_ckpt}"
+            ## --continue_train --load_iter 200000"
 
 echo "[*] Training is starting on `hostname`, GPU#: ${gpu_ids}, logs_dir: ${logs_dir}"
 

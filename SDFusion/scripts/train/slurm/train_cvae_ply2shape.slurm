@@ -10,8 +10,8 @@
 #SBATCH --partition=HGX
 #SBATCH --account=research
 
-#SBATCH -o "/home/lipuhao/dev/PartDiff/PartDiffusion/SDFusion/slurms/%x.%j.out"
-#SBATCH -e "/home/lipuhao/dev/PartDiff/PartDiffusion/SDFusion/slurms/%x.%j.err"
+#SBATCH -o "/home/lipuhao/dev/PartDiff/PartDiffusion/SDFusion/logs/slurms/%x.%j.out"
+#SBATCH -e "/home/lipuhao/dev/PartDiff/PartDiffusion/SDFusion/logs/slurms/%x.%j.err"
 
 logs_dir='logs'
 
@@ -33,10 +33,10 @@ trunc_thres=0.2
 #####################
 
 ### display & log stuff ###
-display_freq=100
-print_freq=5
+display_freq=1000
+print_freq=25
 total_iters=250000
-save_steps_freq=1000
+save_steps_freq=2500
 ###########################
 
 multi_gpu=0  # multi-gpu
