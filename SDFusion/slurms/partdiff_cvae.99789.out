@@ -1,0 +1,118 @@
+[*] Training is starting on hgx-hyperplane07, GPU#: 0, logs_dir: logs
+CUDA TORCH AVAILABLE: True
+python train.py --name test_bs8-cvae-scale-lr1e-4 --logs_dir logs --gpu_ids 0 --lr 1e-4 --batch_size 8 --max_dataset_size 1000000 --model cvae-ply2shape --cvae_cfg configs/cvae-ply2shape-128.yaml --dataset_mode gapnet --res 128 --cat slider_drawer --trunc_thres 0.2 --display_freq 100 --print_freq 5 --total_iters 250000 --save_steps_freq 1000 --dataroot /scratch2/generalvision/lipuhao/partgen/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/ --ply_cond --cond_ckpt ../pretrained_checkpoint/pointnet2.pth
+------------ Options -------------
+backend: gloo
+batch_size: 8
+bboxroot: None
+cat: slider_drawer
+ckpt_dir: logs/test_bs8-cvae-scale-lr1e-4/ckpt
+cond_ckpt: ../pretrained_checkpoint/pointnet2.pth
+continue_train: False
+cvae_cfg: configs/cvae-ply2shape-128.yaml
+dataroot: /scratch2/generalvision/lipuhao/partgen/raid/haoran/Project/PartDiffusion/PartDiffusion/dataset/
+dataset_mode: gapnet
+ddim_eta: 0.0
+ddim_steps: 10
+debug: 0
+df_cfg: configs/sdfusion_snet.yaml
+display_freq: 100
+end_idx: None
+freeze_iters: 0
+gpu_ids: 0
+guided_inference: False
+haoran: False
+haoran_rotation: False
+img_dir: logs/test_bs8-cvae-scale-lr1e-4/train_visuals
+isTrain: True
+joint_rotate: False
+lambda_L1: 10.0
+load_iter: latest
+local_rank: 0
+logs_dir: logs
+loss_collision_weight: 1.0
+loss_contact_weight: 0.1
+loss_margin: 0.0078125
+lr: 0.0001
+lr_decay_iters: 50
+lr_policy: lambda
+max_dataset_size: 1000000
+mobility_sample_count: 32
+mobility_type: translation
+model: cvae-ply2shape
+model_id: None
+nThreads: 9
+name: test_bs8-cvae-scale-lr1e-4
+phase: train
+ply_bbox_cond: False
+ply_cond: True
+ply_norm: False
+ply_rotate: False
+print_freq: 5
+ratio: 1.0
+res: 128
+rotate_angle: None
+save_epoch_freq: 5
+save_latest_freq: 500
+save_steps_freq: 1000
+scale_mode: volume
+sdf_mode: part
+seed: 111
+serial_batches: False
+start_idx: None
+test_description: None
+test_diversity: False
+total_iters: 250000
+trunc_thres: 0.2
+uc_bbox_scale: 3.0
+uc_ply_scale: 3.0
+uc_scale: 3.0
+use_mobility_constraint: False
+use_predicted_scale: False
+use_predicted_volume: False
+visual_mode: mesh
+visual_normalize: False
+vq_cat: None
+vq_cfg: configs/vqvae_snet.yaml
+vq_ckpt: None
+vq_dset: None
+vq_model: vqvae
+which_epoch: latest
+-------------- End ----------------
+[*] 446 samples loaded.
+[*] 48 samples loaded.
+[*] Dataset has been created: GAPartNetSDFDataset
+[*] # training images = 446
+[*] # testing images = 48
+Working with z of shape (1, 3, 16, 16, 16) = 12288 dimensions.
+_IncompatibleKeys(missing_keys=['null_cond'], unexpected_keys=['fc3.weight', 'fc3.bias'])
+[*] conditional model successfully loaded
+[*] Model CVAE-Model-PointCloud-to-Shape initialized, isTrain:True
+---------- Networks initialized -------------
+-----------------------------------------------
+[*] Model has been created: CVAE-Model-PointCloud-to-Shape
+[*] "cvae-ply2shape" initialized.
+[*] saving model and dataset files: /scratch/lipuhao/dev/PartDiff/PartDiffusion/SDFusion/models/cvae_ply2shape_model.py, /scratch/lipuhao/dev/PartDiff/PartDiffusion/SDFusion/datasets/gapnet_dataset.py
+[*] create image directory:
+/scratch/lipuhao/dev/PartDiff/PartDiffusion/SDFusion/logs/test_bs8-cvae-scale-lr1e-4/train_visuals...
+[*] Start training. name: test_bs8-cvae-scale-lr1e-4
+[test_bs8-cvae-scale-lr1e-4] iters: 5, time: 1.203) total: 5.562436 
+[test_bs8-cvae-scale-lr1e-4] iters: 10, time: 2.003) total: 0.464933 
+[test_bs8-cvae-scale-lr1e-4] iters: 15, time: 2.805) total: 1.569690 
+[test_bs8-cvae-scale-lr1e-4] iters: 20, time: 3.674) total: 1.236918 
+[test_bs8-cvae-scale-lr1e-4] iters: 25, time: 4.630) total: 0.601771 
+[test_bs8-cvae-scale-lr1e-4] iters: 30, time: 5.598) total: 1.491886 
+[test_bs8-cvae-scale-lr1e-4] iters: 35, time: 6.563) total: 0.167778 
+[test_bs8-cvae-scale-lr1e-4] iters: 40, time: 7.503) total: 0.157232 
+[test_bs8-cvae-scale-lr1e-4] iters: 45, time: 8.356) total: 0.128982 
+[test_bs8-cvae-scale-lr1e-4] iters: 50, time: 9.142) total: 0.219158 
+[test_bs8-cvae-scale-lr1e-4] iters: 55, time: 9.935) total: 0.250250 
+[test_bs8-cvae-scale-lr1e-4] iters: 60, time: 10.701) total: 0.105365 
+[test_bs8-cvae-scale-lr1e-4] iters: 65, time: 11.488) total: 0.071698 
+[test_bs8-cvae-scale-lr1e-4] iters: 70, time: 12.335) total: 0.076905 
+[test_bs8-cvae-scale-lr1e-4] iters: 75, time: 13.183) total: 0.072440 
+[test_bs8-cvae-scale-lr1e-4] iters: 80, time: 14.050) total: 0.078377 
+[test_bs8-cvae-scale-lr1e-4] iters: 85, time: 14.864) total: 0.070287 
+[test_bs8-cvae-scale-lr1e-4] iters: 90, time: 15.683) total: 0.060849 
+[test_bs8-cvae-scale-lr1e-4] iters: 95, time: 16.494) total: 0.055581 
+[test_bs8-cvae-scale-lr1e-4] iters: 100, time: 17.234) total: 0.093582 

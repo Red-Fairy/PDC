@@ -52,6 +52,12 @@ class CVAEModelPly2Shape(BaseModel):
 
         self.cvae = CVAE(ddconfig, configs.model.params.condconfig, opt.cond_ckpt)
         self.cvae.to(self.device)
+
+        # record z_shape
+        self.shape_res = ddconfig.resolution
+        z_ch, n_down = ddconfig.z_ch, ddconfig.n_down
+        z_sp_dim = self.shape_res // (2 ** n_down)
+        self.z_shape = (z_ch, z_sp_dim, z_sp_dim, z_sp_dim)
         
         ######## END: Define Networks ########
 
@@ -157,9 +163,15 @@ class CVAEModelPly2Shape(BaseModel):
 
         return loss
     
-    def inference(self):
-        raise NotImplementedError
-    
+    def inference(self, data):
+        
+        self.switch_eval()
+        self.set_input(data)
+
+        B = self.x.shape[0]
+        eps = torch.randn(B, *self.z_shape).to(self.device)
+        self.gen_df = self.cvae.decode(eps, self.ply)
+
     def guided_inference(self):
         raise NotImplementedError('Guided Inference not implemented for this model')
 
