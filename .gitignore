@@ -6,6 +6,7 @@ dataset_gallery/*
 ignore_files/*
 haoran/*
 slurms/*
+debug/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
