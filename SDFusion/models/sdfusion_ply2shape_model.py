@@ -36,8 +36,7 @@ from planners.base_model import create_planner
 from utils.util import AverageMeter, Logger
 
 # rendering
-from utils.util_3d import init_mesh_renderer, render_sdf
-from datasets.convert_utils import sdf_to_mesh_trimesh, mesh_to_sdf
+from utils.util_3d import init_mesh_renderer, render_sdf, sdf_to_mesh_trimesh
 
 class SDFusionModelPly2Shape(BaseModel):
     def name(self):

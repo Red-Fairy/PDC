@@ -35,8 +35,7 @@ from diffusers.optimization import get_cosine_schedule_with_warmup
 from utils.util import AverageMeter, Logger
 
 # rendering
-from utils.util_3d import init_mesh_renderer, render_sdf
-from datasets.convert_utils import sdf_to_mesh_trimesh, mesh_to_sdf
+from utils.util_3d import init_mesh_renderer, render_sdf, sdf_to_mesh_trimesh
 
 class SDFusionModelPlyBBox2Shape(BaseModel):
     def name(self):

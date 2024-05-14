@@ -49,6 +49,8 @@ avg_meters = {f'{i*0.0025:.4f}': AverageMeter() for i in range(1, 6)}
 
 files = os.listdir(root)
 
+max_failed_level = 0
+
 for sdf_h5_file in tqdm(files):
 
     sdf_h5_file = os.path.join(root, sdf_h5_file)
@@ -63,14 +65,19 @@ for sdf_h5_file in tqdm(files):
     pcd_gt = torch.tensor(np.asarray(pcd_gt.points)).to('cuda').unsqueeze(0)
 
     for i in range(1, 6):
-        mesh_recon = sdf_to_o3d_mesh(sdf, level=i*0.0025)
-        mesh_recon.translate(-mesh_recon.get_axis_aligned_bounding_box().get_center())
+        try:
+            mesh_recon = sdf_to_o3d_mesh(sdf, level=i*0.0025)
+            mesh_recon.translate(-mesh_recon.get_axis_aligned_bounding_box().get_center())
 
-        pcd_recon = mesh_recon.sample_points_uniformly(number_of_points=10000)
-        pcd_recon = torch.tensor(np.asarray(pcd_recon.points)).to('cuda').unsqueeze(0)
+            pcd_recon = mesh_recon.sample_points_uniformly(number_of_points=10000)
+            pcd_recon = torch.tensor(np.asarray(pcd_recon.points)).to('cuda').unsqueeze(0)
 
-        loss = chamfer_distance(pcd_recon, pcd_gt, batch_reduction='sum', point_reduction='mean')[0]
-        avg_meters[f'{i*0.0025:.4f}'].update(loss.item())
+            loss = chamfer_distance(pcd_recon, pcd_gt, batch_reduction='sum', point_reduction='mean')[0]
+            avg_meters[f'{i*0.0025:.4f}'].update(loss.item())
+        except:
+            if i*0.0025 > max_failed_level:
+                max_failed_level = i*0.0025
+            print(f'{i*0.0025:.4f} error for {sdf_h5_file}')
 
 for key in avg_meters:
     print(f'Level {key}: {avg_meters[key].avg}')

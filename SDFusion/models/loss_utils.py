@@ -6,7 +6,8 @@ import trimesh
 import torch.nn.functional as F
 import open3d
 
-from datasets.convert_utils import sdf_to_mesh_trimesh, mesh_to_sdf
+# from datasets.convert_utils import sdf_to_mesh_trimesh, mesh_to_sdf
+from utils.util_3d import sdf_to_mesh_trimesh, mesh_to_sdf
 
 from torch import nn
 

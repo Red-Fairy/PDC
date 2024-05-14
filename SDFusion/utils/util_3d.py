@@ -196,12 +196,23 @@ def init_mesh_renderer(image_size=512, dist=3.5, elev=90, azim=90, camera='0', d
 
 ############################# END: renderer #######################################
 
+def try_level_marching_cubes(sdf, level, spacing):
+    try:
+        vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf, level=level, spacing=spacing)
+        mesh = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_normals=normals)
+        return mesh
+    except:
+        level += 0.0025
+        return try_level_marching_cubes(sdf, level, spacing)
 
-def sdf_to_mesh_trimesh(sdf, level=0.02, spacing=(0.01,0.01,0.01)):
+def sdf_to_mesh_trimesh(sdf, level=0.0075, spacing=(0.01,0.01,0.01)):
     if torch.is_tensor(sdf):
         sdf = sdf.detach().cpu().numpy()
-    vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf, level=level, spacing=spacing)
-    mesh_mar = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_normals=normals)
+
+    # vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf, level=level, spacing=spacing)
+    # mesh_mar = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_normals=normals)
+
+    mesh_mar = try_level_marching_cubes(sdf, level, spacing)
 
     mar_bounding = mesh_mar.bounding_box
     mar_cen = mesh_mar.bounding_box.centroid
@@ -209,7 +220,6 @@ def sdf_to_mesh_trimesh(sdf, level=0.02, spacing=(0.01,0.01,0.01)):
     mesh = trimesh.Trimesh(new_vertices, mesh_mar.faces)
 
     return mesh
-
 
 def sdf_to_mesh(sdf, level=0.02, color=None, render_all=False):
     # device='cuda'

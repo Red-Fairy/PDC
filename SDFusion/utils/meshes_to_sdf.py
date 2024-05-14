@@ -96,7 +96,7 @@ if __name__ == '__main__':
                     h5_file = h5py.File(os.path.join(sdf_basedir, h5_filename), 'r')
                     sdf = h5_file['pc_sdf_sample'][:].astype(np.float32)
                     sdf = torch.Tensor(sdf).view(1, args.res, args.res, args.res)
-                    vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf.squeeze(0).cpu().numpy(), level=0.02, spacing=(SPACING, SPACING, SPACING))
+                    vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf.squeeze(0).cpu().numpy(), level=0.005, spacing=(SPACING, SPACING, SPACING))
                     mesh_recon = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_normals=normals)
                     mesh_recon.apply_translation(-mesh_recon.bounding_box.centroid)
                     mesh_recon.apply_scale(np.max(S) / np.max(mesh_recon.bounding_box.extents))

@@ -23,10 +23,7 @@ from models.loss_utils import VQLoss
 
 from utils.util import AverageMeter, Logger
 
-import utils.util
-from utils.util_3d import init_mesh_renderer, render_sdf
-from utils.distributed import reduce_loss_dict
-from datasets.convert_utils import sdf_to_mesh_trimesh, mesh_to_sdf
+from utils.util_3d import init_mesh_renderer, sdf_to_mesh_trimesh
 
 class CVAEModelPly2Shape(BaseModel):
     def name(self):
