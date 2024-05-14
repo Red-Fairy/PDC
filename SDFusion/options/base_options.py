@@ -186,7 +186,8 @@ class BaseOptions():
 			self.opt.img_dir += f'_{self.opt.test_description}' if self.opt.test_description is not None else ''
 
 		# self.opt.img_dir += f'_{self.opt.model_id}' if self.opt.model_id is not None else ''
-		os.makedirs(self.opt.img_dir, exist_ok=True)
+		if accelerator is not None and not accelerator.is_main_process:
+			os.makedirs(self.opt.img_dir, exist_ok=True)
 
 		# print args
 		if (accelerator is None or accelerator.is_main_process):
@@ -205,8 +206,8 @@ class BaseOptions():
 
 		# tensorboard writer
 		tb_dir = '%s/tboard' % expr_dir
-		if (accelerator is None or accelerator.is_main_process) and not os.path.exists(tb_dir):
-			os.makedirs(tb_dir)
+		if accelerator is None or accelerator.is_main_process:
+			os.makedirs(tb_dir, exist_ok=True)
 
 		self.opt.tb_dir = tb_dir
 		writer = SummaryWriter(log_dir=tb_dir)
