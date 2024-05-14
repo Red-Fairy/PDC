@@ -32,7 +32,7 @@ def try_level_marching_cubes(sdf, level, spacing):
         level += 0.0025
         return try_level_marching_cubes(sdf, level, spacing)
 
-def sdf_to_mesh_trimesh(sdf, level=0.0075, spacing=(0.01,0.01,0.01)):
+def sdf_to_mesh_trimesh(sdf, level=0.02, spacing=(0.01,0.01,0.01)):
     if torch.is_tensor(sdf):
         sdf = sdf.detach().cpu().numpy()
 

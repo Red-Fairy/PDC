@@ -16,7 +16,7 @@ import torch
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--root', type=str, default='/mnt/data-rundong/PartDiffusion/dataset')
-parser.add_argument('--save_root', type=str, default='/mnt/azureml/cr/j/7aaae224465249e79ffd6396abc43217/exe/wd')
+parser.add_argument('--save_root', type=str, default='/mnt/azureml/cr/j/18805bb336d249f6b409578dd210054f/exe/wd/full_sdf_128')
 parser.add_argument('--cat', type=str, default='slider_drawer', help='category name')
 parser.add_argument('--padding', type=float, default=0.2, help='length of the bounding box')
 parser.add_argument('--res', type=int, default=128, help='resolution of the sdf')
@@ -51,7 +51,7 @@ suffix = ''
 if __name__ == '__main__':
     for CAT in CATS:
         print('processing category:', CAT)
-        mesh_basedir = os.path.join(args.root, 'full_meshes', CAT)
+        mesh_basedir = os.path.join(args.root, 'full_meshes_manifold', CAT)
         sdf_basedir = os.path.join(args.save_root, f'full_sdf_{RES}', CAT)
         os.makedirs(sdf_basedir, exist_ok=True)
 
@@ -66,7 +66,7 @@ if __name__ == '__main__':
         filenames = [f for f in os.listdir(mesh_basedir) if f.endswith('.obj')]
 
         for file_name in tqdm(filenames):
-            if not '12085_1' in file_name:
+            if int(file_name.split('_')[0]) > 100000:
                 continue
             try:
                 cprint(f'process mesh: {file_name}', 'green')

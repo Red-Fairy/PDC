@@ -17,7 +17,7 @@ from omegaconf import OmegaConf
 
 import open3d
 import trimesh
-from datasets.convert_utils import mesh_to_sdf
+from utils.util_3d import mesh_to_sdf
 
 def pc_normalize(pc, scale_norm=True, return_stat=False):
     centroid = np.mean(pc, axis=0)

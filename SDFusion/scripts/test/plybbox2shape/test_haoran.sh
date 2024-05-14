@@ -34,8 +34,8 @@ name=$1
 gpu_ids=$2
 load_iter=$3
 model_id='10489_2'
-# cat="slider_drawer"
-cat='hinge_door'
+cat="slider_drawer"
+# cat='hinge_door'
 
 # 0.00390625 1/256
 # 0.0078125 1/128

@@ -45,7 +45,7 @@ def sdf_to_o3d_mesh(sdf, level=0.02, res=128):
 
 root = '/mnt/data-rundong/PartDiffusion/dataset/part_sdf_128/slider_drawer'
 
-avg_meters = {f'{i*0.0025:.4f}': AverageMeter() for i in range(1, 6)}
+avg_meters = {f'{i*0.0025:.4f}': AverageMeter() for i in range(4, 9)}
 
 files = os.listdir(root)
 
@@ -64,7 +64,7 @@ for sdf_h5_file in tqdm(files):
     pcd_gt = mesh_gt.sample_points_uniformly(number_of_points=10000)
     pcd_gt = torch.tensor(np.asarray(pcd_gt.points)).to('cuda').unsqueeze(0)
 
-    for i in range(1, 6):
+    for i in range(4, 9):
         try:
             mesh_recon = sdf_to_o3d_mesh(sdf, level=i*0.0025)
             mesh_recon.translate(-mesh_recon.get_axis_aligned_bounding_box().get_center())
@@ -79,8 +79,8 @@ for sdf_h5_file in tqdm(files):
                 max_failed_level = i*0.0025
             print(f'{i*0.0025:.4f} error for {sdf_h5_file}')
 
-for key in avg_meters:
-    print(f'Level {key}: {avg_meters[key].avg}')
+# for key in avg_meters:
+#     print(f'Level {key}: {avg_meters[key].avg}')
 
     # print(sdf.shape)
 

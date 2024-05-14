@@ -2,7 +2,7 @@ import os
 import open3d
 import sys
 sys.path.append('.')
-from datasets.convert_utils import sdf_to_mesh_trimesh, mesh_to_sdf
+from utils import sdf_to_mesh_trimesh, mesh_to_sdf
 import torch
 import numpy as np
 import torch.nn.functional as F
@@ -84,17 +84,17 @@ def get_physical_loss(sdf, ply, scale, part_translation,
     loss_collision = torch.sum(torch.max(F.relu(-sdf_ply-collision_margin), dim=0)[0])
     loss_contact = torch.sum(torch.min(F.relu(sdf_ply-contact_margin), dim=1)[0])
 
-    return {'contact': loss_contact.item(), 'collision': loss_collision.item()}
+    return loss_contact.item(), loss_collision.item()
 
 def passed_physical_feasibility(contact_loss, collision_loss, 
-                                contact_weight=1, collision_weight=1,
-                                loss_thres=1e-5):
-    return contact_loss * contact_weight < loss_thres and collision_loss * collision_weight < loss_thres
+                                contact_thres=1e-5, collision_thres=1e-5):
+    return contact_loss < contact_thres and collision_loss < collision_thres
 
 def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor,
                          res: int=128, padding: float=0.2, 
                          collision_margin=1/128, contact_margin=1/128,
-                         grid_length=1/128, steps=(5, 5, 5), step_thres=1, loss_thres=1e-5,
+                         grid_length=1/128, steps=(5, 5, 5), step_thres=1,
+                         contact_thres=1e-5, collision_thres=1e-5,
                          move_type='translation', move_limit=None, move_axis=None, move_origin=None,
                          device='cuda:0'):
     '''
@@ -122,7 +122,8 @@ def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor,
                                         move_limit=move_limit, move_axis=move_axis, move_origin=move_origin,
                                         move_type=move_type, move_samples=32,
                                         collision_margin=collision_margin, contact_margin=contact_margin)
-        if passed_physical_feasibility(contact_loss, collsion_loss, loss_thres=loss_thres):
+        print(contact_loss, collsion_loss)
+        if passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
                 # make sure that at the position, the part cannot move further on x and y axis, (but allow move one step)
                 # for ddx, ddy in [(step_thres*grid_length, 0), (-step_thres*grid_length, 0), (0, step_thres*grid_length), (0, -step_thres*grid_length)]:
                 for ddx, ddy in [(0, step_thres*grid_length), (0, -step_thres*grid_length)]:
@@ -131,14 +132,14 @@ def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor,
                                                 move_limit=move_limit, move_axis=move_axis, move_origin=move_origin,
                                                 move_type=move_type, move_samples=32,
                                                 collision_margin=collision_margin, contact_margin=contact_margin)
-                    if passed_physical_feasibility(contact_loss, collsion_loss, loss_thres=loss_thres):
+                    if passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
                         print(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}' + \
                               f'but also at translation: {part_translation_dd[0].cpu().numpy()}, thus not physical feasible.')
-                        return False
+                        return 0
                     print(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}')
-                    return True
+                    return 1
     print(f'Not physical feasible for all translations.')
-    return False
+    return -1
 
 def main():
     parser = argparse.ArgumentParser()
@@ -150,6 +151,10 @@ def main():
 
     device = f'cuda:{args.gpu_id}'
 
+    good_objs = []
+    all_not_feasible_objs = []
+    multiple_feasible_objs = []
+
     test_obj_files = [x for x in os.listdir(args.test_root) if x.endswith('.obj')]
     with open(args.test_list, 'r') as f:
         test_filenames = f.readlines()
@@ -160,25 +165,31 @@ def main():
     test_obj_files = [os.path.join(args.test_root, f) for f in test_obj_files]
     test_pcd_files = [os.path.join(args.gt_root, 'part_ply_fps', 'slider_drawer', f) for f in test_pcd_files]
 
-    good_obj_files = []
-
-    for (obj_file, pcd_file) in tqdm(zip(test_obj_files, test_pcd_files)):
+    for (obj_file, pcd_file) in zip(test_obj_files, test_pcd_files):
         obj = trimesh.load(obj_file)
         pcd = open3d.io.read_point_cloud(pcd_file)
         pcd = torch.tensor(np.array(pcd.points), dtype=torch.float32).to(device) # (N, 3)
-
-        result = physical_feasibility(obj, pcd, device=device, margin=0,
-                                      grid_length=1/128, step_thres=4, 
+        
+        print(f'Physical feasibility of {obj_file}', end=' ')
+        result = physical_feasibility(obj, pcd, device=device,
+                                      grid_length=1/128, step_thres=2, 
                                       res=128,
                                       move_type='translation', move_limit=(0, 0.2), 
                                       move_axis=torch.tensor([0., 0., 1.], device=device), 
                                       move_origin=torch.tensor([0., 0., 0.], device=device),
-                                      collision_margin=-1/128, contact_margin=1/128,)
-        print(f'Physical feasibility of {obj_file}: {result}')
-        if result:
-            good_obj_files.append(os.path.basename(obj_file))
+                                      collision_margin=-0.0001, contact_margin=1/128,
+                                      contact_thres=1e-3, collision_thres=100)
 
-    print(f'Good objects count: {len(good_obj_files)}\n, Good objects: {good_obj_files}')
+        if result == 1:
+            good_objs.append(os.path.basename(obj_file))
+        elif result == 0:
+            multiple_feasible_objs.append(os.path.basename(obj_file))
+        else:
+            all_not_feasible_objs.append(os.path.basename(obj_file))
+
+    print(f'Good objects: {good_objs}')
+    print(f'Multiple feasible objects: {multiple_feasible_objs}')
+    print(f'All not feasible objects: {all_not_feasible_objs}')
 
 if __name__ == '__main__':
     main()

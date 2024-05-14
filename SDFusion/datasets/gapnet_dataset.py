@@ -20,7 +20,7 @@ from omegaconf import OmegaConf
 
 import open3d
 import trimesh
-from datasets.convert_utils import mesh_to_sdf
+from utils.util_3d import mesh_to_sdf
 from datasets.gapnet_utils import pc_normalize
 import random
 

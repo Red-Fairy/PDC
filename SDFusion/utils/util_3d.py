@@ -205,7 +205,7 @@ def try_level_marching_cubes(sdf, level, spacing):
         level += 0.0025
         return try_level_marching_cubes(sdf, level, spacing)
 
-def sdf_to_mesh_trimesh(sdf, level=0.0075, spacing=(0.01,0.01,0.01)):
+def sdf_to_mesh_trimesh(sdf, level=0.02, spacing=(0.01,0.01,0.01)):
     if torch.is_tensor(sdf):
         sdf = sdf.detach().cpu().numpy()
 
@@ -323,7 +323,7 @@ def voxel_to_mesh(voxel, color=None):
     vox_mesh.textures = pytorch3d.renderer.Textures(verts_rgb=verts_rgb_list)
     return vox_mesh
 
-def mesh_to_sdf(mesh, res=64, padding=0.2):
+def mesh_to_sdf(mesh, res=64, padding=0.2, trunc=0.2, device='cuda'):
     def to_tensor(data, device='cuda'):
         if isinstance(data, torch.Tensor):
             return data
@@ -347,11 +347,13 @@ def mesh_to_sdf(mesh, res=64, padding=0.2):
         if isinstance(mesh, trimesh.Scene):
             mesh = mesh.dump().sum()
 
-        vertices = mesh.vertices - mesh.bounding_box.centroid
-        vertices *= 2 / (np.max(mesh.bounding_box.extents) + padding)
+        mesh.apply_translation(-mesh.bounding_box.centroid)
+        mesh.apply_scale(2 / np.max(mesh.bounding_box.extents)) # first scale to unit cube, i.e., max(extents) = 2
+        # print(np.max(np.abs(mesh.bounds)), np.max(mesh.bounding_box.extents), np.max(mesh.extents))
+        mesh.apply_scale(2 / (2 + padding)) # then padding 0.2
+        # print(np.max(np.abs(mesh.bounds)), np.max(mesh.bounding_box.extents), np.max(mesh.extents))
 
-        return trimesh.Trimesh(vertices=vertices, faces=mesh.faces)
-
+        return mesh
 
     class KaolinMeshModel():
         def __init__(self, store_meshes=None, device="cuda"):
@@ -376,7 +378,7 @@ def mesh_to_sdf(mesh, res=64, padding=0.2):
                     self.object_face_verts_list.append(index_vertices_by_faces(self.object_verts_list[-1].unsqueeze(0), self.object_faces_list[-1]))
             self.num_meshes = len(meshes)
 
-        def mesh_points_sd(self, mesh_idx, points):
+        def mesh_points_sd(self, mesh_idx, points, device):
             """
             Compute the signed distance of a specified point cloud (`points`) to a mesh (specified by `mesh_idx`).
 
@@ -387,7 +389,7 @@ def mesh_to_sdf(mesh, res=64, padding=0.2):
             Returns:
                 `signed_distance`: `Tensor`(B x N)
             """
-            points = to_tensor(points)
+            points = to_tensor(points, device)
             verts = self.object_verts_list[mesh_idx].clone().unsqueeze(0).tile((points.shape[0], 1, 1))
             faces = self.object_faces_list[mesh_idx].clone()
             face_verts = self.object_face_verts_list[mesh_idx]
@@ -398,14 +400,13 @@ def mesh_to_sdf(mesh, res=64, padding=0.2):
             return torch.where(signs, -dis, dis)
     
     voxel_resolution = res
-    device = 'cuda'
 
-    save_spacing_centroid_dic = {}
-    ###### calculate spacing before mesh scale to unit cube
-    spacing = compute_unit_cube_spacing_padding(mesh, padding, voxel_resolution)
-    save_spacing_centroid_dic['spacing'] = str(spacing)
-    save_spacing_centroid_dic['padding'] = str(padding)
-    save_spacing_centroid_dic['centroid'] = np.array(mesh.bounding_box.centroid).tolist()
+    # save_spacing_centroid_dic = {}
+    # ###### calculate spacing before mesh scale to unit cube
+    # spacing = compute_unit_cube_spacing_padding(mesh, padding, voxel_resolution)
+    # save_spacing_centroid_dic['spacing'] = str(spacing)
+    # save_spacing_centroid_dic['padding'] = str(padding)
+    # save_spacing_centroid_dic['centroid'] = np.array(mesh.bounding_box.centroid).tolist()
 
     mesh = scale_to_unit_cube_padding(mesh, padding)
 
@@ -419,8 +420,10 @@ def mesh_to_sdf(mesh, res=64, padding=0.2):
     obj_meshes = []
     obj_meshes.append(mesh)
     kl = KaolinMeshModel(store_meshes=obj_meshes, device=device)
-    sdf = kl.mesh_points_sd(0, points.unsqueeze(0).contiguous())
-    sdf = sdf.reshape((voxel_resolution, voxel_resolution, voxel_resolution)).detach().cpu().numpy()
+    sdf = kl.mesh_points_sd(0, points.unsqueeze(0).contiguous(), device)
+    sdf = sdf.reshape((1, voxel_resolution, voxel_resolution, voxel_resolution)).detach()
+
+    sdf = sdf.clamp(-trunc, trunc)
     
     return sdf
 
