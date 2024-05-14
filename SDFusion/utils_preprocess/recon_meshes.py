@@ -17,9 +17,10 @@ level = 0.02
 for cat in cats:
     files = os.listdir(os.path.join(root, cat))
     for file in tqdm(files):
+        filepath = os.path.join(root, cat, file)
         if not file.endswith('.h5'):
             continue
-        h5_f = h5py.File(file, 'r')
+        h5_f = h5py.File(filepath, 'r')
         sdf = h5_f['pc_sdf_sample'][:].astype(np.float32).reshape(res, res, res)
         h5_f.close()
         

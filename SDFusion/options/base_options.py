@@ -176,10 +176,9 @@ class BaseOptions():
 		else:
 			rotate_string = f'_rotate{self.opt.rotate_angle}' if self.opt.rotate_angle is not None else '_rotate'
 			self.opt.img_dir = os.path.join(expr_dir, f'test_{self.opt.load_iter}{rotate_string}_eta{self.opt.ddim_eta}_steps{self.opt.ddim_steps}')
-			if self.opt.ply_cond:
-				self.opt.img_dir += f'_scale{self.opt.uc_scale}'
-			elif self.opt.ply_bbox_cond:
-				self.opt.img_dir += f'_ply{self.opt.uc_ply_scale}_bbox{self.opt.uc_bbox_scale}'
+			self.opt.img_dir += f'_scale{self.opt.uc_scale}'
+			# elif self.opt.ply_bbox_cond:
+			# 	self.opt.img_dir += f'_ply{self.opt.uc_ply_scale}_bbox{self.opt.uc_bbox_scale}'
 			self.opt.img_dir += '_extent' if self.opt.scale_mode == 'max_extent' else '_volume'
 			self.opt.img_dir += '_mobility' if self.opt.use_mobility_constraint else ''
 			self.opt.img_dir += '_guided' if self.opt.guided_inference else ''
