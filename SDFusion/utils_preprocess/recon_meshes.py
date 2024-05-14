@@ -8,7 +8,7 @@ import h5py
 import trimesh
 
 # root = '/mnt/data-rundong/PartDiffusion/dataset/part_sdf_128/'
-src_root = '/mnt/data-rundong/PartDiffusion/dataset/part_meshes'
+src_root = '/mnt/data-rundong/PartDiffusion/dataset/full_meshes_manifold'
 dst_root = '../../part_meshes_recon'
 
 cats = ['slider_drawer', 'hinge_door', 'hinge_knob', 'line_fixed_handle']

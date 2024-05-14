@@ -1,5 +1,3 @@
-logs_dir='logs'
-
 ### model stuff ###
 model="vqvae"
 vq_cfg="configs/vqvae_gapnet-128.yaml"
@@ -8,7 +6,7 @@ vq_cfg="configs/vqvae_gapnet-128.yaml"
 ### dataset stuff ###
 max_dataset_size=10000000
 dataset_mode='gapnet'
-dataroot="../../dataset/"
+dataroot="/mnt/data-rundong/PartDiffusion/dataset/"
 
 ###########################
 
@@ -22,6 +20,7 @@ save_steps_freq=20000
 ### hyper params ###
 multi_gpu=1
 
+logs_dir='logs'
 batch_size=1
 res=128
 trunc_thres=0.2

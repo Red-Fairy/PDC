@@ -16,7 +16,7 @@ import torch
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--root', type=str, default='/mnt/data-rundong/PartDiffusion/dataset')
-parser.add_argument('--save_root', type=str, default='/mnt/azureml/cr/j/18805bb336d249f6b409578dd210054f/exe/wd/full_sdf_128')
+parser.add_argument('--save_root', type=str, default='../../PartDataset')
 parser.add_argument('--cat', type=str, default='slider_drawer', help='category name')
 parser.add_argument('--padding', type=float, default=0.2, help='length of the bounding box')
 parser.add_argument('--res', type=int, default=128, help='resolution of the sdf')
@@ -28,6 +28,7 @@ parser.add_argument('--rotation', action='store_true', help='whether to rotate t
 parser.add_argument('--mirror', action='store_true', help='whether to mirror the mesh')
 parser.add_argument('--scale', action='store_true', help='whether to scale the mesh')
 parser.add_argument('--haoran_convention', action='store_true', help='whether to use haoran 3D convention')
+parser.add_argument('--double_gen_sdf', action='store_true', help='mesh->sdf->mesh->sdf')
 
 args = parser.parse_args()
 
@@ -55,7 +56,7 @@ if __name__ == '__main__':
         sdf_basedir = os.path.join(args.save_root, f'full_sdf_{RES}', CAT)
         os.makedirs(sdf_basedir, exist_ok=True)
 
-        if args.gen_recon:
+        if args.gen_recon or args.double_gen_sdf:
             mesh_recon_basedir = os.path.join(args.save_root, f'full_meshes_recon', CAT)
             os.makedirs(mesh_recon_basedir, exist_ok=True)
 
@@ -68,9 +69,11 @@ if __name__ == '__main__':
         for file_name in tqdm(filenames):
             if int(file_name.split('_')[0]) > 100000:
                 continue
-            try:
-                cprint(f'process mesh: {file_name}', 'green')
 
+            cprint(f'process mesh: {file_name}', 'green')
+            h5_filename = file_name.replace('.obj', '.h5')
+
+            try:
                 object_id, part_id = file_name.split('.obj')[0].split('_')
                 mesh = trimesh.load(os.path.join(mesh_basedir, file_name))
 
@@ -83,20 +86,10 @@ if __name__ == '__main__':
                 T = np.array(mesh.bounding_box.centroid)
                 S = mesh.bounding_box.extents
 
-                # generate the SDF
                 sdf = mesh_to_sdf(mesh, args.res, padding=args.padding, trunc=args.truncation)
 
-                sdf = sdf.reshape(-1, 1)
-                h5_filename = file_name[:-4] + '.h5'
-                h5f = h5py.File(os.path.join(sdf_basedir, h5_filename), 'w')
-                h5f.create_dataset('pc_sdf_sample', data=sdf.cpu().numpy().astype(np.float32), compression='gzip', compression_opts=4)
-                h5f.close()
-
-                if args.gen_recon:
-                    h5_file = h5py.File(os.path.join(sdf_basedir, h5_filename), 'r')
-                    sdf = h5_file['pc_sdf_sample'][:].astype(np.float32)
-                    sdf = torch.Tensor(sdf).view(1, args.res, args.res, args.res)
-                    vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf.squeeze(0).cpu().numpy(), level=0.005, spacing=(SPACING, SPACING, SPACING))
+                if args.gen_recon or args.double_gen_sdf:
+                    vertices, faces, normals, _ = skimage.measure.marching_cubes(sdf.squeeze(0).cpu().numpy(), level=0.02, spacing=(SPACING, SPACING, SPACING))
                     mesh_recon = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_normals=normals)
                     mesh_recon.apply_translation(-mesh_recon.bounding_box.centroid)
                     mesh_recon.apply_scale(np.max(S) / np.max(mesh_recon.bounding_box.extents))
@@ -113,11 +106,23 @@ if __name__ == '__main__':
                     with open(os.path.join(part_bbox_basedir, f'{object_id}_{part_id}.json'), 'w') as f:
                         json.dump(bbox, f)
 
+                # generate the SDF
+                if not args.double_gen_sdf:
+                    sdf = sdf.reshape(-1, 1)
+                    h5f = h5py.File(os.path.join(sdf_basedir, h5_filename), 'w')
+                    h5f.create_dataset('pc_sdf_sample', data=sdf.cpu().numpy().astype(np.float32), compression='gzip', compression_opts=4)
+                    h5f.close()
+                else:
+                    sdf = mesh_to_sdf(mesh_recon, args.res, padding=args.padding, trunc=args.truncation)
+                    sdf = sdf.reshape(-1, 1)
+                    h5f = h5py.File(os.path.join(sdf_basedir, h5_filename), 'w')
+                    h5f.create_dataset('pc_sdf_sample', data=sdf.cpu().numpy().astype(np.float32), compression='gzip', compression_opts=4)
+                    h5f.close()
+
                 if args.debug:
                     break
             except:
-                with open('error_log.txt', 'a') as f:
-                    f.write(f'{file_name}\n')
+                print(colored(f'error processing {file_name}', 'red'))
 
             # if ROTATION:
             #     ## rotate the mesh
