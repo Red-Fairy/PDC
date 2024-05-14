@@ -415,7 +415,7 @@ def mesh_to_sdf(mesh, res=64, padding=0.2, trunc=0.2, device='cuda'):
     ys = np.linspace(-1, 1, voxel_resolution)
     zs = np.linspace(-1, 1, voxel_resolution)
     xx, yy, zz = np.meshgrid(xs, ys, zs, indexing='ij')
-    points = torch.tensor(np.vstack([xx.ravel(), yy.ravel(), zz.ravel()]).T, dtype=torch.float32).cuda()
+    points = torch.tensor(np.vstack([xx.ravel(), yy.ravel(), zz.ravel()]).T, dtype=torch.float32).to(device)
 
     obj_meshes = []
     obj_meshes.append(mesh)

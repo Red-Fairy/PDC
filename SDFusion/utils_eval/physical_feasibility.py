@@ -80,11 +80,30 @@ def get_physical_loss(sdf, ply, scale, part_translation,
     # input: (B, 1, res_sdf, res_sdf, res_sdf), (B, 1, 1, N, 3) -> (B, 1, 1, 1, N)
     sdf_ply = F.grid_sample(sdf, ply_rotated.unsqueeze(1).unsqueeze(1), align_corners=True, padding_mode='border').squeeze(1).squeeze(1).squeeze(1) # (B, N)
 
+    # debug, filter the points with positive sampled sdf values
+    # ply_file = open3d.geometry.PointCloud()
+    # res = 128
+    # ply_file.points = open3d.utility.Vector3dVector((ply[0].T).cpu().numpy())
+    # open3d.io.write_point_cloud('debug_ori_0.ply', ply_file)
+    # ply_file.points = open3d.utility.Vector3dVector((ply[-1].T).cpu().numpy())
+    # open3d.io.write_point_cloud('debug_ori_moved.ply', ply_file)
+    # mesh = sdf_to_mesh_trimesh(sdf[0][0], spacing=(2./res, 2./res, 2./res))
+    # sdf = mesh_to_sdf(mesh).unsqueeze(0).repeat(B,1,1,1,1)
+    # mesh.apply_translation(-mesh.bounding_box.centroid)
+    # mesh.export('debug.obj')
+    # sdf_max = F.relu(-sdf_ply-collision_margin)
+    # ply_file.points = open3d.utility.Vector3dVector((ply[0].T)[torch.where(sdf_max[0] > 0)].cpu().numpy())
+    # open3d.io.write_point_cloud('debug_ori_collision.ply', ply_file)
+    # ply_file.points = open3d.utility.Vector3dVector((ply[-1].T)[torch.where(sdf_max[-1] > 0)].cpu().numpy())
+    # open3d.io.write_point_cloud('debug_moved_collision.ply', ply_file)
+    # exit()
+
     # 4) calculate the collision loss
     loss_collision = torch.sum(torch.max(F.relu(-sdf_ply-collision_margin), dim=0)[0])
-    loss_contact = torch.sum(torch.min(F.relu(sdf_ply-contact_margin), dim=1)[0])
 
-    return loss_contact.item(), loss_collision.item()
+    loss_contact = torch.sum(torch.min(F.relu(sdf_ply-contact_margin), dim=1)[0]) / B
+
+    return loss_collision.item(), loss_contact.item()
 
 def passed_physical_feasibility(contact_loss, collision_loss, 
                                 contact_thres=1e-5, collision_thres=1e-5):
@@ -105,7 +124,7 @@ def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor,
     mesh_max_extent = np.max(mesh.bounding_box.extents)
     translation = torch.tensor(mesh.bounding_box.centroid).unsqueeze(0).to(device) # (1, 3)
     scale = torch.tensor((2. / mesh_max_extent) * (2 / (2 + padding)), dtype=torch.float32).to(device)  # scale the part to the unit cube
-    sdf = mesh_to_sdf(mesh, res=res, padding=padding).unsqueeze(0) # (1, 1, res, res, res)
+    sdf = mesh_to_sdf(mesh, res=res, padding=padding, device=device).unsqueeze(0) # (1, 1, res, res, res)
 
     pcd = pcd.unsqueeze(0).permute(0, 2, 1).to(device)  # (1, 3, N)
     # grid search the physical feasibility around the translation
@@ -125,28 +144,27 @@ def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor,
         print(contact_loss, collsion_loss)
         if passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
                 # make sure that at the position, the part cannot move further on x and y axis, (but allow move one step)
-                # for ddx, ddy in [(step_thres*grid_length, 0), (-step_thres*grid_length, 0), (0, step_thres*grid_length), (0, -step_thres*grid_length)]:
-                for ddx, ddy in [(0, step_thres*grid_length), (0, -step_thres*grid_length)]:
+                for ddx, ddy in [(0, i*grid_length) for i in range(1, step_thres+1)]:
                     part_translation_dd = translation + torch.tensor([dx+ddx, dy+ddy, dz]).unsqueeze(0).to(device)
                     contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation_dd, 
                                                 move_limit=move_limit, move_axis=move_axis, move_origin=move_origin,
                                                 move_type=move_type, move_samples=32,
                                                 collision_margin=collision_margin, contact_margin=contact_margin)
-                    if passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
-                        print(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}' + \
-                              f'but also at translation: {part_translation_dd[0].cpu().numpy()}, thus not physical feasible.')
-                        return 0
-                    print(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}')
-                    return 1
+                    if not passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
+                        print(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}')
+                        return 1
+                print(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}' + \
+                    f'but also for all vertical movement. Not physical feasible.')
+                return 0
     print(f'Not physical feasible for all translations.')
     return -1
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--test_root', type=str, default='/mnt/data-rundong/PartDiffusion/dataset/part_meshes/slider_drawer/')
+    parser.add_argument('--test_root', type=str, default='../../part_meshes_recon/slider_drawer/')
     parser.add_argument('--gt_root', type=str, default='/mnt/data-rundong/PartDiffusion/dataset/')
     parser.add_argument('--test_list', type=str, default='/mnt/data-rundong/PartDiffusion/data_lists/test/slider_drawer.txt')
-    parser.add_argument('--gpu_id', type=int, default=0)
+    parser.add_argument('--gpu_id', type=int, default=7)
     args = parser.parse_args()
 
     device = f'cuda:{args.gpu_id}'
@@ -172,13 +190,13 @@ def main():
         
         print(f'Physical feasibility of {obj_file}', end=' ')
         result = physical_feasibility(obj, pcd, device=device,
-                                      grid_length=1/128, step_thres=2, 
+                                      grid_length=0.01, step_thres=5, 
                                       res=128,
                                       move_type='translation', move_limit=(0, 0.2), 
                                       move_axis=torch.tensor([0., 0., 1.], device=device), 
                                       move_origin=torch.tensor([0., 0., 0.], device=device),
-                                      collision_margin=-0.0001, contact_margin=1/128,
-                                      contact_thres=1e-3, collision_thres=100)
+                                      collision_margin=0.02, contact_margin=0.02,
+                                      contact_thres=0.1, collision_thres=0.05)
 
         if result == 1:
             good_objs.append(os.path.basename(obj_file))
