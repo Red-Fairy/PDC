@@ -36,8 +36,7 @@ args="--name ${name} --logs_dir ${logs_dir} --lr ${lr} --batch_size ${batch_size
                 --dataroot ${dataroot} --dataset_mode ${dataset_mode} --cat ${cat} \
                 --res ${res} --trunc_thres ${trunc_thres} --max_dataset_size ${max_dataset_size} \
                 --display_freq ${display_freq} --print_freq ${print_freq} \
-                --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} 
-                --ply_rotate "
+                --total_iters ${total_iters} --save_steps_freq ${save_steps_freq} "
 
 if [ $multi_gpu = 1 ]; then
     torchrun --nproc_per_node=8 --nnode=${nnode} --node_rank=$AZUREML_CR_NODE_RANK --master_addr=$AZ_BATCHAI_JOB_MASTER_NODE_IP --master_port=9901 train_accelerate.py $args
