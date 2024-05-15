@@ -162,13 +162,13 @@ class BaseOptions():
 
 		# make experiment dir
 		expr_dir = os.path.join(self.opt.logs_dir, self.opt.name)
-		if (accelerator is None or accelerator.is_main_process) and not os.path.exists(expr_dir):
-			os.makedirs(expr_dir)
+		if accelerator is None or accelerator.is_main_process:
+			os.makedirs(expr_dir, exist_ok=True)
 		
 		ckpt_dir = os.path.join(self.opt.logs_dir, self.opt.name, 'ckpt')
 		self.opt.ckpt_dir = ckpt_dir
-		if (accelerator is None or accelerator.is_main_process) and not os.path.exists(ckpt_dir):
-			os.makedirs(ckpt_dir)
+		if accelerator is None or accelerator.is_main_process:
+			os.makedirs(ckpt_dir, exist_ok=True)
 
 		# self.opt.img_dir += '_predscale' if self.opt.use_predicted_scale else ''
 		if self.opt.isTrain:
@@ -186,7 +186,7 @@ class BaseOptions():
 			self.opt.img_dir += f'_{self.opt.test_description}' if self.opt.test_description is not None else ''
 
 		# self.opt.img_dir += f'_{self.opt.model_id}' if self.opt.model_id is not None else ''
-		if accelerator is not None and not accelerator.is_main_process:
+		if accelerator is None or accelerator.is_main_process:
 			os.makedirs(self.opt.img_dir, exist_ok=True)
 
 		# print args
