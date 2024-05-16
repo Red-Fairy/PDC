@@ -133,7 +133,7 @@ def get_physical_loss(sdf, ply, ply_translation, ply_rotation,
     sdf_ply = F.grid_sample(sdf, ply_rotated.unsqueeze(1).unsqueeze(1), align_corners=True, padding_mode='border').squeeze(1).squeeze(1).squeeze(1) # (B, N)
 
     # 4) calculate the collision loss
-    loss_collision = torch.sum(torch.sum(F.relu(-sdf_ply-margin), dim=0)[0]) / B
+    loss_collision = torch.sum(F.relu(-sdf_ply-margin)) / B
 
     # 4+) calculate the contact loss, punish if all points are outside the part
     loss_contact = torch.sum(torch.min(F.relu(sdf_ply-margin), dim=1)[0]) / B
