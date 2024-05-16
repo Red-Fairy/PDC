@@ -108,7 +108,7 @@ def get_physical_loss(sdf, ply, ply_translation, ply_rotation,
             K = torch.tensor([[0, -move_axis[2], move_axis[1]],
                               [move_axis[2], 0, -move_axis[0]],
                               [-move_axis[1], move_axis[0], 0]], device=sdf.device) # construct the rotation matrix
-            R = torch.eye(3, device=sdf.device) + torch.sin(-angle) * K + (1 - torch.cos(-angle)) * torch.matmul(K, K) # (B, 3, 3)
+            R = torch.eye(3, device=sdf.device) + torch.sin(angle) * K + (1 - torch.cos(angle)) * torch.matmul(K, K) # (B, 3, 3)
             ply = torch.matmul(R, ply) # (B, 3, N)
             ply = ply + move_origin.view(1, 3, 1) # translate ply back
             # debug

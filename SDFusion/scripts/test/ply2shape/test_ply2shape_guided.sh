@@ -50,7 +50,6 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --ply_rotate \
             --use_mobility_constraint \
             --rotate_angle ${rotate_angle} \
-            --scale_mode volume \
             --guided_inference \
             --haoran_rotation \
             --loss_margin 0 \

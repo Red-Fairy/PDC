@@ -7,15 +7,15 @@ df_cfg='configs/sdfusion-ply2shape-128.yaml'
 vq_model="vqvae"
 vq_dset='gapnet'
 vq_cat="slider_drawer"
-vq_ckpt="../../data-rundong/PartDiffusion/SDFusion/logs/gapnet-res128-vqvae-lr0.00002/ckpt/vqvae_steps-latest.pth"
+vq_ckpt="/mnt/data-rundong/PartDiffusion/SDFusion/logs/gapnet-res128-vqvae-lr0.00002/ckpt/vqvae_steps-latest.pth"
 vq_cfg="configs/vqvae_gapnet-128.yaml"
 
-cond_ckpt="../../data-rundong/PartDiffusion/pretrained_checkpoint/pointnet2.pth"
+cond_ckpt="/mnt/data-rundong/PartDiffusion/pretrained_checkpoint/pointnet2.pth"
 
 ### dataset stuff ###
 max_dataset_size=1000000
 dataset_mode='gapnet'
-dataroot="../../data-rundong/PartDiffusion/dataset"
+dataroot="/mnt/data-rundong/PartDiffusion/dataset"
 
 res=128
 trunc_thres=0.2
@@ -52,11 +52,11 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --use_mobility_constraint \
             --guided_inference \
             --haoran \
-            --loss_margin 0.00390625 \
+            --loss_margin 0.01 \
             --test_diversity \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
-            --start_idx $5 --end_idx $6 \
-            --ddim_steps 50 --uc_scale 3 --test_description margin256_haoran "
+            --start_idx $4 --end_idx $5 \
+            --ddim_steps 50 --uc_scale 3 --test_description margin0.01_haoran "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args &
 

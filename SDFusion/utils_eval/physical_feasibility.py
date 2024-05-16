@@ -62,7 +62,7 @@ def get_physical_loss(sdf, ply, scale, part_translation,
             K = torch.tensor([[0, -move_axis[2], move_axis[1]],
                               [move_axis[2], 0, -move_axis[0]],
                               [-move_axis[1], move_axis[0], 0]], device=sdf.device) # construct the rotation matrix
-            R = torch.eye(3, device=sdf.device) + torch.sin(-angle) * K + (1 - torch.cos(-angle)) * torch.matmul(K, K) # (B, 3, 3)
+            R = torch.eye(3, device=sdf.device) + torch.sin(angle) * K + (1 - torch.cos(angle)) * torch.matmul(K, K) # (B, 3, 3)
             ply = torch.matmul(R, ply) # (B, 3, N)
             ply = ply + move_origin.view(1, 3, 1) # translate ply back
         else:
@@ -116,7 +116,7 @@ def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor, logger: Logge
                          collision_margin=1/128, contact_margin=1/128,
                          grid_length=1/128, steps=(3, 3, 7), step_thres=1,
                          contact_thres=1e-5, collision_thres=1e-5,
-                         scale_type='volume',
+                         cat='slider_drawer',
                          move_type='translation', move_limit=None, move_axis=None, 
                          device='cuda:0'):
     '''
@@ -125,15 +125,16 @@ def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor, logger: Logge
     '''
     # 1) get the sdf value of the point cloud
     mesh_extent = mesh.bounding_box.extents
+    move_origin = mesh.bounding_box.centroid + mesh.bounding_box.extents / 2
     translation = torch.tensor(mesh.bounding_box.centroid).unsqueeze(0).to(device) # (1, 3)
-    # scale = torch.tensor((2. / mesh_max_extent) * (2 / (2 + padding)), dtype=torch.float32).to(device)  # scale the part to the unit cube
     sdf = mesh_to_sdf(mesh, res=res, padding=padding, device=device).unsqueeze(0) # (1, 1, res, res, res)
+
     recon_mesh = sdf_to_mesh_trimesh(sdf[0][0], spacing=(2./res, 2./res, 2./res), level=0.025)
-    move_origin = recon_mesh.bounding_box.centroid + recon_mesh.bounding_box.extents / 2
-    if scale_type == 'volume':
-        scale = (np.prod(mesh_extent) / np.prod(recon_mesh.bounding_box.extents)) ** (1/3)
-    else:
+    # move_origin = recon_mesh.bounding_box.centroid + recon_mesh.bounding_box.extents / 2
+    if cat == 'hinge_door':
         scale = np.max(mesh_extent) / np.max(recon_mesh.bounding_box.extents)
+    else: # scale by volume
+        scale = (np.prod(mesh_extent) / np.prod(recon_mesh.bounding_box.extents)) ** (1/3)
 
     pcd = pcd.unsqueeze(0).permute(0, 2, 1).to(device)  # (1, 3, N)
     # grid search the physical feasibility around the translation
@@ -143,41 +144,14 @@ def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor, logger: Logge
     X, Y, Z = torch.meshgrid(x, y, z)
     X, Y, Z = X.contiguous().view(-1), Y.contiguous().view(-1), Z.contiguous().view(-1)
     # sort with the absolute distance to the origin
-    if scale_type == 'volume': # sort by x^2 + z^2, if equal, sort by abs(y)
+    if cat == 'slider_drawer': # sort by x^2 + z^2, if equal, sort by abs(y)
         zipped = sorted(zip(X, Y, Z), key=lambda x: (x[0]**2 + x[2]**2) * 100 + abs(x[1]))
-    else: # sort by x^2 + y^2, if equal, sort by z
+    elif cat == 'hinge_door': # sort by x^2 + y^2, if equal, sort by z
         zipped = sorted(zip(X, Y, Z), key=lambda x: (x[0]**2 + x[1]**2) * 100 + x[2])
-    # best_loss = 1e5
-    # contact_loss_, collsion_loss_ = 0, 0
-    # for (dx, dy, dz) in zipped:
-    #     part_translation = translation + torch.tensor([dx, dy, dz]).unsqueeze(0).to(device)
-    #     contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation, 
-    #                                     move_limit=move_limit, move_axis=move_axis, move_origin=move_origin,
-    #                                     move_type=move_type, move_samples=32,
-    #                                     collision_margin=collision_margin, contact_margin=contact_margin)
-    #     logger.log(f'{contact_loss:.4f}, {collsion_loss:.4f}')
-    #     if contact_loss + collsion_loss < best_loss:
-    #         dx_, dy_, dz_ = dx, dy, dz
-    #         best_loss = contact_loss + collsion_loss
-    #         contact_loss_, collsion_loss_ = contact_loss, collsion_loss
-    # if passed_physical_feasibility(contact_loss_, collsion_loss_, contact_thres, collision_thres):
-    #     # make sure that at the position, the part cannot move further on x and y axis, (but allow move one step)
-    #     if scale_type == 'volume':
-    #         other_positions_to_check = [(0, i*grid_length, 0) for i in range(1, step_thres+1)] + [(0, -i*grid_length, 0) for i in range(1, step_thres+1)]
-    #     else:
-    #         other_positions_to_check = [(0, 0, -i*grid_length) for i in range(1, step_thres+1)]
-    #     for ddx, ddy, ddz in other_positions_to_check:
-    #         part_translation_dd = translation + torch.tensor([dx_+ddx, dy_+ddy, dz_+ddz]).unsqueeze(0).to(device)
-    #         contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation_dd, 
-    #                                     move_limit=move_limit, move_axis=move_axis, move_origin=move_origin,
-    #                                     move_type=move_type, move_samples=32,
-    #                                     collision_margin=collision_margin, contact_margin=contact_margin)
-    #         if not passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
-    #             logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}')
-    #             return 1
-    #     logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}' + \
-    #         f'but also for all movement. Not physical feasible.')
-    #     return 0
+    else: #  sort by x^2 + y^2 + z^2
+        zipped = sorted(zip(X, Y, Z), key=lambda x: x[0]**2 + x[1]**2 + x[2]**2)
+    best_loss = 1e5
+    contact_loss_, collsion_loss_ = 0, 0
     for (dx, dy, dz) in zipped:
         part_translation = translation + torch.tensor([dx, dy, dz]).unsqueeze(0).to(device)
         contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation, 
@@ -185,30 +159,61 @@ def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor, logger: Logge
                                         move_type=move_type, move_samples=32,
                                         collision_margin=collision_margin, contact_margin=contact_margin)
         logger.log(f'{contact_loss:.4f}, {collsion_loss:.4f}')
-        if passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
-            # make sure that at the position, the part cannot move further on x and y axis, (but allow move one step)
-            if scale_type == 'volume':
-                other_positions_to_check = [(0, i*grid_length, 0) for i in range(1, step_thres+1)] + [(0, -i*grid_length, 0) for i in range(1, step_thres+1)]
-            else:
-                other_positions_to_check = [(0, 0, -i*grid_length) for i in range(1, step_thres+1)]
-            for ddx, ddy, ddz in other_positions_to_check:
-                part_translation_dd = translation + torch.tensor([dx+ddx, dy+ddy, dz+ddz]).unsqueeze(0).to(device)
-                contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation_dd, 
-                                            move_limit=move_limit, move_axis=move_axis, move_origin=move_origin,
-                                            move_type=move_type, move_samples=32,
-                                            collision_margin=collision_margin, contact_margin=contact_margin)
-                if not passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
-                    logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}')
-                    return 1
-            logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}' + \
-                f'but also for all movement. Not physical feasible.')
-            return 0
+        if contact_loss + collsion_loss < best_loss:
+            dx_, dy_, dz_ = dx, dy, dz
+            best_loss = contact_loss + collsion_loss
+            contact_loss_, collsion_loss_ = contact_loss, collsion_loss
+    if passed_physical_feasibility(contact_loss_, collsion_loss_, contact_thres, collision_thres):
+        # make sure that at the position, the part cannot move further on x and y axis, (but allow move one step)
+        if cat == 'slider_drawer':
+            other_positions_to_check = [(0, i*grid_length, 0) for i in range(1, step_thres+1)] + [(0, -i*grid_length, 0) for i in range(1, step_thres+1)]
+        elif cat == 'hinge_door':
+            other_positions_to_check = [(0, 0, -i*grid_length) for i in range(1, step_thres+1)]
+        else:
+            other_positions_to_check = [(0, 0, i*grid_length) for i in range(1, step_thres+1)] + [(0, 0, -i*grid_length) for i in range(1, step_thres+1)]
+        for ddx, ddy, ddz in other_positions_to_check:
+            part_translation_dd = translation + torch.tensor([dx_+ddx, dy_+ddy, dz_+ddz]).unsqueeze(0).to(device)
+            contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation_dd, 
+                                        move_limit=move_limit, move_axis=move_axis, move_origin=move_origin,
+                                        move_type=move_type, move_samples=32,
+                                        collision_margin=collision_margin, contact_margin=contact_margin)
+            if not passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
+                logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}')
+                return 1
+        logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}' + \
+            f'but also for all movement. Not physical feasible.')
+        return 0
+    # for (dx, dy, dz) in zipped:
+    #     part_translation = translation + torch.tensor([dx, dy, dz]).unsqueeze(0).to(device)
+    #     contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation, 
+    #                                     move_limit=move_limit, move_axis=move_axis, move_origin=move_origin,
+    #                                     move_type=move_type, move_samples=32,
+    #                                     collision_margin=collision_margin, contact_margin=contact_margin)
+    #     logger.log(f'{contact_loss:.4f}, {collsion_loss:.4f}')
+    #     if passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
+    #         # make sure that at the position, the part cannot move further on x and y axis, (but allow move one step)
+    #         if scale_type == 'volume':
+    #             other_positions_to_check = [(0, i*grid_length, 0) for i in range(1, step_thres+1)] + [(0, -i*grid_length, 0) for i in range(1, step_thres+1)]
+    #         else:
+    #             other_positions_to_check = [(0, 0, -i*grid_length) for i in range(1, step_thres+1)]
+    #         for ddx, ddy, ddz in other_positions_to_check:
+    #             part_translation_dd = translation + torch.tensor([dx+ddx, dy+ddy, dz+ddz]).unsqueeze(0).to(device)
+    #             contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation_dd, 
+    #                                         move_limit=move_limit, move_axis=move_axis, move_origin=move_origin,
+    #                                         move_type=move_type, move_samples=32,
+    #                                         collision_margin=collision_margin, contact_margin=contact_margin)
+    #             if not passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
+    #                 logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}')
+    #                 return 1
+    #         logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}' + \
+    #             f' but also for all movement. Not physical feasible.')
+    #         return 0
     logger.log(f'Not physical feasible for all translations.')
     return -1
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('test_root', type=str, default='../../part_meshes_recon/slider_drawer')
+    parser.add_argument('test_root', type=str) #  '../../part_meshes_recon/slider_drawer'
     parser.add_argument('--gt_root', type=str, default='/mnt/data-rundong/PartDiffusion/dataset')
     parser.add_argument('--test_list', type=str, default='../data_lists/test/')
     parser.add_argument('--cat', type=str, default='slider_drawer')
@@ -220,8 +225,10 @@ def main():
     parser.add_argument('--grid_length', type=float, default=0.01)
     args = parser.parse_args()
 
-    # hinge door: 0.04, 0.01, 0.04, 0.0125
-    # slider_drawer: 0.1, 0.01, 0.1, 0.01
+    # hinge door: 0.1, 0.01, 0.1, 0.01 
+    # slider_drawer: 0.05, 0.005, 0.05, 0.005 / 50 + 5 + 5
+    # hinge_knob : 0.05, 0.005, 0.05, 0.005 
+    # line_fixed: 0.05, 0.005, 0.05, 0.005 / 85 + 5 + 0
 
     device = f'cuda:{args.gpu_id}'
 
@@ -252,20 +259,19 @@ def main():
         move_axis = [0, 0, 1]
         steps = (5, 5, 5)
         step_thres = 3
-        scale_type = 'volume'
     elif args.cat == 'hinge_door':
         move_limit = (0, 90)
         move_type = 'rotation'
         move_axis = [1, 0, 0]
         steps = (3, 3, 11)
         step_thres = 5
-        scale_type = 'max_extent'
     else:
         move_limit = move_type = move_axis = None
-        scale_type = 'volume'
+        steps = (5, 5, 5)
+        step_thres = 3
 
     for (obj_file, pcd_file) in zip(test_obj_files, test_pcd_files):
-        # if not any([x in obj_file for x in ['29133_0.obj', '32324_1.obj', '34178_1.obj']]):
+        # if not any([x in obj_file for x in ['47187_0.obj']]):
         #     continue
         obj = trimesh.load(obj_file)
         pcd = open3d.io.read_point_cloud(pcd_file)
@@ -275,7 +281,7 @@ def main():
         result = physical_feasibility(obj, pcd, logger, device=device,
                                       grid_length=args.grid_length,
                                       step_thres=step_thres, steps=steps, 
-                                      res=128, scale_type=scale_type,
+                                      res=128, cat=args.cat,
                                       move_type=move_type, move_limit=move_limit, 
                                       move_axis=move_axis,
                                       collision_margin=args.collision_margin, contact_margin=args.contact_margin,
