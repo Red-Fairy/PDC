@@ -99,7 +99,7 @@ def get_physical_loss(sdf, ply, scale, part_translation,
     # exit()
 
     # 4) calculate the collision loss
-    loss_collision = torch.sum(torch.max(F.relu(-sdf_ply-collision_margin), dim=0)[0])
+    loss_collision = torch.sum(F.relu(-sdf_ply-collision_margin)) / B
 
     loss_contact = torch.sum(torch.min(F.relu(sdf_ply-contact_margin), dim=1)[0]) / B
 
@@ -112,7 +112,7 @@ def passed_physical_feasibility(contact_loss, collision_loss,
 def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor,
                          res: int=128, padding: float=0.2, 
                          collision_margin=1/128, contact_margin=1/128,
-                         grid_length=1/128, steps=(5, 5, 5), step_thres=1,
+                         grid_length=1/128, steps=(6, 6, 6), step_thres=1,
                          contact_thres=1e-5, collision_thres=1e-5,
                          move_type='translation', move_limit=None, move_axis=None, move_origin=None,
                          device='cuda:0'):
@@ -141,10 +141,10 @@ def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor,
                                         move_limit=move_limit, move_axis=move_axis, move_origin=move_origin,
                                         move_type=move_type, move_samples=32,
                                         collision_margin=collision_margin, contact_margin=contact_margin)
-        print(contact_loss, collsion_loss)
+        print(f'{contact_loss:.4f}, {collsion_loss:.4f}')
         if passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
                 # make sure that at the position, the part cannot move further on x and y axis, (but allow move one step)
-                for ddx, ddy in [(0, i*grid_length) for i in range(1, step_thres+1)]:
+                for ddx, ddy in [(0, i*grid_length) for i in range(1, step_thres+1)] + [(0, -i*grid_length) for i in range(1, step_thres+1)]:
                     part_translation_dd = translation + torch.tensor([dx+ddx, dy+ddy, dz]).unsqueeze(0).to(device)
                     contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation_dd, 
                                                 move_limit=move_limit, move_axis=move_axis, move_origin=move_origin,
@@ -184,19 +184,21 @@ def main():
     test_pcd_files = [os.path.join(args.gt_root, 'part_ply_fps', 'slider_drawer', f) for f in test_pcd_files]
 
     for (obj_file, pcd_file) in zip(test_obj_files, test_pcd_files):
+        # if not any([x in obj_file for x in ['29133_0.obj', '32324_1.obj', '34178_1.obj']]):
+        #     continue
         obj = trimesh.load(obj_file)
         pcd = open3d.io.read_point_cloud(pcd_file)
         pcd = torch.tensor(np.array(pcd.points), dtype=torch.float32).to(device) # (N, 3)
         
-        print(f'Physical feasibility of {obj_file}', end=' ')
+        print(f'Physical feasibility of {os.path.basename(obj_file)}')
         result = physical_feasibility(obj, pcd, device=device,
-                                      grid_length=0.01, step_thres=5, 
+                                      grid_length=0.01, step_thres=3, 
                                       res=128,
                                       move_type='translation', move_limit=(0, 0.2), 
                                       move_axis=torch.tensor([0., 0., 1.], device=device), 
                                       move_origin=torch.tensor([0., 0., 0.], device=device),
-                                      collision_margin=0.02, contact_margin=0.02,
-                                      contact_thres=0.1, collision_thres=0.05)
+                                      collision_margin=0.01, contact_margin=0.01,
+                                      contact_thres=0.15, collision_thres=0.05)
 
         if result == 1:
             good_objs.append(os.path.basename(obj_file))

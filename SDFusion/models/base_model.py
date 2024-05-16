@@ -72,6 +72,7 @@ class BaseModel():
         self.model_names = []
         self.epoch_labels = []
         self.optimizers = []
+        self.schedulers = []
 
     def set_input(self, input):
         self.input = input

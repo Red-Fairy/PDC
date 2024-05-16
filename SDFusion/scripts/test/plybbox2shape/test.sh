@@ -48,8 +48,8 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --ply_rotate \
             --scale_mode max_extent \
             --ply_bbox_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
-            --ddim_steps 50 --uc_ply_scale 2 --uc_bbox_scale 2 --uc_scale 1 \
-            --loss_margin 0.0078125 \
+            --ddim_steps 50 --uc_scale 3 \
+            --loss_margin 0.01 \
             --test_description margin128 \
             --use_mobility_constraint "
             # --model_id ${model_id}"

@@ -3,7 +3,7 @@ from tqdm import tqdm
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('root', type=str, default='./logs/slider_drawer-ply2shape-plyrot-scale3-lr0.00001/test_250000_rotate0.0_scale3.0_eta0.0_steps50_volume_mobility_diversity_margin256-haoran')
+parser.add_argument('root', type=str, default='./logs/slider_drawer-plybbox2shape-plyrot-lr0.00001')
 args = parser.parse_args()
 
 root = args.root

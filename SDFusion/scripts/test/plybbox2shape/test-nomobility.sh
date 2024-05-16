@@ -50,8 +50,8 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --rotate_angle ${rotate_angle} \
             --scale_mode max_extent \
             --ply_bbox_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
-            --ddim_steps 50 --uc_ply_scale 2 --uc_bbox_scale 2 \
-            --loss_margin 0.0078125 \
+            --ddim_steps 50 --uc_scale 3 \
+            --loss_margin 0.01 \
             --test_description margin128 "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
