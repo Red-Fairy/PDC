@@ -11,7 +11,7 @@ from utils import AverageMeter
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--test_root', type=str, default='./logs/slider_drawer-ply2shape-plyrot-scale3-lr0.00001/test_250000_rotate0.0_scale3.0_eta0.0_steps50_volume_mobility_diversity_margin256-haoran/meshes_canonical_selected')
+    parser.add_argument('test_root', type=str)
     parser.add_argument('--gt_root', type=str, default='../../part_meshes_recon/slider_drawer')
     args = parser.parse_args()
 

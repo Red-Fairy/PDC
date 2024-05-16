@@ -138,76 +138,78 @@ def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor, logger: Logge
 
     pcd = pcd.unsqueeze(0).permute(0, 2, 1).to(device)  # (1, 3, N)
     # grid search the physical feasibility around the translation
-    x = torch.linspace(-grid_length, grid_length, steps[0]).to(device) 
-    y = torch.linspace(-grid_length, grid_length, steps[1]).to(device) 
-    z = torch.linspace(-grid_length, grid_length, steps[2]).to(device) 
+    x = torch.linspace(-grid_length, grid_length, steps[0]).to(device) * (steps[0] - 1) / 2
+    y = torch.linspace(-grid_length, grid_length, steps[1]).to(device) * (steps[1] - 1) / 2
+    z = torch.linspace(-grid_length, grid_length, steps[2]).to(device) * (steps[2] - 1) / 2
     X, Y, Z = torch.meshgrid(x, y, z)
     X, Y, Z = X.contiguous().view(-1), Y.contiguous().view(-1), Z.contiguous().view(-1)
     # sort with the absolute distance to the origin
-    if cat == 'slider_drawer': # sort by x^2 + z^2, if equal, sort by abs(y)
+    if cat == 'slider_drawer': # sort by x^2 + y^2, if equal, sort by -z
         zipped = sorted(zip(X, Y, Z), key=lambda x: (x[0]**2 + x[2]**2) * 100 + abs(x[1]))
     elif cat == 'hinge_door': # sort by x^2 + y^2, if equal, sort by z
         zipped = sorted(zip(X, Y, Z), key=lambda x: (x[0]**2 + x[1]**2) * 100 + x[2])
     else: #  sort by x^2 + y^2 + z^2
         zipped = sorted(zip(X, Y, Z), key=lambda x: x[0]**2 + x[1]**2 + x[2]**2)
-    best_loss = 1e5
-    contact_loss_, collsion_loss_ = 0, 0
+    # best_loss = 1e5
+    # contact_loss_, collsion_loss_ = 0, 0
     for (dx, dy, dz) in zipped:
         part_translation = translation + torch.tensor([dx, dy, dz]).unsqueeze(0).to(device)
         contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation, 
                                         move_limit=move_limit, move_axis=move_axis, move_origin=move_origin,
                                         move_type=move_type, move_samples=32,
                                         collision_margin=collision_margin, contact_margin=contact_margin)
-        logger.log(f'{contact_loss:.4f}, {collsion_loss:.4f}')
-        if contact_loss + collsion_loss < best_loss:
-            dx_, dy_, dz_ = dx, dy, dz
-            best_loss = contact_loss + collsion_loss
-            contact_loss_, collsion_loss_ = contact_loss, collsion_loss
-    if passed_physical_feasibility(contact_loss_, collsion_loss_, contact_thres, collision_thres):
-        # make sure that at the position, the part cannot move further on x and y axis, (but allow move one step)
-        if cat == 'slider_drawer':
-            other_positions_to_check = [(0, i*grid_length, 0) for i in range(1, step_thres+1)] + [(0, -i*grid_length, 0) for i in range(1, step_thres+1)]
-        elif cat == 'hinge_door':
-            other_positions_to_check = [(0, 0, -i*grid_length) for i in range(1, step_thres+1)]
-        else:
-            other_positions_to_check = [(0, 0, i*grid_length) for i in range(1, step_thres+1)] + [(0, 0, -i*grid_length) for i in range(1, step_thres+1)]
-        for ddx, ddy, ddz in other_positions_to_check:
-            part_translation_dd = translation + torch.tensor([dx_+ddx, dy_+ddy, dz_+ddz]).unsqueeze(0).to(device)
-            contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation_dd, 
-                                        move_limit=move_limit, move_axis=move_axis, move_origin=move_origin,
-                                        move_type=move_type, move_samples=32,
-                                        collision_margin=collision_margin, contact_margin=contact_margin)
-            if not passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
-                logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}')
-                return 1
-        logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}' + \
-            f'but also for all movement. Not physical feasible.')
-        return 0
-    # for (dx, dy, dz) in zipped:
-    #     part_translation = translation + torch.tensor([dx, dy, dz]).unsqueeze(0).to(device)
-    #     contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation, 
+        print(f'{contact_loss:.4f}, {collsion_loss:.4f}')
+    #     if contact_loss + collsion_loss < best_loss:
+    #         dx_, dy_, dz_ = dx, dy, dz
+    #         best_loss = contact_loss + collsion_loss
+    #         contact_loss_, collsion_loss_ = contact_loss, collsion_loss
+    # if passed_physical_feasibility(contact_loss_, collsion_loss_, contact_thres, collision_thres):
+    #     # make sure that at the position, the part cannot move further on x and y axis, (but allow move one step)
+    #     if cat == 'slider_drawer':
+    #         other_positions_to_check = [(0, i*grid_length, 0) for i in range(1, step_thres+1)] + [(0, -i*grid_length, 0) for i in range(1, step_thres+1)]
+    #     elif cat == 'hinge_door':
+    #         other_positions_to_check = [(0, 0, -i*grid_length) for i in range(1, step_thres+1)]
+    #     else:
+    #         other_positions_to_check = [(0, 0, i*grid_length) for i in range(1, step_thres+1)] + [(0, 0, -i*grid_length) for i in range(1, step_thres+1)]
+    #     for ddx, ddy, ddz in other_positions_to_check:
+    #         part_translation_dd = translation + torch.tensor([dx_+ddx, dy_+ddy, dz_+ddz]).unsqueeze(0).to(device)
+    #         contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation_dd, 
     #                                     move_limit=move_limit, move_axis=move_axis, move_origin=move_origin,
     #                                     move_type=move_type, move_samples=32,
     #                                     collision_margin=collision_margin, contact_margin=contact_margin)
-    #     logger.log(f'{contact_loss:.4f}, {collsion_loss:.4f}')
-    #     if passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
-    #         # make sure that at the position, the part cannot move further on x and y axis, (but allow move one step)
-    #         if scale_type == 'volume':
-    #             other_positions_to_check = [(0, i*grid_length, 0) for i in range(1, step_thres+1)] + [(0, -i*grid_length, 0) for i in range(1, step_thres+1)]
-    #         else:
-    #             other_positions_to_check = [(0, 0, -i*grid_length) for i in range(1, step_thres+1)]
-    #         for ddx, ddy, ddz in other_positions_to_check:
-    #             part_translation_dd = translation + torch.tensor([dx+ddx, dy+ddy, dz+ddz]).unsqueeze(0).to(device)
-    #             contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation_dd, 
-    #                                         move_limit=move_limit, move_axis=move_axis, move_origin=move_origin,
-    #                                         move_type=move_type, move_samples=32,
-    #                                         collision_margin=collision_margin, contact_margin=contact_margin)
-    #             if not passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
-    #                 logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}')
-    #                 return 1
-    #         logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}' + \
-    #             f' but also for all movement. Not physical feasible.')
-    #         return 0
+    #         if not passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
+    #             logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}')
+    #             return 1
+    #     logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}' + \
+    #         f'but also for all movement. Not physical feasible.')
+    #     return 0
+    for (dx, dy, dz) in zipped:
+        part_translation = translation + torch.tensor([dx, dy, dz]).unsqueeze(0).to(device)
+        contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation, 
+                                        move_limit=move_limit, move_axis=move_axis, move_origin=move_origin,
+                                        move_type=move_type, move_samples=32,
+                                        collision_margin=collision_margin, contact_margin=contact_margin)
+        print(f'{contact_loss:.4f}, {collsion_loss:.4f}')
+        if passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
+            # make sure that at the position, the part cannot move further on x and y axis, (but allow move one step)
+            if cat == 'slider_drawer':
+                other_positions_to_check = [(i*grid_length, 0, 0) for i in range(1, step_thres+1)] + [(-i*grid_length, 0, 0) for i in range(1, step_thres+1)]
+            elif cat == 'hinge_door':
+                other_positions_to_check = [(0, 0, -i*grid_length) for i in range(1, step_thres+1)]
+            else:
+                other_positions_to_check = [(0, 0, i*grid_length) for i in range(1, step_thres+1)] + [(0, 0, -i*grid_length) for i in range(1, step_thres+1)]
+            for ddx, ddy, ddz in other_positions_to_check:
+                part_translation_dd = translation + torch.tensor([dx+ddx, dy+ddy, dz+ddz]).unsqueeze(0).to(device)
+                contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation_dd, 
+                                            move_limit=move_limit, move_axis=move_axis, move_origin=move_origin,
+                                            move_type=move_type, move_samples=32,
+                                            collision_margin=collision_margin, contact_margin=contact_margin)
+                if not passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
+                    logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}')
+                    return 1
+            logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}' + \
+                f' but also for all movement. Not physical feasible.')
+            return 0
     logger.log(f'Not physical feasible for all translations.')
     return -1
 
@@ -218,16 +220,19 @@ def main():
     parser.add_argument('--test_list', type=str, default='../data_lists/test/')
     parser.add_argument('--cat', type=str, default='slider_drawer')
     parser.add_argument('--gpu_id', type=int, default=7)
-    parser.add_argument('--contact_thres', type=float, default=0.1)
+    parser.add_argument('--contact_thres', type=float, default=0.025)
     parser.add_argument('--contact_margin', type=float, default=0.01)
-    parser.add_argument('--collision_thres', type=float, default=0.1)
+    parser.add_argument('--collision_thres', type=float, default=0.025)
     parser.add_argument('--collision_margin', type=float, default=0.01)
-    parser.add_argument('--grid_length', type=float, default=0.01)
+    parser.add_argument('--grid_length', type=float, default=0.005)
     args = parser.parse_args()
 
-    # hinge door: 0.1, 0.01, 0.1, 0.01 
-    # slider_drawer: 0.05, 0.005, 0.05, 0.005 / 50 + 5 + 5
-    # hinge_knob : 0.05, 0.005, 0.05, 0.005 
+    # slider_drawer: 0.08, 0.008, 0.08, 0.008 / 38 + 8 + 2
+    # slider_drawer: 0.1, 0.01, 0.1, 0.01 / 31 + 17 + 0
+    # slider_drawer: 0.05, 0.005, 0.05, 0.005 / 32 + 0 + 16
+    # slider_drawer: 0.05, 0.01, 0.05, 0.01 / 37 + 7 + 4
+    # hinge door: 0.05, 0.005, 0.05, 0.005 / 50 + 5 + 5
+    # hinge_knob : 0.05, 0.005, 0.05, 0.005 / 19 + 1 + 0
     # line_fixed: 0.05, 0.005, 0.05, 0.005 / 85 + 5 + 0
 
     device = f'cuda:{args.gpu_id}'
@@ -254,21 +259,21 @@ def main():
     test_pcd_files = [os.path.join(args.gt_root, 'part_ply_fps', args.cat, f) for f in test_pcd_files]
     
     if args.cat == 'slider_drawer':
-        move_limit = (0, 0.2)
+        move_limit = (0, 0.1)
         move_type = 'translation'
         move_axis = [0, 0, 1]
-        steps = (5, 5, 5)
-        step_thres = 3
+        steps = (5, 5, 31)
+        step_thres = 20
     elif args.cat == 'hinge_door':
         move_limit = (0, 90)
         move_type = 'rotation'
         move_axis = [1, 0, 0]
-        steps = (3, 3, 11)
-        step_thres = 5
+        steps = (5, 5, 31)
+        step_thres = 3
     else:
         move_limit = move_type = move_axis = None
-        steps = (5, 5, 5)
-        step_thres = 3
+        steps = (5, 5, 21)
+        step_thres = 2
 
     for (obj_file, pcd_file) in zip(test_obj_files, test_pcd_files):
         # if not any([x in obj_file for x in ['47187_0.obj']]):

@@ -438,7 +438,7 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
                     
                     grad = torch.autograd.grad(collision_loss + contact_loss, latents_grad)[0] # (B, *shape)
                     # print(grad.sum().item())
-                    # grad = grad / (grad.norm() + 1e-8) # clip grad norm
+                    grad = grad / (grad.norm() + 1e-8) # clip grad norm
                     noise_pred = noise_pred_uncond + (1 - self.noise_scheduler.alphas_cumprod[t]) ** 0.5 * grad + \
                                     self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
 
