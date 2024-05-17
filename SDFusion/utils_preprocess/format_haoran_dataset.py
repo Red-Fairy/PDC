@@ -6,14 +6,19 @@ import json
 from tqdm import tqdm
 import torch
 
-data_count_per_instance = 7
+data_count_per_instance = 3
 
 root = '../ignore_files/eval_output'
 dst_root = '../data_lists/pred_pose'
 files = os.listdir(root)
 files = [file for file in files if 'pred_bbox' in file]
 
-cat = files[0].split('wo-')[1].split('-link')[0]
+try:
+    cat = files[0].split('wo-')[1].split('-link')[0]
+    flag = 0
+except:
+    cat = 'slider_drawer'
+    flag = 1
 
 file_count_record = {}
 
@@ -25,9 +30,14 @@ for i in range(data_count_per_instance):
 for i, file in enumerate(tqdm(files)):
     # obtain the object_id, part_id, rotate angle (inferred from filename)
     # and the bbox (inferred from the bbox file)
-    object_id = int(file.split('-')[0])
-    part_id = int(file.split('link_')[1].split('-')[0])
-    rotate_angle = float(file.split('-pred_bbox')[0].split('_')[-1])
+    if flag == 0:
+        object_id = int(file.split('-')[0])
+        part_id = int(file.split('link_')[1].split('-')[0])
+        rotate_angle = float(file.split('-pred_bbox')[0].split('_')[-1])
+    else:
+        object_id = int(file.split('_')[0])
+        part_id = int(file.split('_')[1])
+        rotate_angle = float(file.split('-pred_bbox')[0].split('_')[-1])
     key = (object_id, part_id)
     if key not in file_count_record:
         file_count_record[key] = 0
@@ -50,12 +60,7 @@ for i, file in enumerate(tqdm(files)):
     # print(x_positive_dir)
 
     # calculate the rotation angle around the y-axis
-    if cat == 'slider_drawer':
-        rotate_angle_pred = 90 - np.arctan2(x_positive_dir[2], x_positive_dir[0]) * 180 / np.pi
-    elif cat == 'hinge_door':
-        rotate_angle_pred = -90 - np.arctan2(x_positive_dir[2], x_positive_dir[0]) * 180 / np.pi
-    else:
-        rotate_angle_pred = 90 - np.arctan2(x_positive_dir[2], x_positive_dir[0]) * 180 / np.pi
+    rotate_angle_pred = -90 - np.arctan2(x_positive_dir[2], x_positive_dir[0]) * 180 / np.pi
 
     # rotate the points by the predicted angle
     r = R.from_euler('y', -rotate_angle_pred, degrees=True)
