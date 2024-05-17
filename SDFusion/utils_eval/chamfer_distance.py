@@ -29,6 +29,7 @@ def main():
     CUBE_SIDE_LEN = 2.0
     threshold_list = [CUBE_SIDE_LEN/500, CUBE_SIDE_LEN/400,
                       CUBE_SIDE_LEN/250, CUBE_SIDE_LEN/200, CUBE_SIDE_LEN/100]
+    # threshold_list = [CUBE_SIDE_LEN/200]
     
     loss_meter_CD = AverageMeter()
     loss_fscore_meters = {th: AverageMeter() for th in threshold_list}
