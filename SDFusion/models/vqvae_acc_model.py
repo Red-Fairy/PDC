@@ -255,11 +255,7 @@ class VQVAEAccModel(BaseModel):
         else:
             state_dict = ckpt
         
-        # NOTE: handle version difference...
-        if 'vqvae' not in state_dict:
-            self.vqvae.load_state_dict(state_dict)
-        else:
-            self.vqvae.load_state_dict(state_dict['vqvae'])
+        self.vqvae.load_state_dict(state_dict['vqvae'])
             
         print(colored('[*] weight successfully load from: %s' % ckpt, 'blue'))
 

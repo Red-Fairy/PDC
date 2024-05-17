@@ -50,7 +50,8 @@ def create_model(opt, accelerator=None, input_instance=None):
             from models.cvae_ply2shape_model import CVAEModelPly2Shape
             model = CVAEModelPly2Shape(opt)
         else:
-            raise NotImplementedError("CVAE Model with accelerator not implemented yet")
+            from models.cvae_ply2shape_acc_model import CVAEModelPly2ShapeAcc
+            model = CVAEModelPly2ShapeAcc(opt, accelerator)
         
     else:
         raise ValueError("Model [%s] not recognized." % opt.model)

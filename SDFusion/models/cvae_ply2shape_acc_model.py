@@ -22,18 +22,21 @@ from models.networks.cvae_networks.network import CVAE
 from models.loss_utils import VQLoss
 
 from utils.util import AverageMeter, Logger
+from accelerate import Accelerator
 
 from utils.util_3d import init_mesh_renderer, sdf_to_mesh_trimesh
 
-class CVAEModelPly2Shape(BaseModel):
+
+class CVAEModelPly2ShapeAcc(BaseModel):
     def name(self):
-        return 'CVAE-Model-PointCloud-to-Shape'
+        return 'CVAE-Model-PointCloud-to-Shape-acclerate'
     
-    def __init__(self, opt):
+    def __init__(self, opt, accelerator: Accelerator):
         super().__init__(opt)
         self.isTrain = opt.isTrain
         self.model_name = self.name()
-        self.device = 'cuda'
+        self.device = accelerator.device
+        self.accelerator = accelerator
 
         # -------------------------------
         # Define Networks
@@ -61,8 +64,6 @@ class CVAEModelPly2Shape(BaseModel):
         cprint(f"[*] Model {self.model_name} initialized, isTrain:{self.isTrain}", 'green')
         if self.isTrain:
 
-            # self.optimizer1 = optim.AdamW([p for p in self.cvae.parameters() if p.requires_grad == True] + \
-            #                 [p for p in self.cond_model.parameters() if p.requires_grad == True], lr=opt.lr)
             self.optimizer1 = optim.AdamW([p for p in self.cvae.parameters() if p.requires_grad == True])
 
             lr_lambda1 = lambda it: 0.5 * (1 + np.cos(np.pi * it / opt.total_iters))
@@ -71,15 +72,19 @@ class CVAEModelPly2Shape(BaseModel):
             self.optimizers = [self.optimizer1]
             self.schedulers = [self.scheduler1]
 
-            self.print_networks(verbose=False)
-
             if opt.continue_train:
                 self.start_iter = self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
             else:
                 self.start_iter = 0
+
+            self.optimizer1, self.scheduler1 = accelerator.prepare(self.optimizer1, self.scheduler1)
+
+            self.print_networks(verbose=False)
             
         else:
             self.load_ckpt(ckpt=os.path.join(opt.ckpt_dir, f'df_steps-{opt.load_iter}.pth'))
+
+        self.cvae = accelerator.prepare(self.cvae)
         
         # setup renderer
         dist, elev, azim = 1.0, 20, 120
@@ -146,8 +151,8 @@ class CVAEModelPly2Shape(BaseModel):
 
         B = self.x.shape[0]
         
-        z, mu, logvar = self.cvae.encode(self.x, self.ply, verbose=True)
-        x_recon = self.cvae.decode(z, self.ply)
+        z, mu, logvar = self.cvae.module.encode(self.x, self.ply, verbose=True)
+        x_recon = self.cvae.module.decode(z, self.ply)
 
         loss = 0.
         ## 1. recon loss
@@ -167,7 +172,7 @@ class CVAEModelPly2Shape(BaseModel):
 
         B = self.x.shape[0]
         eps = torch.randn(B, *self.z_shape).to(self.device)
-        self.gen_df = self.cvae.decode(eps, self.ply)
+        self.gen_df = self.cvae.module.decode(eps, self.ply).detach()
 
     def guided_inference(self):
         raise NotImplementedError('Guided Inference not implemented for this model')
@@ -186,17 +191,19 @@ class CVAEModelPly2Shape(BaseModel):
     
     def optimize_parameters(self, total_steps):
         loss = self.forward()
-        avg_loss = loss.mean()
+
+        avg_loss = self.accelerator.gather(loss).mean()
         if avg_loss > 100:
             print(colored(f"Loss too large: {avg_loss.item()} | operation: skipping", 'red'))
             return
-        self.loss_meter.update(avg_loss, self.opt.batch_size)
-        self.loss_meter_epoch.update(avg_loss, self.opt.batch_size)
-        loss.backward()
+        
+        self.loss_meter.update(avg_loss, self.opt.batch_size * self.accelerator.num_processes)
+        self.loss_meter_epoch.update(avg_loss, self.opt.batch_size * self.accelerator.num_processes)
+
+        self.accelerator.backward(loss)
 
         # clip grad norm
         torch.nn.utils.clip_grad_norm_(self.cvae.parameters(), 1.0)
-        # torch.nn.utils.clip_grad_norm_(self.cond_model.parameters(), 1.0)
         
         for optimizer in self.optimizers:
             optimizer.step()
@@ -253,8 +260,7 @@ class CVAEModelPly2Shape(BaseModel):
     @torch.no_grad()
     def save(self, label, global_step, save_opt=False):
         state_dict = {
-            'cvae': self.cvae.state_dict(),
-            # 'cond_model': self.cond_model.state_dict(),
+            'cvae': self.cvae.module.state_dict(),
             'global_step': global_step,
         }
 
@@ -274,7 +280,7 @@ class CVAEModelPly2Shape(BaseModel):
             state_dict = torch.load(ckpt, map_location=map_fn)
         else:
             state_dict = ckpt
-            
+
         self.cvae.load_state_dict(state_dict['cvae'])
         print(colored('[*] weight successfully load from: %s' % ckpt, 'blue'))
 
