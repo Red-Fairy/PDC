@@ -276,11 +276,16 @@ def main():
     for (obj_file, pcd_file) in zip(test_obj_files, test_pcd_files):
         # if not any([x in obj_file for x in ['10797_1.obj', '10068_2.obj', '10685_1.obj', '12038_1.obj']]):
         #     continue
+        logger.log(f'Physical feasibility of {os.path.basename(obj_file)}')
+
         obj = trimesh.load(obj_file)
+        # check watertight
+        if not obj.is_watertight:
+            logger.log(f'{os.path.basename(obj_file)} is not watertight, thus not physical feasible!')
+            all_not_feasible_objs.append(os.path.basename(obj_file))
         pcd = open3d.io.read_point_cloud(pcd_file)
         pcd = torch.tensor(np.array(pcd.points), dtype=torch.float32).to(device) # (N, 3)
         
-        logger.log(f'Physical feasibility of {os.path.basename(obj_file)}')
         result = physical_feasibility(obj, pcd, logger, device=device,
                                       grid_length=args.grid_length,
                                       step_thres=args.step_thres, steps=steps, 

@@ -35,7 +35,7 @@ gpu_ids=$2
 load_iter=$3
 cat=$4
 testset_idx=$5
-test_description="margin0.005_set${estset_idx}"
+test_description="margin0.005_set${testset_idx}"
 
 # 0.00390625 1/256
 # 0.0078125 1/128
