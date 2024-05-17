@@ -35,7 +35,7 @@ gpu_ids=$2
 load_iter=$3
 cat=$4
 testset_idx=$5
-test_description="margin0.005_set${estset_idx}"
+test_description="margin0.005_set${testset_idx}"
 
 # 0.00390625 1/256
 # 0.0078125 1/128
@@ -49,7 +49,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --ply_rotate \
             --haoran \
             --ply_bbox_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
-            --ddim_steps 50 --uc_scale 3 \
+            --ddim_steps 50 --uc_scale 5 \
             --loss_margin 0.005 \
             --test_description ${test_description} --testset_idx ${testset_idx} \
             --use_mobility_constraint "
