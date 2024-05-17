@@ -145,9 +145,9 @@ def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor, logger: Logge
     X, Y, Z = X.contiguous().view(-1), Y.contiguous().view(-1), Z.contiguous().view(-1)
     # sort with the absolute distance to the origin
     if cat == 'slider_drawer': # sort by x^2 + y^2, if equal, sort by -z
-        zipped = sorted(zip(X, Y, Z), key=lambda x: (x[0]**2 + x[2]**2) * 100 + abs(x[1]))
+        zipped = sorted(zip(X, Y, Z), key=lambda x: (x[0]**2 + x[2]**2) * 1e8 + abs(x[1]))
     elif cat == 'hinge_door': # sort by x^2 + y^2, if equal, sort by z
-        zipped = sorted(zip(X, Y, Z), key=lambda x: (x[0]**2 + x[1]**2) * 100 + x[2])
+        zipped = sorted(zip(X, Y, Z), key=lambda x: (x[0]**2 + x[1]**2) * 1e8 + x[2])
     else: #  sort by x^2 + y^2 + z^2
         zipped = sorted(zip(X, Y, Z), key=lambda x: x[0]**2 + x[1]**2 + x[2]**2)
     # best_loss = 1e5
@@ -220,11 +220,12 @@ def main():
     parser.add_argument('--test_list', type=str, default='../data_lists/test/')
     parser.add_argument('--cat', type=str, default='slider_drawer')
     parser.add_argument('--gpu_id', type=int, default=7)
-    parser.add_argument('--contact_thres', type=float, default=0.025)
-    parser.add_argument('--contact_margin', type=float, default=0.01)
-    parser.add_argument('--collision_thres', type=float, default=0.025)
-    parser.add_argument('--collision_margin', type=float, default=0.01)
+    parser.add_argument('--contact_thres', type=float, default=0.05)
+    parser.add_argument('--contact_margin', type=float, default=0.005)
+    parser.add_argument('--collision_thres', type=float, default=0.05)
+    parser.add_argument('--collision_margin', type=float, default=0.005)
     parser.add_argument('--grid_length', type=float, default=0.005)
+    parser.add_argument('--step_thres', type=int, default=5)
     args = parser.parse_args()
 
     # slider_drawer: 0.08, 0.008, 0.08, 0.008 / 38 + 8 + 2
@@ -263,20 +264,17 @@ def main():
         move_type = 'translation'
         move_axis = [0, 0, 1]
         steps = (5, 5, 31)
-        step_thres = 20
     elif args.cat == 'hinge_door':
         move_limit = (0, 90)
         move_type = 'rotation'
         move_axis = [1, 0, 0]
         steps = (5, 5, 31)
-        step_thres = 3
     else:
         move_limit = move_type = move_axis = None
         steps = (5, 5, 21)
-        step_thres = 2
 
     for (obj_file, pcd_file) in zip(test_obj_files, test_pcd_files):
-        # if not any([x in obj_file for x in ['47187_0.obj']]):
+        # if not any([x in obj_file for x in ['10797_1.obj', '10068_2.obj', '10685_1.obj', '12038_1.obj']]):
         #     continue
         obj = trimesh.load(obj_file)
         pcd = open3d.io.read_point_cloud(pcd_file)
@@ -285,7 +283,7 @@ def main():
         logger.log(f'Physical feasibility of {os.path.basename(obj_file)}')
         result = physical_feasibility(obj, pcd, logger, device=device,
                                       grid_length=args.grid_length,
-                                      step_thres=step_thres, steps=steps, 
+                                      step_thres=args.step_thres, steps=steps, 
                                       res=128, cat=args.cat,
                                       move_type=move_type, move_limit=move_limit, 
                                       move_axis=move_axis,

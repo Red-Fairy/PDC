@@ -13,7 +13,7 @@ class TestOptions(BaseOptions):
 
         # for diversity test
         self.parser.add_argument('--diversity_count', type=int, default=8)
-        # self.parser.add_argument('--testdir', type=str, default='', help='test directory prefix')
+        self.parser.add_argument('--testset_idx', type=int, default=0, help='testset idx when using rotation')
 
         # use bbox mesh to initialize
         self.parser.add_argument('--use_bbox_mesh', action='store_true', help='use bbox mesh to initialize')

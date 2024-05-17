@@ -34,7 +34,8 @@ name=$1
 gpu_ids=$2
 load_iter=$3
 model_id='10489_2'
-cat="slider_drawer"
+# cat="slider_drawer"
+cat="hinge_door"
 
 # --loss_margin 0.00390625 1/256
 
@@ -48,8 +49,8 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --haoran \
             --ply_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
             --ddim_steps 50 --uc_scale 3 \
-            --loss_margin 0.01 \
-            --test_description margin0.01-haoran \
+            --loss_margin 0.005 \
+            --test_description margin0.005-haoran \
             --use_mobility_constraint "
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args

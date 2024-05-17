@@ -6,19 +6,21 @@ import json
 from tqdm import tqdm
 import torch
 
-data_count_per_instance = 5
+data_count_per_instance = 7
 
-root = '../../data-rundong/PartDiffusion/eval_output'
-dst_root = '../ignore_files/slider_drawer'
+root = '../ignore_files/eval_output'
+dst_root = '../data_lists/pred_pose'
 files = os.listdir(root)
 files = [file for file in files if 'pred_bbox' in file]
+
+cat = files[0].split('wo-')[1].split('-link')[0]
 
 file_count_record = {}
 
 sum_angle_diff = 0
 
 for i in range(data_count_per_instance):
-    os.makedirs(os.path.join(dst_root, f'set_{i}'), exist_ok=True)
+    os.makedirs(os.path.join(dst_root, cat, f'set_{i}'), exist_ok=True)
 
 for i, file in enumerate(tqdm(files)):
     # obtain the object_id, part_id, rotate angle (inferred from filename)
@@ -31,7 +33,7 @@ for i, file in enumerate(tqdm(files)):
         file_count_record[key] = 0
     else:
         file_count_record[key] += 1
-    dst_path = os.path.join(dst_root, f'set_{file_count_record[key]}/{object_id}_{part_id}.json')
+    dst_path = os.path.join(dst_root, cat, f'set_{file_count_record[key]}/{object_id}_{part_id}.json')
 
     points = open3d.io.read_point_cloud(os.path.join(root, file)).points
     points = np.array(points)
@@ -48,7 +50,12 @@ for i, file in enumerate(tqdm(files)):
     # print(x_positive_dir)
 
     # calculate the rotation angle around the y-axis
-    rotate_angle_pred = 90 - np.arctan2(x_positive_dir[2], x_positive_dir[0]) * 180 / np.pi
+    if cat == 'slider_drawer':
+        rotate_angle_pred = 90 - np.arctan2(x_positive_dir[2], x_positive_dir[0]) * 180 / np.pi
+    elif cat == 'hinge_door':
+        rotate_angle_pred = -90 - np.arctan2(x_positive_dir[2], x_positive_dir[0]) * 180 / np.pi
+    else:
+        rotate_angle_pred = 90 - np.arctan2(x_positive_dir[2], x_positive_dir[0]) * 180 / np.pi
 
     # rotate the points by the predicted angle
     r = R.from_euler('y', -rotate_angle_pred, degrees=True)

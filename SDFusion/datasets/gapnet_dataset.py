@@ -46,7 +46,7 @@ class GAPartNetDataset(BaseDataset):
         self.haoran_rotation = haoran_rotation
         if self.haoran:
             assert cat == 'slider_drawer' or cat == 'hinge_door'
-        self.haoran_override = f'../data_lists/pred_pose/{cat}/set_0'
+            self.haoran_override = f'../data_lists/pred_pose/{cat}/set_{opt.testset_idx}'
 
         if self.phase == 'refine':
             assert opt.batch_size == 1

@@ -12,7 +12,7 @@ from utils import AverageMeter
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('test_root', type=str)
-    parser.add_argument('--gt_root', type=str, default='../../part_meshes_recon/slider_drawer')
+    parser.add_argument('gt_root', type=str) # default='../../part_meshes_recon/slider_drawer'
     args = parser.parse_args()
 
     # run in SDFusion directory
@@ -27,7 +27,9 @@ def main():
 
     loss_meter = AverageMeter()
 
-    for (obj_file_test, obj_file_gt) in tqdm(zip(obj_files_test, obj_files_gt)):
+    zipped = zip(obj_files_test, obj_files_gt)
+
+    for (obj_file_test, obj_file_gt) in tqdm(zipped):
         assert obj_file_test.split('/')[-1] == obj_file_gt.split('/')[-1]
         obj_test = open3d.io.read_triangle_mesh(obj_file_test)
         obj_test.translate(-obj_test.get_axis_aligned_bounding_box().get_center())
