@@ -285,6 +285,7 @@ def main():
         splits = [split for split in splits if split.volume > 1e-7]
         if len(splits) != 1:
             logger.log(f'{os.path.basename(obj_file)} contains mutiple not connected parts, thus not physical feasible!')
+            all_not_feasible_objs.append(os.path.basename(obj_file))
             continue
         obj = splits[0]
         # def is_inside(comp1, comp2):
