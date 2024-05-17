@@ -330,9 +330,9 @@ def main():
             all_not_feasible_objs.append(os.path.basename(obj_file))
     
 
-    logger.log(f'Good objects: {good_objs}')
-    logger.log(f'Multiple feasible objects: {multiple_feasible_objs}')
-    logger.log(f'All not feasible objects: {all_not_feasible_objs}')
+    logger.log(f'Good objects, count: {len(good_objs)} IDs: {good_objs}')
+    logger.log(f'Multiple feasible objects, count: {len(multiple_feasible_objs)} IDs: {multiple_feasible_objs}')
+    logger.log(f'All not feasible objects, count: {len(all_not_feasible_objs)} IDs: {all_not_feasible_objs}')
 
 if __name__ == '__main__':
     main()

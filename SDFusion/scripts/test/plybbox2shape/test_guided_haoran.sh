@@ -34,9 +34,9 @@ name=$1
 gpu_ids=$2
 load_iter=$3
 model_id='20411_0'
-# cat="slider_drawer"
-cat="slider_drawer"
-uc_scale=$4
+cat=$4
+# cat="hinge_door"
+uc_scale=$5
 
 # slider-ply2shape-plyrot-scale3-lr0.00001
 
@@ -53,11 +53,11 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --use_mobility_constraint \
             --guided_inference \
             --haoran \
-            --loss_margin 0.02 \
+            --loss_margin 0.005 \
             --test_diversity \
             --ply_bbox_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
             --uc_scale ${uc_scale} \
-            --ddim_steps 50 --test_description margin128_haoran "
+            --ddim_steps 50 --testset_idx $6 --test_description $7"
 
-CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
+CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args &
 

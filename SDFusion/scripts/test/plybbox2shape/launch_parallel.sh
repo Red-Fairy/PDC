@@ -2,7 +2,7 @@ uc_scale=3
 cat=$1
 path="${cat}-plybbox2shape-plyrot-lr0.00001"
 
-for testset_idx in {0..2}
+for testset_idx in {2..2}
 do
 task_description="haoran0.005_gradNorm_set${testset_idx}"
 for i in {0..7}
