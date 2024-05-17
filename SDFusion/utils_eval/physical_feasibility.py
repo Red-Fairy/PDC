@@ -183,6 +183,7 @@ def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor, logger: Logge
     #     logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}' + \
     #         f'but also for all movement. Not physical feasible.')
     #     return 0
+    multiple_feasibility_flag = 0
     for (dx, dy, dz) in zipped:
         part_translation = translation + torch.tensor([dx, dy, dz]).unsqueeze(0).to(device)
         contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation, 
@@ -207,11 +208,14 @@ def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor, logger: Logge
                 if not passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
                     logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}')
                     return 1
-            logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}' + \
-                f' but also for all movement. Not physical feasible.')
-            return 0
-    logger.log(f'Not physical feasible for all translations.')
-    return -1
+            multiple_feasibility_flag = 1
+    if multiple_feasibility_flag:
+        logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}' + \
+            f' but also for all movement. Not physical feasible.')
+        return 0
+    else:
+        logger.log(f'Not physical feasible for all translations.')
+        return -1
 
 def main():
     parser = argparse.ArgumentParser()
@@ -288,7 +292,7 @@ def main():
             all_not_feasible_objs.append(os.path.basename(obj_file))
             continue
         obj = splits[0]
-        if obj.euler_number != 2:
+        if args.cat == 'hinge_door' and obj.euler_number != 2:
             logger.log(f'{os.path.basename(obj_file)} contains holes, thus not physical feasible!')
             all_not_feasible_objs.append(os.path.basename(obj_file))
             continue

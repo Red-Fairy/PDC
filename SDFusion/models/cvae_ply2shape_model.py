@@ -167,7 +167,7 @@ class CVAEModelPly2Shape(BaseModel):
 
         B = self.x.shape[0]
         eps = torch.randn(B, *self.z_shape).to(self.device)
-        self.gen_df = self.cvae.decode(eps, self.ply)
+        self.gen_df = self.cvae.decode(eps, self.ply).detach()
 
     def guided_inference(self):
         raise NotImplementedError('Guided Inference not implemented for this model')
