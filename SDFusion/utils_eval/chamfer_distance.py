@@ -14,8 +14,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('test_meshes', type=str)
     parser.add_argument('gt_meshes', type=str) # default='../../part_meshes_recon/slider_drawer'
+    parser.add_argument('--gpu_id', type=str, default='0')
     parser.add_argument('--num_points', type=int, default=20000)
     args = parser.parse_args()
+
+    device = f'cuda:{args.gpu_id}'
 
     # calculate chamfer distance and f-score
     log_path = os.path.join('/', *os.path.abspath(args.test_meshes).split('/')[:-1], 'metrics.txt')
@@ -45,8 +48,8 @@ def main():
         pcd_test = obj_test.sample_points_uniformly(number_of_points=args.num_points) 
         pcd_gt = obj_gt.sample_points_uniformly(number_of_points=args.num_points)
 
-        pointclouds_test = torch.tensor(np.asarray(pcd_test.points)).to('cuda').unsqueeze(0) # (1, num_points, 3)
-        pointclouds_gt = torch.tensor(np.asarray(pcd_gt.points)).to('cuda').unsqueeze(0) # (1, num_points, 3)
+        pointclouds_test = torch.tensor(np.asarray(pcd_test.points)).to(device).unsqueeze(0) # (1, num_points, 3)
+        pointclouds_gt = torch.tensor(np.asarray(pcd_gt.points)).to(device).unsqueeze(0) # (1, num_points, 3)
         
         loss = chamfer_distance(pointclouds_test, pointclouds_gt, batch_reduction='sum', point_reduction='mean')[0]
         loss_meter_CD.update(loss.item(), args.num_points)
