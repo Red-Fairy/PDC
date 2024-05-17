@@ -13,3 +13,4 @@ matplotlib
 PyMCubes
 scikit-image
 trimesh
+rtree

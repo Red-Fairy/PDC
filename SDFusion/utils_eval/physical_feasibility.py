@@ -220,18 +220,15 @@ def main():
     parser.add_argument('--test_list', type=str, default='../data_lists/test/')
     parser.add_argument('--cat', type=str, default='slider_drawer')
     parser.add_argument('--gpu_id', type=int, default=7)
-    parser.add_argument('--contact_thres', type=float, default=0.05)
+    parser.add_argument('--contact_thres', type=float, default=0.04)
     parser.add_argument('--contact_margin', type=float, default=0.005)
-    parser.add_argument('--collision_thres', type=float, default=0.05)
+    parser.add_argument('--collision_thres', type=float, default=0.04)
     parser.add_argument('--collision_margin', type=float, default=0.005)
     parser.add_argument('--grid_length', type=float, default=0.005)
     parser.add_argument('--step_thres', type=int, default=5)
     args = parser.parse_args()
 
     # slider_drawer: 0.08, 0.008, 0.08, 0.008 / 38 + 8 + 2
-    # slider_drawer: 0.1, 0.01, 0.1, 0.01 / 31 + 17 + 0
-    # slider_drawer: 0.05, 0.005, 0.05, 0.005 / 32 + 0 + 16
-    # slider_drawer: 0.05, 0.01, 0.05, 0.01 / 37 + 7 + 4
     # hinge door: 0.05, 0.005, 0.05, 0.005 / 50 + 5 + 5
     # hinge_knob : 0.05, 0.005, 0.05, 0.005 / 19 + 1 + 0
     # line_fixed: 0.05, 0.005, 0.05, 0.005 / 85 + 5 + 0
@@ -283,6 +280,25 @@ def main():
         if not obj.is_watertight:
             logger.log(f'{os.path.basename(obj_file)} is not watertight, thus not physical feasible!')
             all_not_feasible_objs.append(os.path.basename(obj_file))
+            continue
+        splits = obj.split(only_watertight=True)
+        splits = [split for split in splits if split.volume > 1e-7]
+        if len(splits) != 1:
+            logger.log(f'{os.path.basename(obj_file)} contains mutiple not connected parts, thus not physical feasible!')
+            continue
+        obj = splits[0]
+        # def is_inside(comp1, comp2):
+        #     return np.all(comp2.contains(comp1.vertices))
+        # def check_connectivity(splits):
+        #     for i, comp1 in enumerate(splits):
+        #         for comp2 in splits[i+1:]:
+        #             if not is_inside(comp1, comp2) and not is_inside(comp2, comp1):
+        #                 return 0
+        #     return 1
+        # if check_connectivity(splits) == 0:
+        #     logger.log(f'{os.path.basename(obj_file)} contains mutiple not connected parts, thus not physical feasible!')
+        #     continue
+
         pcd = open3d.io.read_point_cloud(pcd_file)
         pcd = torch.tensor(np.array(pcd.points), dtype=torch.float32).to(device) # (N, 3)
         
