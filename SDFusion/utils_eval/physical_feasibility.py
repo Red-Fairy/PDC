@@ -265,14 +265,17 @@ def main():
         move_type = 'translation'
         move_axis = [0, 0, 1]
         steps = (5, 5, 31)
+        steps_thres = 11
     elif args.cat == 'hinge_door':
         move_limit = (0, 90)
         move_type = 'rotation'
         move_axis = [1, 0, 0]
         steps = (5, 5, 31)
+        steps_thres = 5
     else:
         move_limit = move_type = move_axis = None
         steps = (5, 5, 21)
+        steps_thres = 5
 
     for (obj_file, pcd_file) in zip(test_obj_files, test_pcd_files):
         # if not any([x in obj_file for x in ['10797_1.obj', '10068_2.obj', '10685_1.obj', '12038_1.obj']]):
