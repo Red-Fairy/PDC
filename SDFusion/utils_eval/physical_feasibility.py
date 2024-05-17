@@ -288,6 +288,10 @@ def main():
             all_not_feasible_objs.append(os.path.basename(obj_file))
             continue
         obj = splits[0]
+        if obj.euler_number != 2:
+            logger.log(f'{os.path.basename(obj_file)} contains holes, thus not physical feasible!')
+            all_not_feasible_objs.append(os.path.basename(obj_file))
+            continue
         # def is_inside(comp1, comp2):
         #     return np.all(comp2.contains(comp1.vertices))
         # def check_connectivity(splits):
