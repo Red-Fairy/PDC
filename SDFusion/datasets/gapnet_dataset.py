@@ -56,7 +56,7 @@ class GAPartNetDataset(BaseDataset):
         if cat != 'all':
             dataroot = os.path.join(opt.dataroot, self.sdf_dir, cat)
             self.sdf_filepaths = [os.path.join(dataroot, f) for f in os.listdir(dataroot) if f.endswith('.h5')]
-            if (self.phase == 'train' or self.phase == 'test') and opt.sdf_mode == 'part':
+            if (self.phase == 'train' or self.phase == 'test') and opt.sdf_mode == 'part' and opt.model_id is not None:
                 filelist_path = opt.dataroot.replace('dataset', 'data_lists/'+phase)
                 with open(os.path.join(filelist_path, cat+'.txt'), 'r') as f:
                     file_names = [line.strip() for line in f]
@@ -77,6 +77,11 @@ class GAPartNetDataset(BaseDataset):
 
         if not self.opt.isTrain and opt.model_id is not None:
             self.sdf_filepaths = [f for f in self.sdf_filepaths if opt.model_id in f]
+        
+        # only test the following ids
+        ids = ['19179', '19898']
+        # ids = ['22301', '23372', '25144']
+        self.sdf_filepaths = [f for f in self.sdf_filepaths if any([i in f for i in ids])]
 
         # self.bbox_cond = opt.bbox_cond
 
@@ -191,6 +196,9 @@ class GAPartNetDataset(BaseDataset):
 
                 if self.haoran: # use the predicted rotation matrix
                     ret['ply_rotation_pred'] = build_rot_matrix(transform['rotate_angle_pred'] * np.pi / 180)
+            
+            else:
+                points_stat['rotation'] = torch.eye(4)
 
                 # points_stat['centroid'] = torch.mm(rot_matrix, points_stat['centroid'].view(3, 1)).view(3)
 

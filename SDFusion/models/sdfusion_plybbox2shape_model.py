@@ -161,6 +161,10 @@ class SDFusionModelPlyBBox2Shape(BaseModel):
             self.part_translation_pred = input['part_translation_pred'].to(self.device)
             self.part_extent_pred = input['part_extent_pred'].to(self.device)
             self.ply_rotation_pred = input['ply_rotation_pred'].to(self.device)
+        else:
+            self.part_translation_pred = self.part_translation
+            self.part_extent_pred = self.part_extent
+            self.ply_rotation_pred = self.ply_rotation
 
     def switch_train(self):
         self.df.train()
