@@ -184,6 +184,8 @@ def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor, logger: Logge
     #         f'but also for all movement. Not physical feasible.')
     #     return 0
     multiple_feasibility_flag = 0
+    best_loss = 1e5
+    best_position = None
     for (dx, dy, dz) in zipped:
         part_translation = translation + torch.tensor([dx, dy, dz]).unsqueeze(0).to(device)
         contact_loss, collsion_loss = get_physical_loss(sdf, pcd, scale, part_translation, 
@@ -191,6 +193,9 @@ def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor, logger: Logge
                                         move_type=move_type, move_samples=32,
                                         collision_margin=collision_margin, contact_margin=contact_margin)
         print(f'{contact_loss:.4f}, {collsion_loss:.4f}')
+        if contact_loss + collsion_loss < best_loss:
+            best_position = torch.tensor([dx, dy, dz]).cpu().numpy()
+            best_loss = contact_loss + collsion_loss
         if passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
             # make sure that at the position, the part cannot move further on x and y axis, (but allow move one step)
             if cat == 'slider_drawer':
@@ -207,15 +212,15 @@ def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor, logger: Logge
                                             collision_margin=collision_margin, contact_margin=contact_margin)
                 if not passed_physical_feasibility(contact_loss, collsion_loss, contact_thres, collision_thres):
                     logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}')
-                    return 1
+                    return 1, torch.tensor([dx, dy, dz]).cpu().numpy()
             multiple_feasibility_flag = 1
     if multiple_feasibility_flag:
         logger.log(f'Physical feasible at translation: {part_translation[0].cpu().numpy()}' + \
             f' but also for all movement. Not physical feasible.')
-        return 0
+        return 0, best_position
     else:
         logger.log(f'Not physical feasible for all translations.')
-        return -1
+        return -1, None
 
 def main():
     parser = argparse.ArgumentParser()
@@ -224,12 +229,13 @@ def main():
     parser.add_argument('--gt_root', type=str, default='/mnt/data-rundong/PartDiffusion/dataset')
     parser.add_argument('--test_list', type=str, default='../data_lists/test/')
     parser.add_argument('--gpu_id', type=int, default=7)
-    parser.add_argument('--contact_thres', type=float, default=0.01)
+    parser.add_argument('--contact_thres', type=float, default=0.04)
     parser.add_argument('--contact_margin', type=float, default=0.005)
-    parser.add_argument('--collision_thres', type=float, default=0.01)
+    parser.add_argument('--collision_thres', type=float, default=0.04)
     parser.add_argument('--collision_margin', type=float, default=0.005)
     parser.add_argument('--grid_length', type=float, default=0.005)
     parser.add_argument('--step_thres', type=int, default=5)
+    parser.add_argument('--save_translation', action='store_true')
     args = parser.parse_args()
 
     # slider_drawer: 0.08, 0.008, 0.08, 0.008 / 38 + 8 + 2
@@ -245,6 +251,10 @@ def main():
     logger.log('Collision threshold: {:.4f}'.format(args.collision_thres))
     logger.log('Contact margin: {:.4f}'.format(args.contact_margin))
     logger.log('Collision margin: {:.4f}'.format(args.collision_margin))
+
+    if args.save_translation:
+        translation_savedir = '/' + os.path.join(*os.path.abspath(args.test_root).split('/')[:-1], args.test_root.split('/')[-1]+'_translated')
+        os.makedirs(translation_savedir, exist_ok=True)
 
     good_objs = []
     all_not_feasible_objs = []
@@ -265,17 +275,14 @@ def main():
         move_type = 'translation'
         move_axis = [0, 0, 1]
         steps = (5, 5, 31)
-        steps_thres = 11
     elif args.cat == 'hinge_door':
         move_limit = (0, 90)
         move_type = 'rotation'
         move_axis = [1, 0, 0]
         steps = (5, 5, 31)
-        steps_thres = 5
     else:
         move_limit = move_type = move_axis = None
         steps = (5, 5, 21)
-        steps_thres = 5
 
     for (obj_file, pcd_file) in zip(test_obj_files, test_pcd_files):
         # if not any([x in obj_file for x in ['10797_1.obj', '10068_2.obj', '10685_1.obj', '12038_1.obj']]):
@@ -283,21 +290,24 @@ def main():
         logger.log(f'Physical feasibility of {os.path.basename(obj_file)}')
 
         obj = trimesh.load(obj_file)
+        
         # check watertight
         if not obj.is_watertight:
             logger.log(f'{os.path.basename(obj_file)} is not watertight, thus not physical feasible!')
             all_not_feasible_objs.append(os.path.basename(obj_file))
+            os.system(f'cp {obj_file} {os.path.join(translation_savedir, os.path.basename(obj_file))}')
             continue
         splits = obj.split(only_watertight=True)
         splits = [split for split in splits if split.volume > 1e-7]
         if len(splits) != 1:
             logger.log(f'{os.path.basename(obj_file)} contains mutiple not connected parts, thus not physical feasible!')
             all_not_feasible_objs.append(os.path.basename(obj_file))
+            os.system(f'cp {obj_file} {os.path.join(translation_savedir, os.path.basename(obj_file))}')
             continue
-        obj = splits[0]
-        if args.cat in ['hinge_door', 'line_fixed_handle'] and obj.euler_number != 2:
+        if args.cat in ['hinge_door', 'line_fixed_handle'] and splits[0].euler_number != 2:
             logger.log(f'{os.path.basename(obj_file)} contains holes, thus not physical feasible!')
             all_not_feasible_objs.append(os.path.basename(obj_file))
+            os.system(f'cp {obj_file} {os.path.join(translation_savedir, os.path.basename(obj_file))}')
             continue
         # def is_inside(comp1, comp2):
         #     return np.all(comp2.contains(comp1.vertices))
@@ -314,7 +324,7 @@ def main():
         pcd = open3d.io.read_point_cloud(pcd_file)
         pcd = torch.tensor(np.array(pcd.points), dtype=torch.float32).to(device) # (N, 3)
         
-        result = physical_feasibility(obj, pcd, logger, device=device,
+        result, translation = physical_feasibility(obj, pcd, logger, device=device,
                                       grid_length=args.grid_length,
                                       step_thres=args.step_thres, steps=steps, 
                                       res=128, cat=args.cat,
@@ -324,10 +334,19 @@ def main():
                                       contact_thres=args.contact_thres, collision_thres=args.collision_thres)
         if result == 1:
             good_objs.append(os.path.basename(obj_file))
+            # translate the part
+            if args.save_translation:
+                obj.apply_translation(translation)
+                obj.export(os.path.join(translation_savedir, os.path.basename(obj_file)))
         elif result == 0:
             multiple_feasible_objs.append(os.path.basename(obj_file))
+            if args.save_translation:
+                obj.apply_translation(translation)
+                obj.export(os.path.join(translation_savedir, os.path.basename(obj_file)))
         else:
             all_not_feasible_objs.append(os.path.basename(obj_file))
+            if args.save_translation:
+                os.system(f'cp {obj_file} {os.path.join(translation_savedir, os.path.basename(obj_file))}')
     
 
     logger.log(f'Good objects, count: {len(good_objs)} IDs: {good_objs}')
