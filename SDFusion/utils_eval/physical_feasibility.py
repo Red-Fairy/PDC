@@ -295,19 +295,22 @@ def main():
         if not obj.is_watertight:
             logger.log(f'{os.path.basename(obj_file)} is not watertight, thus not physical feasible!')
             all_not_feasible_objs.append(os.path.basename(obj_file))
-            os.system(f'cp {obj_file} {os.path.join(translation_savedir, os.path.basename(obj_file))}')
+            if args.save_translation:
+                os.system(f'cp {obj_file} {os.path.join(translation_savedir, os.path.basename(obj_file))}')
             continue
         splits = obj.split(only_watertight=True)
         splits = [split for split in splits if split.volume > 1e-7]
         if len(splits) != 1:
             logger.log(f'{os.path.basename(obj_file)} contains mutiple not connected parts, thus not physical feasible!')
             all_not_feasible_objs.append(os.path.basename(obj_file))
-            os.system(f'cp {obj_file} {os.path.join(translation_savedir, os.path.basename(obj_file))}')
+            if args.save_translation:
+                os.system(f'cp {obj_file} {os.path.join(translation_savedir, os.path.basename(obj_file))}')
             continue
         if args.cat in ['hinge_door', 'line_fixed_handle'] and splits[0].euler_number != 2:
             logger.log(f'{os.path.basename(obj_file)} contains holes, thus not physical feasible!')
             all_not_feasible_objs.append(os.path.basename(obj_file))
-            os.system(f'cp {obj_file} {os.path.join(translation_savedir, os.path.basename(obj_file))}')
+            if args.save_translation:
+                os.system(f'cp {obj_file} {os.path.join(translation_savedir, os.path.basename(obj_file))}')
             continue
         # def is_inside(comp1, comp2):
         #     return np.all(comp2.contains(comp1.vertices))
