@@ -45,7 +45,6 @@ class GAPartNetDataset(BaseDataset):
         self.haoran = haoran
         self.haoran_rotation = haoran_rotation
         if self.haoran:
-            assert cat == 'slider_drawer' or cat == 'hinge_door'
             self.haoran_override = f'../data_lists/pred_pose/{cat}/set_{opt.testset_idx}'
 
         if self.phase == 'refine':
@@ -158,7 +157,7 @@ class GAPartNetDataset(BaseDataset):
                     ret['part_translation_pred'] = part_translate_pred
                     ret['part_extent_pred'] = part_extent_pred
                 
-            if self.opt.use_mobility_constraint:
+            if self.opt.use_mobility_constraint and self.opt.cat in ['slider_drawer', 'hinge_door']:
                 if self.haoran:
                     if self.opt.cat == 'slider_drawer':
                         move_axis = torch.tensor([0, 0, 1], dtype=torch.float32)

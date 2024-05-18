@@ -52,7 +52,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --test_diversity \
             --ply_bbox_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
             --uc_scale ${uc_scale} \
-            --ddim_steps 50 --test_description $5"
+            --ddim_steps 50 --test_description $6"
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args 
 

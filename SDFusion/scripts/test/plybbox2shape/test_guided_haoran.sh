@@ -57,5 +57,5 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --uc_scale ${uc_scale} \
             --ddim_steps 50 --testset_idx $6 --test_description $7"
 
-CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args &
+CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args
 

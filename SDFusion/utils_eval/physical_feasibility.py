@@ -220,13 +220,13 @@ def physical_feasibility(mesh: trimesh.Trimesh, pcd: torch.Tensor, logger: Logge
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('test_root', type=str) #  '../../part_meshes_recon/slider_drawer'
+    parser.add_argument('cat', type=str, default='slider_drawer')
     parser.add_argument('--gt_root', type=str, default='/mnt/data-rundong/PartDiffusion/dataset')
     parser.add_argument('--test_list', type=str, default='../data_lists/test/')
-    parser.add_argument('--cat', type=str, default='slider_drawer')
     parser.add_argument('--gpu_id', type=int, default=7)
-    parser.add_argument('--contact_thres', type=float, default=0.04)
+    parser.add_argument('--contact_thres', type=float, default=0.01)
     parser.add_argument('--contact_margin', type=float, default=0.005)
-    parser.add_argument('--collision_thres', type=float, default=0.04)
+    parser.add_argument('--collision_thres', type=float, default=0.01)
     parser.add_argument('--collision_margin', type=float, default=0.005)
     parser.add_argument('--grid_length', type=float, default=0.005)
     parser.add_argument('--step_thres', type=int, default=5)
@@ -295,7 +295,7 @@ def main():
             all_not_feasible_objs.append(os.path.basename(obj_file))
             continue
         obj = splits[0]
-        if args.cat == 'hinge_door' and obj.euler_number != 2:
+        if args.cat in ['hinge_door', 'line_fixed_handle'] and obj.euler_number != 2:
             logger.log(f'{os.path.basename(obj_file)} contains holes, thus not physical feasible!')
             all_not_feasible_objs.append(os.path.basename(obj_file))
             continue
