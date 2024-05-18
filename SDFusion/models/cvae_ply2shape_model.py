@@ -160,7 +160,7 @@ class CVAEModelPly2Shape(BaseModel):
 
         return loss
     
-    def inference(self, data):
+    def inference(self, data, **kwargs):
         
         self.switch_eval()
         self.set_input(data)
