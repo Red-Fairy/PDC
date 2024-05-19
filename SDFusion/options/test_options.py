@@ -14,6 +14,7 @@ class TestOptions(BaseOptions):
         # for diversity test
         self.parser.add_argument('--diversity_count', type=int, default=8)
         self.parser.add_argument('--testset_idx', type=int, default=0, help='testset idx when using rotation')
+        self.parser.add_argument('--infer_entire_dataset', action='store_true', help='infer entire dataset')
 
         # use bbox mesh to initialize
         self.parser.add_argument('--use_bbox_mesh', action='store_true', help='use bbox mesh to initialize')

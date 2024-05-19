@@ -34,6 +34,7 @@ name=$1
 gpu_ids=$2
 load_iter=$3
 cat=$4
+# cat="hinge_door"
 uc_scale=$5
 
 # slider-ply2shape-plyrot-scale3-lr0.00001
@@ -47,12 +48,14 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --vq_model ${vq_model} --vq_cfg ${vq_cfg} --vq_ckpt ${vq_ckpt} --vq_dset ${vq_dset} --vq_cat ${vq_cat} \
             --dataset_mode ${dataset_mode} --res ${res} --cat ${cat} --trunc_thres ${trunc_thres} \
             --total_iters ${total_iters} --dataroot ${dataroot} \
+            --use_mobility_constraint \
             --guided_inference \
             --loss_margin 0.005 \
             --test_diversity \
             --ply_bbox_cond --cond_ckpt ${cond_ckpt} --load_iter ${load_iter} \
             --uc_scale ${uc_scale} \
-            --ddim_steps 50 --test_description $6"
+            --start_idx $6 --end_idx $7 \
+            --ddim_steps 50 --test_description $8"
 
-CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args 
+CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args &
 

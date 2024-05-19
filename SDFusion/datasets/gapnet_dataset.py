@@ -56,10 +56,13 @@ class GAPartNetDataset(BaseDataset):
             dataroot = os.path.join(opt.dataroot, self.sdf_dir, cat)
             self.sdf_filepaths = [os.path.join(dataroot, f) for f in os.listdir(dataroot) if f.endswith('.h5')]
             # only test the following ids
-            # ids = ['19179', '19898']
-            # ids = ['22301', '23372', '25144']
+            # ids = ['7128', '7167', '7273', '7296', '7349', '12065', '12597']
+            # ['100282', '100283', '101363', '101579', '101583']
+            # ids = ['101584', '101591', '101593', '101594', '101599', '101603']
+            # ids = ['101605', '101611', '101612', '101613', '101619', '101623', '101773', '101908']
             # self.sdf_filepaths = [f for f in self.sdf_filepaths if any([i in f for i in ids])]
-            if (self.phase == 'train' or self.phase == 'test') and opt.sdf_mode == 'part':
+            if opt.sdf_mode == 'part' and not (self.phase == 'test' and self.opt.infer_full_dataset):
+                # (self.phase == 'train' or self.phase == 'test'):
                 filelist_path = opt.dataroot.replace('dataset', 'data_lists/'+phase)
                 with open(os.path.join(filelist_path, cat+'.txt'), 'r') as f:
                     file_names = [line.strip() for line in f]
