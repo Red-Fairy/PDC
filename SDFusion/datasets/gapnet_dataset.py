@@ -51,6 +51,7 @@ class GAPartNetDataset(BaseDataset):
             assert opt.batch_size == 1
 
         self.sdf_dir = f'{opt.sdf_mode}_sdf_{opt.res}'
+        self.pcd_dir = opt.pcd_dir # part_ply_fps
 
         if cat != 'all':
             dataroot = os.path.join(opt.dataroot, self.sdf_dir, cat)
@@ -65,8 +66,8 @@ class GAPartNetDataset(BaseDataset):
                     file_names = [line.strip() for line in f]
                 self.sdf_filepaths = [f for f in self.sdf_filepaths if f.split('/')[-1].split('.')[0] in file_names]
             elif opt.model_id is not None:
-                self.sdf_filepaths = [f for f in self.sdf_filepaths if opt.model_id in f]
-            self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace(self.sdf_dir, 'part_ply_fps').replace('.h5', '.ply')), self.sdf_filepaths))
+                self.sdf_filepaths = [f for f in self.sdf_filepaths if any([i in f for i in opt.model_id])]
+            self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace(self.sdf_dir, self.pcd_dir).replace('.h5', '.ply')), self.sdf_filepaths))
         else:
             self.sdf_filepaths = []
             for c in os.listdir(os.path.join(opt.dataroot, self.sdf_dir)):
@@ -130,7 +131,7 @@ class GAPartNetDataset(BaseDataset):
         #     ret['bbox'] = bbox
 
         if self.ply_cond or self.ply_bbox_cond:
-            ply_filepath = sdf_h5_file.replace(self.sdf_dir, 'part_ply_fps').replace('.h5', '.ply')
+            ply_filepath = sdf_h5_file.replace(self.sdf_dir, self.pcd_dir).replace('.h5', '.ply')
             ply_file = open3d.io.read_point_cloud(ply_filepath).points
 
             points = np.array(ply_file)
@@ -251,9 +252,9 @@ class GAPartNetDataset4ScalePrediction(BaseDataset):
     def __init__(self, opt, phase='train', cat='all', extend_size=None):
 
         self.phase = phase
-        self.ply_dir = f'part_ply_fps'
+        self.pcd_dir = f'part_ply_fps'
 
-        dataroot = os.path.join(opt.dataroot, self.ply_dir, cat)
+        dataroot = os.path.join(opt.dataroot, self.pcd_dir, cat)
         self.filepaths = [os.path.join(dataroot, x) for x in os.listdir(dataroot) if x.endswith('.ply')]
 
         if self.phase == 'train' or self.phase == 'test':
