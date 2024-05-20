@@ -56,14 +56,16 @@ class GAPartNetDataset(BaseDataset):
             dataroot = os.path.join(opt.dataroot, self.sdf_dir, cat)
             self.sdf_filepaths = [os.path.join(dataroot, f) for f in os.listdir(dataroot) if f.endswith('.h5')]
             # only test the following ids
-            ids = ['22301', '23372', '25144']
-            self.sdf_filepaths = [f for f in self.sdf_filepaths if any([i in f for i in ids])]
-            # if opt.sdf_mode == 'part' and not (self.phase == 'test' and self.opt.infer_full_dataset):
-            #     # (self.phase == 'train' or self.phase == 'test'):
-            #     filelist_path = opt.dataroot.replace('dataset', 'data_lists/'+phase)
-            #     with open(os.path.join(filelist_path, cat+'.txt'), 'r') as f:
-            #         file_names = [line.strip() for line in f]
-            #     self.sdf_filepaths = [f for f in self.sdf_filepaths if f.split('/')[-1].split('.')[0] in file_names]
+            # ids = ['22301', '23372', '25144']
+            # self.sdf_filepaths = [f for f in self.sdf_filepaths if any([i in f for i in ids])]
+            if opt.sdf_mode == 'part' and opt.model_id is None:
+                # (self.phase == 'train' or self.phase == 'test'):
+                filelist_path = opt.dataroot.replace('dataset', 'data_lists/'+phase)
+                with open(os.path.join(filelist_path, cat+'.txt'), 'r') as f:
+                    file_names = [line.strip() for line in f]
+                self.sdf_filepaths = [f for f in self.sdf_filepaths if f.split('/')[-1].split('.')[0] in file_names]
+            elif opt.model_id is not None:
+                self.sdf_filepaths = [f for f in self.sdf_filepaths if opt.model_id in f]
             self.sdf_filepaths = list(filter(lambda f: os.path.exists(f.replace(self.sdf_dir, 'part_ply_fps').replace('.h5', '.ply')), self.sdf_filepaths))
         else:
             self.sdf_filepaths = []
@@ -77,10 +79,7 @@ class GAPartNetDataset(BaseDataset):
 
         if self.haoran or self.haoran_rotation:
             self.sdf_filepaths = list(filter(lambda f: os.path.exists(os.path.join(self.haoran_override, os.path.basename(f).replace('.h5', '.json'))), self.sdf_filepaths))
-
-        if not self.opt.isTrain and opt.model_id is not None:
-            self.sdf_filepaths = [f for f in self.sdf_filepaths if opt.model_id in f]
-
+            
         # self.bbox_cond = opt.bbox_cond
 
         self.ply_cond = opt.ply_cond
