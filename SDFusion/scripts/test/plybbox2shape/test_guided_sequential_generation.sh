@@ -34,7 +34,7 @@ name=$1
 gpu_ids=$2
 cat=$3
 test_description=$4
-model_ids="41083,45238,45146,45749,19179,19898,25493"
+model_id="19898_15"
 # 19898: 1 door & 6 drawers
 # 25493: 3 drawers
 # 19179: 2 drawers
@@ -62,7 +62,7 @@ args="--name ${name} --logs_dir ${logs_dir} --gpu_ids ${gpu_ids} \
             --loss_margin 0.005 \
             --test_diversity --pcd_dir part_ply_rm_multi \
             --ply_bbox_cond --cond_ckpt ${cond_ckpt} \
-            --uc_scale ${uc_scale} --load_iter ${load_iter} \
+            --uc_scale ${uc_scale} --load_iter ${load_iter} --model_id ${model_id} \
             --ddim_steps 50 --test_description ${test_description}"
 
 CUDA_VISIBLE_DEVICES=$gpu_ids python test.py $args 

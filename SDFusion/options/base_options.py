@@ -188,7 +188,7 @@ class BaseOptions():
 			self.opt.img_dir += '_diversity' if self.opt.test_diversity else ''
 			self.opt.img_dir += f'_{self.opt.test_description}' if self.opt.test_description is not None else ''
 
-		self.opt.model_id = [int(x) for x in self.opt.model_id.split(',')] if self.opt.model_id is not None else None
+		self.opt.model_id = [x for x in self.opt.model_id.split(',')] if self.opt.model_id is not None else None
 		# self.opt.img_dir += f'_{self.opt.model_id}' if self.opt.model_id is not None else ''
 		if accelerator is None or accelerator.is_main_process:
 			os.makedirs(self.opt.img_dir, exist_ok=True)
