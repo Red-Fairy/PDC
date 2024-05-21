@@ -8,8 +8,8 @@ import torch
 
 data_count_per_instance = 3
 
-root = '../ignore_files/eval_output'
-dst_root = '../data_lists/pred_pose'
+root = '../../eval_output_line_fixed_handle-abl'
+dst_root = '../data_lists/pred_pose_regression'
 files = os.listdir(root)
 files = [file for file in files if 'pred_bbox' in file]
 
@@ -17,7 +17,7 @@ try:
     cat = files[0].split('wo-')[1].split('-link')[0]
     flag = 0
 except:
-    cat = 'slider_drawer'
+    cat = 'line_fixed_handle'
     flag = 1
 
 file_count_record = {}
