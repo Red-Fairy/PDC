@@ -35,7 +35,6 @@ gpu_ids=$2
 load_iter=$3
 model_id='20411_0'
 cat=$4
-# cat="hinge_door"
 uc_scale=$5
 
 # slider-ply2shape-plyrot-scale3-lr0.00001
